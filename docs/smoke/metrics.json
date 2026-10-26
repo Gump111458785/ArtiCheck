@@ -1,0 +1,14 @@
+{
+  "scope": "Synthetic smoke test only; not a held-out paper benchmark",
+  "tp": 3,
+  "fp": 0,
+  "tn": 9,
+  "fn": 0,
+  "threshold": 0.5,
+  "macro_f1": 1.0,
+  "issue_recall": 1.0,
+  "false_positive_rate": 0.0,
+  "positive_support": 3,
+  "negative_support": 9,
+  "abstention_rate": 0.0
+}

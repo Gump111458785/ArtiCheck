@@ -1,0 +1,2 @@
+- name: articheck
+  _target_: articheck.training.verl_loop.ArtiCheckAgentLoop

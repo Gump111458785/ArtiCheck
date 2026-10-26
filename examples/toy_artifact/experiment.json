@@ -1,0 +1,9 @@
+{
+  "metric_average": "macro",
+  "y_true": [0, 0, 0, 0, 1, 1],
+  "y_pred": [0, 0, 0, 0, 0, 1],
+  "train_ids": ["train-1", "train-2", "train-3"],
+  "test_ids": ["test-1", "test-2"],
+  "method_steps": 100,
+  "baseline_steps": 100
+}

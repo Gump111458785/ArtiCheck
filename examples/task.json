@@ -1,0 +1,13 @@
+{
+  "paper_id": "toy-paper",
+  "repo_id": "toy-artifact-v1",
+  "repo": "toy_artifact",
+  "cacheable": true,
+  "probe": ["python3", "probe.py"],
+  "paper_text": "Synthetic example: macro F1 is 0.7777778, splits are disjoint, and training budgets match.",
+  "claims": [
+    {"id": "C1", "text": "Reported score uses macro F1", "kind": "metric", "spec": {"key": "macro_f1", "expected": 0.7777777777777778, "tolerance": 0.000001}},
+    {"id": "C2", "text": "Training and test data do not overlap", "kind": "split_disjoint", "spec": {"train_key": "train_ids", "test_key": "test_ids"}},
+    {"id": "C3", "text": "Baseline and method use equal training steps", "kind": "baseline_equal", "spec": {"method_key": "method_steps", "baseline_key": "baseline_steps"}}
+  ]
+}
