@@ -35,3 +35,7 @@
 - 真实 vLLM 原生 token HTTP 接口：本地测试使用响应契约模拟。
 - SFT、verl 自定义 AgentLoop、GRPO 分布式训练和 `grpo_loss` 的 PyTorch 数值/梯度行为：当前没有 PyTorch/CUDA；代码和配置已提供，仍需在 GPU 环境验证。
 - DAPO 动态补采样与 IS 接入、AWQ/FP8、真实人工试用、真实论文数据、显存/吞吐/耗时/成本收益：未完成，不应写成简历已达成指标。
+
+## GitHub CI
+
+首个完整代码提交的 [GitHub Actions 运行](https://github.com/Gump111458785/ArtiCheck/actions/runs/40318860573) 已全部通过：Ubuntu 上 Python 3.10、3.11、3.12 的核心测试与 CLI 样例，以及 Python 3.11 job 的 Docker 冒烟测试。它验证教学任务的容器路径，不代表真实论文或 GPU 训练通过。

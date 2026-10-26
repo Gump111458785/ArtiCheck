@@ -45,7 +45,10 @@ class Sandbox:
         if not argv or not all(isinstance(x, str) and "\0" not in x for x in argv):
             raise ValueError("Expected an argv list")
         name = "articheck-" + uuid.uuid4().hex
-        env = {"PATH": os.defpath, "LANG": "C.UTF-8", "PYTHONDONTWRITEBYTECODE": "1"}
+        # The trusted Docker CLIENT needs its configured daemon/context. Host
+        # variables are not forwarded into the container without explicit -e.
+        env = None if self.mode == "docker" else {
+            "PATH": os.defpath, "LANG": "C.UTF-8", "PYTHONDONTWRITEBYTECODE": "1"}
         command = self.docker_command(repo, argv, name) if self.mode == "docker" else argv
         started = time.monotonic()
         with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:

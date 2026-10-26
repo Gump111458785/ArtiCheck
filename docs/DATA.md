@@ -18,7 +18,7 @@ Probe 的 stdout 必须是单个 JSON object；非零退出、超时、输出溢
 
 缓存仅在 task 显式设 `cacheable=true` 时启用。只有固定种子、确定性的实验才应开启。缓存键包含源码内容摘要、argv、Docker 镜像实际 ID 或 local Python 身份、执行限制。运行中源文件改变会撤销最终判定。
 
-Docker 模式无网络、只读根文件系统和 artifact 挂载、非 root、去 capabilities、限制进程/内存/CPU。需要安装依赖时，用户应预先构建可信镜像并通过 `--image` 指定。当前模式不支持将结果写回 artifact 目录；probe 应向 stdout 输出核查结果。
+Docker 模式无网络、只读根文件系统和 artifact 挂载、非 root、去 capabilities、限制进程/内存/CPU。可信 Docker 客户端保留主机 daemon/context 配置，容器只接收显式指定的环境变量。需要安装依赖时，用户应预先构建可信镜像并通过 `--image` 指定。当前模式不支持将结果写回 artifact 目录；probe 应向 stdout 输出核查结果。
 
 local 模式会清理子进程环境变量，但不提供文件系统、网络或系统调用隔离，只用于本仓库可信教学样例。Docker 当前本地未实测，CI 为其提供独立测试步骤。
 
