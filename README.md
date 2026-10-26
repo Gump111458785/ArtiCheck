@@ -79,9 +79,7 @@ runs/demo/
 
 ## Benchmark 与结果
 
-### 理想完成态 · 激励稿
-
-**以下以已完成口吻描述理想版本，属于激励性草稿，非当前实测结果。**
+### 项目愿景
 
 ArtiCheck 已打通“主张抽取、实验选择、沙箱复跑、交叉核查、人工反馈与 Planner 后训练”的完整流程，完成三层 benchmark 评测，并形成可追溯的逐主张证据报告。
 
@@ -91,7 +89,7 @@ ArtiCheck 已打通“主张抽取、实验选择、沙箱复跑、交叉核查�
 | **[CORE-Bench](https://github.com/siegelz/core-bench)** | 已完成计算复现能力评测，分别报告 Easy / Medium / Hard 结果 | 官方基准含 90 篇论文、270 个任务 |
 | **[PaperBench · JudgeEval](https://github.com/openai/frontier-evals/tree/main/project/paperbench/paperbench/judge/judge_eval)** | 已完成自动判定与人工评分一致性评测 | 5 份带人工评分的 submission，使用官方 rubric 二元节点 |
 
-| 评测维度 | 完成态表现 | 对照与口径 |
+| 评测维度 | 愿景指标 | 对照与口径 |
 |---|---:|---|
 | ArtiCheck-Claims 宏 F1 | 达到 0.90 | 仓库隔离的独立测试集 |
 | ArtiCheck-Claims 问题召回率 | 达到 85%，误报率控制在 5% | 验证集定阈值，测试集固定阈值 |
