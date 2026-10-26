@@ -11,7 +11,7 @@
 [![Version](https://img.shields.io/badge/version-0.1.0-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-[快速开始](#quickstart) · [报告示例](#example) · [工作原理](#workflow) · [Planner 训练](#training) · [文档](#docs)
+[快速开始](#quickstart) · [报告示例](#example) · [Benchmark 与结果](#benchmarks) · [工作原理](#workflow) · [Planner 训练](#training) · [文档](#docs)
 
 </div>
 
@@ -74,6 +74,43 @@ runs/demo/
 | C3：方法与 baseline 训练步数相同 | `supported` | 双方均为 100 步 |
 
 查看完整的 [指标缺陷报告](docs/smoke/metric-defect-report.md)、[clean 报告](docs/smoke/clean-report.md) 和 [样例指标](docs/smoke/metrics.json)。判定范围限于所提供的主张与 probe 证据。
+
+<a id="benchmarks"></a>
+
+## Benchmark 与结果
+
+### 正式评测方案
+
+| Benchmark | 评测重点 | 计划使用方式 | ArtiCheck 实测状态 |
+|---|---|---|---|
+| **ArtiCheck-Claims（拟建）** | 指标计算、数据泄漏与 baseline 设置缺陷 | 计划覆盖至少 50 个独立原始仓库、1,000 条审核后主张；按仓库隔离划分 | 尚未构建正式数据集 |
+| **[CORE-Bench](https://github.com/siegelz/core-bench)** | 科学论文代码的计算复现能力 | 公开基准含 90 篇论文、270 个任务；按 Easy / Medium / Hard 分层报告官方结果 | 尚未接入或运行 |
+| **[PaperBench · JudgeEval](https://github.com/openai/frontier-evals/tree/main/project/paperbench/paperbench/judge/judge_eval)** | 自动判定与人工评分的一致性 | 使用 5 份带人工评分的 submission，按官方 rubric 二元节点评测 | 尚未接入或运行 |
+
+三者分别衡量缺陷检出、复现执行和判定质量，分数单独报告。CORE-Bench 的复现任务没有直接提供本项目所需的缺陷真值；JudgeEval 也不等同于完整运行 PaperBench。
+
+### 当前实测：工程冒烟测试
+
+| 数据与策略 | 主张数 | 检出问题 | 正常主张误报 | 宏 F1 | 问题召回率 | 误报率 |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 个教学仓库的 4 个版本 · FixedPlanner + 规则核查 | 12 | 3 / 3 | 0 / 9 | 1.000 | 100% | 0% |
+
+该结果来自仓库内的受控样例，正例 3 条、负例 9 条，阈值为 0.5；未使用训练后的模型。它验证工程链路，不能替代独立仓库测试或外部 benchmark 成绩。[结果文件](docs/smoke/metrics.json) · [验证记录](docs/VALIDATION.md)
+
+### 理想完成态：预设目标，尚未测得
+
+以下数值是项目规划中的验收目标，由本项目设定，**不是实验结果或根据现有样例外推的预测**。正式实验前需冻结数据、预算与基线。
+
+| 评测维度 | 理想目标 | 对照与口径 |
+|---|---:|---|
+| ArtiCheck-Claims 宏 F1 | ≥ 0.90 | 仓库隔离的独立测试集 |
+| ArtiCheck-Claims 问题召回率 | ≥ 85%，同时误报率 ≤ 5% | 验证集定阈值，测试集固定阈值 |
+| CORE-Bench 任务成功率 | 较固定工作流 + 7B 提高 ≥ 10 个百分点 | 同一难度、任务集合、硬件与工具预算 |
+| JudgeEval 官方 F1 | ≥ 0.85 | 按官方 rubric 与人工标签计算 |
+| 单篇核查耗时中位数 | ≤ 基线的 70% | 相对固定工作流 + 7B，分别报告冷启动与缓存命中 |
+| 单篇核查成本 | ≤ 基线的 60% | 相同计价范围，并满足上述质量约束 |
+
+实验分组、指标定义、计价方式与结果发布要求见 [Benchmark 协议](docs/BENCHMARKS.md)。所有公开基准的 ArtiCheck 绝对分数、训练收益和性能收益均待实测。
 
 <a id="workflow"></a>
 
@@ -153,6 +190,7 @@ ArtiCheck 将规划策略与核查工具分开，便于在相同任务和预算�
 | 文档 | 内容 |
 |---|---|
 | [数据与执行](docs/DATA.md) | 任务格式、probe 协议、缓存、缺陷注入、划分、评测与反馈 |
+| [Benchmark 协议](docs/BENCHMARKS.md) | 正式基准选择、当前实测、理想目标与公平对照 |
 | [Planner 训练](docs/TRAINING.md) | 教师轨迹、SFT、verl AgentLoop、GRPO 与版本要求 |
 | [Baseline 接入](docs/BASELINE.md) | 外部运行方式、报告映射、来源与许可 |
 | [验证记录](docs/VALIDATION.md) | 测试范围、样例结果和 CI 证据 |
