@@ -1,153 +1,171 @@
-# ArtiCheck — 论文 Artifact 复现预审助手
+<div align="center">
 
-面向论文 Artifact Evaluation 和投稿前自查的**可运行基础架构**。以 [Paper Reproducibility Agent](https://github.com/1a1a11a/2026_paper_reproduce) 为业务 baseline，新增结构化主张核查、受限执行、缺陷注入数据、评测与 Planner 后训练接口。
+# ArtiCheck
 
-当前版本是工程 MVP：CPU 核查链路已验证，真实论文 benchmark、7B 训练、GPU 性能与量化收益尚未验证。仓库不包含虚构的简历指标。
+**把论文中的实验主张，变成带执行证据的核查报告。**
 
-## 5 分钟运行
+论文 Artifact 复现预审 · 可追溯核查 · Planner 后训练实验
 
-要求 Python 3.10+。核心包仅用标准库，无需 API key 或 GPU。
+[![CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml/badge.svg)](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+[快速开始](#quickstart) · [报告示例](#example) · [工作原理](#workflow) · [Planner 训练](#training) · [文档](#docs)
+
+</div>
+
+ArtiCheck 面向会议 Artifact Evaluation、课题组投稿前自查，以及科研 Agent 的评测与训练。输入**人工审核的主张清单和本地仓库快照**，系统选择检查项、执行 probe，并输出逐主张判定、执行证据和可审计轨迹。
+
+当前版本提供可运行的 CLI 核查流程与教学样例，以及独立的 Planner 训练接口。核心核查无需模型 API 或 GPU；模型服务与训练按需接入。
+
+## 核心能力
+
+- **逐主张核查**：比较实验指标、检查训练/测试样本 ID 重叠、核对方法与 baseline 的训练步数。
+- **证据与判定关联**：每条结论引用对应执行记录；缺失数据、超时和执行失败保留为 `inconclusive`。
+- **受控执行**：默认使用 Docker，支持工具、时间和模型调用预算；确定性任务可按源码内容与执行环境缓存结果。
+- **可复用的评测流程**：受控缺陷注入、原始仓库分组划分、宏 F1 与误报约束下的阈值选择。
+- **可替换的 Planner**：在同一核查流程中切换固定策略与模型策略，提供教师轨迹过滤、LoRA SFT 和 verl GRPO 基础代码。
+
+<a id="quickstart"></a>
+
+## 快速开始
+
+**环境要求：** Python 3.10+，macOS 或 Linux。以下命令仅运行仓库自带的可信样例，无需 API key、GPU 或 Docker。
 
 ```bash
-python -m venv .venv
+git clone https://github.com/Gump111458785/ArtiCheck.git
+cd ArtiCheck
+
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e .
 
-# 仅运行仓库自带的可信教学样例；local 不是隔离沙箱
 python -m articheck demo --sandbox local --output runs/demo
-python -m unittest discover -s tests -v
 ```
 
-生成 `runs/demo/metrics.json`、`scores.jsonl`，以及四组独立的 `report.md`、`report.json`、`trace.jsonl`。样例包含 clean 和三种单缺陷变体，共 12 条主张。**样例分数只用于冒烟测试，不能作为真实论文泛化效果。**
+Demo 会执行一个 clean 版本和三个单缺陷版本，分别检查指标计算、数据划分与 baseline 训练预算。`local` 模式直接在主机执行，仅用于可信代码。
 
-核查一个任务清单：
+结果保存在：
 
-```bash
-python -m articheck run --task examples/task.json \
-  --sandbox local --output runs/example
+```text
+runs/demo/
+├── clean/                 # 正常 artifact 的核查结果
+├── metric_average/        # 指标计算缺陷
+├── split_leakage/         # 数据划分泄漏
+├── baseline_budget/       # baseline 训练预算不一致
+├── metrics.json           # 汇总指标
+├── scores.jsonl           # 逐主张标签、得分与判定
+└── labels.jsonl           # 注入真值，独立于 artifact
 ```
 
-默认执行后端为 Docker；对外部 artifact 使用已审查的镜像和 probe：
+每个版本目录包含 `report.md`、`report.json` 和 `trace.jsonl`。再次运行时请指定新的输出目录。
+
+<a id="example"></a>
+
+## 报告示例
+
+在指标缺陷样例中，报告会定位数值偏差，同时保留其他主张的检查结果：
+
+| 主张 | 判定 | 执行证据摘要 |
+|---|---|---|
+| C1：报告的指标符合预期 | `issue` | 观测值 0.833333，预期 0.777778，容差 0.000001 |
+| C2：训练集与测试集不重叠 | `supported` | 样本 ID 交集为 0 |
+| C3：方法与 baseline 训练步数相同 | `supported` | 双方均为 100 步 |
+
+查看完整的 [指标缺陷报告](docs/smoke/metric-defect-report.md)、[clean 报告](docs/smoke/clean-report.md) 和 [样例指标](docs/smoke/metrics.json)。判定范围限于所提供的主张与 probe 证据。
+
+<a id="workflow"></a>
+
+## 工作原理
+
+```mermaid
+flowchart LR
+    T["主张清单 + 仓库快照"] --> L["文献主张读取"]
+    T --> C["代码与 probe 清单"]
+    L --> P["Planner：选择检查项 / 停止"]
+    C --> P
+    P --> E["实验执行：预算 · Docker · 缓存"]
+    E --> A["交叉核查：主张与证据比较"]
+    A --> P
+    P --> R["逐主张报告 + 运行轨迹"]
+```
+
+流程由六个可替换角色组成：`LiteratureReader`、`CodeInspector`、`Planner`、`ExperimentRunner`、`CrossAuditor` 和 `Reporter`。主张读取与代码清单通过 asyncio DAG 并发运行；Planner 选择待检查主张，执行器运行对应 probe，核查器按主张类型生成判定。
+
+默认策略按顺序检查主张。模型策略使用相同的 `check` / `stop` 动作接口；其余角色当前采用确定性实现。
+
+## 核查自己的 artifact
+
+准备一份 [task.json](examples/task.json)，声明仓库位置、主张与预期结果，并提供一个向 stdout 输出 JSON 的 probe。每条主张也可以指定独立 probe，让 Planner 选择对应实验。
+
+| 字段 | 用途 |
+|---|---|
+| `repo` | 相对任务文件的本地 artifact 路径 |
+| `repo_id` | 原始仓库标识；同源变体共享该 ID，用于数据隔离 |
+| `probe` | 默认执行命令，使用 argv 数组 |
+| `claims` | 主张 ID、文本、检查类型和预期值 |
+
+使用 Docker 执行仓库中的示例任务：
 
 ```bash
 docker pull python:3.11-slim
-python -m articheck run --task examples/task.json --output runs/docker-example
+python -m articheck run --task examples/task.json --output runs/review
 ```
 
-## 架构
+替换 `--task` 即可运行自己的任务。需要额外依赖时，预先构建镜像并通过 `--image` 指定。容器默认无网络、只读挂载、非 root 运行，并限制 CPU、内存和进程数。任务格式、probe 输出协议和镜像要求见 [数据与执行指南](docs/DATA.md)。
 
-```mermaid
-flowchart TD
-  A[论文 PDF] --> B[外部 baseline: 论文理解与仓库复现]
-  B --> C[baseline JSON 报告导入]
-  M[人工审核的 task.json + artifact 快照] --> L[LiteratureReader]
-  M --> I[CodeInspector]
-  L --> P[Planner: check claim / stop]
-  I --> P
-  P --> E[ExperimentRunner: 预算 + 缓存 + Docker]
-  E --> V[CrossAuditor: 证据规则判定]
-  V --> P
-  P --> R[Reporter: 逐主张报告]
-  P --> T[Planner 轨迹: token IDs / log-prob / policy version]
-  T --> S[人工或规则接受过滤 → SFT]
-  S --> G[verl Planner AgentLoop → GRPO]
-  R --> F[人工纠错 → 困难样本]
-```
+<a id="training"></a>
 
-六个角色为 LiteratureReader、CodeInspector、Planner、ExperimentRunner、CrossAuditor、Reporter。它们是可替换的角色接口，**默认仅 Planner 可选用 LLM**；其余为确定性实现。文献输入与代码清单通过 asyncio DAG 并发处理，规划和执行循环按依赖推进。
+## Planner 与后训练
 
-## 已实现与边界
+ArtiCheck 将规划策略与核查工具分开，便于在相同任务和预算下比较策略：
 
-| 模块 | 当前能力 | 验证状态 |
+| 路径 | 入口 | 当前状态 |
 |---|---|---|
-| baseline 集成 | 独立启动脚本、报告适配、提交号溯源 | 按指定上游源码接口核对；真实 PDF/API 运行待验证 |
-| 六角色运行时 | asyncio DAG、check/stop、时间/工具/token/API 费用预算 | CPU 测试通过 |
-| 证据核查 | 指标数值比较、训练/测试 ID 交集、基线训练步数比较 | 受控样例通过 |
-| 执行与缓存 | Docker 默认；可信样例可显式 local；内容与镜像身份缓存 | local 已验证；Docker 在 CI 中执行 |
-| 缺陷数据 | 3 类受控注入、clean 对照、原仓库分组拆分 | CPU 测试通过；任意外部仓库需新增 adapter |
-| 评测 | 宏 F1、误报率、召回率、弃权率；验证集选阈值 | CPU 测试通过 |
-| 轨迹 | OpenAI-compatible 推理；vLLM 原生 token 模式；严格训练导出校验 | 模拟服务契约测试通过；真实 vLLM 待验证 |
-| SFT | 教师轨迹接受过滤、assistant-only LoRA 脚本 | 过滤已测试；GPU 训练待验证 |
-| RL | 自定义多轮 verl AgentLoop、Planner token mask、奖励、GRPO 启动脚本 | 源码接口核对；GPU 集成待验证 |
-| DAPO 相关 | clip-higher 配置；动态组过滤与截断 IS 的独立实现 | 动态采样补批与 IS 尚未接入分布式启动器 |
-| 反馈 | 人工纠错与困难样本记录 | CPU 测试覆盖；未自动触发增量训练 |
-| 效率 | FSDP2/LoRA/检查点/动态批预算配置、vLLM 前缀缓存启动脚本 | 未测显存、吞吐、量化或成本收益 |
+| 固定策略 | `run --planner fixed` | CLI 默认策略，已通过样例验证 |
+| 模型策略 | `run --planner model` | OpenAI-compatible 客户端；真实模型服务待验证 |
+| LoRA SFT | `scripts/train_sft.py` | 教师数据过滤与训练脚本已提供，GPU 训练待验证 |
+| GRPO | `scripts/train_grpo.sh` | 自定义 verl AgentLoop 与启动配置已提供，GPU 集成待验证 |
 
-当前没有实现通用 PDF 主张抽取、任意仓库自动缺陷注入、全论文正确性裁决或 AWQ/FP8 量化。新增任务需提供人工审核的主张与受信 probe；probe 的自报结果仍需审计，不能据此排除硬编码或伪造实验结果。
+教师轨迹经独立审核后可导出为 SFT 数据。原生 token 模式保留采样 token IDs、行为 log-prob 与策略版本，用于训练数据审计；普通文本响应不会被转换为合成 RL token 轨迹。
 
-## 使用指定 baseline
+完整步骤见 [训练指南](docs/TRAINING.md)：模型服务接入、教师采样与接受过滤、SFT、仓库隔离数据准备和 GRPO 启动。FSDP2、LoRA、动态批与前缀缓存已有配置入口；DAPO 动态补采样、IS 接入和 AWQ/FP8 属于后续工作。
 
-baseline 固定参考版本为 `dffac1885dbca1aff9b28d79916140b8af71dedf`。本仓库没有复制上游源码；通过进程和 JSON 报告接口对接。上游当前参考版本根目录未附 LICENSE，详见 [来源与许可](docs/BASELINE.md)。
+## 项目状态与路线图
 
-```bash
-# 用户在独立环境安装 baseline 依赖
-git clone https://github.com/1a1a11a/2026_paper_reproduce.git vendor/baseline
-git -C vendor/baseline checkout dffac1885dbca1aff9b28d79916140b8af71dedf
+**v0.1.0 · 工程预览。** Python 3.10–3.12 核心测试和 Linux Docker 样例已通过 [GitHub CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)，包含 28 项行为与契约测试。完整记录见 [验证说明](docs/VALIDATION.md)。
 
-# BASELINE_PYTHON 指向安装了其 requirements.txt 的独立 Python 环境
-export UPSTREAM_DIR="$PWD/vendor/baseline"
-export BASELINE_PYTHON=/absolute/path/to/baseline-env/bin/python
-bash scripts/run_upstream.sh /absolute/paper.pdf /absolute/baseline-report.md \
-  --vm-host your-dedicated-host --vm-user your-user
+- [x] CLI 核查、逐主张证据报告与运行轨迹
+- [x] 三类教学缺陷注入、仓库分组划分与基础评测
+- [x] baseline 报告导入与人工纠错记录
+- [x] Planner SFT / GRPO 基础代码
+- [ ] 真实论文与仓库数据集、独立人工真值
+- [ ] 真实模型服务与 GPU 训练端到端验证
+- [ ] 动态补采样、课程训练与量化实验
 
-python -m articheck import-upstream \
-  --input /absolute/baseline-report.json --output runs/imported-baseline.json
-```
+当前主张来自人工审核的任务清单，probe 也需审核；通用 PDF 主张抽取和任意仓库自动缺陷注入尚未实现。教学样例验证的是工程流程，真实论文效果、训练增益和效率指标有待独立实验。
 
-导入保留上游原判定，不将 `not_reproduced` 自动转换为“论文有缺陷”。导入结果需独立核验证据，不能直接当作训练真值。上游运行器的执行隔离由它自身配置；本项目 Docker 限制不会自动作用于外部 baseline 进程。
+<a id="docs"></a>
 
-## 接入自部署 Planner
+## 文档与开发
+
+| 文档 | 内容 |
+|---|---|
+| [数据与执行](docs/DATA.md) | 任务格式、probe 协议、缓存、缺陷注入、划分、评测与反馈 |
+| [Planner 训练](docs/TRAINING.md) | 教师轨迹、SFT、verl AgentLoop、GRPO 与版本要求 |
+| [Baseline 接入](docs/BASELINE.md) | 外部运行方式、报告映射、来源与许可 |
+| [验证记录](docs/VALIDATION.md) | 测试范围、样例结果和 CI 证据 |
 
 ```bash
-export MODEL_PATH=Qwen/Qwen2.5-7B-Instruct
-bash scripts/serve_vllm.sh
-
-python -m articheck run --task examples/task.json --output runs/planner \
-  --planner model --model "$MODEL_PATH" --policy-version base-model-revision \
-  --base-url http://127.0.0.1:8000/v1 --native-tokens
+python -m articheck --help
+python -m unittest discover -s tests -v
 ```
 
-原生模式调用 vLLM `/tokenize` 与 `/v1/completions`，使用服务端返回的 token IDs 和对齐 log-prob。普通兼容服务可去掉 `--native-tokens`，但其文本轨迹不允许导出为 RL token 训练数据。所有训练轨迹必须保存实际模型 revision / checkpoint 作为 `--policy-version`。
+开发入口：核查流程位于 [`articheck/pipeline.py`](articheck/pipeline.py)，角色与规则位于 [`articheck/roles.py`](articheck/roles.py)，规划动作位于 [`articheck/planner.py`](articheck/planner.py)，训练适配位于 [`articheck/training/`](articheck/training/)。欢迎通过 [Issues](https://github.com/Gump111458785/ArtiCheck/issues) 提交问题或任务适配建议；报告执行问题时请附运行模式、任务结构和去除敏感信息后的日志。
 
-API key 使用 `ARTICHECK_API_KEY` 环境变量。API 费用按 `--input-price`、`--output-price` 的每百万 token 美元价格计算；默认 0 只表示未配置计价，不代表 GPU 推理免费。
+## 来源与许可
 
-## 数据与评测
+业务 baseline 为 [Paper Reproducibility Agent](https://github.com/1a1a11a/2026_paper_reproduce)，通过独立进程与 JSON 报告对接，源码未包含在本仓库中。Planner 训练接口基于 [verl](https://github.com/verl-project/verl)，推理服务可接入 [vLLM](https://github.com/vllm-project/vllm)。
 
-```bash
-python -m articheck inject --source examples --output data/leak \
-  --repo-id canonical-original-repo --defect split_leakage
-python -m articheck split --input data/labels.jsonl --output data/splits
-
-# 先在独立验证集定阈值，再将同一阈值应用到测试集
-python -m articheck calibrate --validation data/validation-scores.jsonl \
-  --max-fpr 0.05 --output runs/threshold.json
-python -m articheck evaluate --input data/test-scores.jsonl \
-  --threshold 0.7 --output runs/test-metrics.json
-```
-
-上例 `0.7` 为占位阈值，实际应使用 `threshold.json` 中的值。`score` 当前为规则输出，未经概率校准。`inconclusive` 保留在评测分母中；漏检按负预测处理，并单独报告弃权率。详见 [数据协议](docs/DATA.md)。
-
-训练说明见 [TRAINING.md](docs/TRAINING.md)，人工纠错见 [DATA.md](docs/DATA.md)，本地验证记录见 [VALIDATION.md](docs/VALIDATION.md)。
-
-## 目录
-
-```text
-articheck/
-  schema.py            主张、任务、证据、判定数据结构
-  runtime.py           DAG / 预算 / 内容快照 / 缓存
-  sandbox.py           Docker 与显式 trusted-local 执行
-  roles.py             六角色中的确定性组件
-  planner.py           固定策略与模型规划策略
-  pipeline.py          核查循环与报告
-  llm.py / trace.py    模型客户端与原生轨迹校验
-  data.py              注入、分组拆分、教师数据接受过滤
-  evaluation.py        指标与验证集阈值
-  feedback.py          人工纠错记录
-  adapters/upstream.py baseline 报告适配
-  training/            verl AgentLoop、奖励、loss 与导出
-examples/              原创可执行教学 artifact
-scripts/               baseline、vLLM、SFT、GRPO、数据准备入口
-tests/                 CPU 行为与契约测试
-```
-
-原创代码使用 MIT License。第三方工具、模型、数据按各自许可使用。
+ArtiCheck 原创代码采用 [MIT License](LICENSE)。外部工具、模型和数据遵循各自许可；baseline 的版本与许可说明见 [BASELINE.md](docs/BASELINE.md)。

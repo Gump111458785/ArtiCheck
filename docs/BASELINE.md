@@ -8,6 +8,27 @@
 
 参考版本根目录没有 LICENSE。本项目不分发、修改或重新许可其源码，MIT 仅覆盖本仓库原创实现。`vendor/` 默认忽略；外部安装前应自行确认上游使用授权。README 中克隆命令用于取得用户指定 baseline，不表示 ArtiCheck 向第三方授予其源码权利。
 
+## 安装与运行
+
+将 baseline 安装在独立环境中：
+
+```bash
+git clone https://github.com/1a1a11a/2026_paper_reproduce.git vendor/baseline
+git -C vendor/baseline checkout dffac1885dbca1aff9b28d79916140b8af71dedf
+python3 -m venv vendor/baseline/.venv
+vendor/baseline/.venv/bin/python -m pip install -r vendor/baseline/requirements.txt
+
+export UPSTREAM_DIR="$PWD/vendor/baseline"
+export BASELINE_PYTHON="$UPSTREAM_DIR/.venv/bin/python"
+bash scripts/run_upstream.sh /absolute/paper.pdf /absolute/baseline-report.md \
+  --vm-host your-dedicated-host --vm-user your-user
+
+python -m articheck import-upstream \
+  --input /absolute/baseline-report.json --output runs/imported-baseline.json
+```
+
+上述命令从 ArtiCheck 仓库根目录运行；按上游 README 设置其模型 API 凭据与远程执行环境。PDF、报告路径和主机名需替换为实际值。上游执行隔离由其自身配置，本项目的 Docker 限制不会自动作用于该独立进程。
+
 ## 报告映射
 
 | 上游 status | ArtiCheck 导入 verdict | 原因 |
