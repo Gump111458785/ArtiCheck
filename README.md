@@ -79,15 +79,28 @@ runs/demo/
 
 ## Benchmark 与结果
 
-### 正式评测方案
+### 理想完成态 · 激励稿
 
-| Benchmark | 评测重点 | 计划使用方式 | ArtiCheck 实测状态 |
-|---|---|---|---|
-| **ArtiCheck-Claims（拟建）** | 指标计算、数据泄漏与 baseline 设置缺陷 | 计划覆盖至少 50 个独立原始仓库、1,000 条审核后主张；按仓库隔离划分 | 尚未构建正式数据集 |
-| **[CORE-Bench](https://github.com/siegelz/core-bench)** | 科学论文代码的计算复现能力 | 公开基准含 90 篇论文、270 个任务；按 Easy / Medium / Hard 分层报告官方结果 | 尚未接入或运行 |
-| **[PaperBench · JudgeEval](https://github.com/openai/frontier-evals/tree/main/project/paperbench/paperbench/judge/judge_eval)** | 自动判定与人工评分的一致性 | 使用 5 份带人工评分的 submission，按官方 rubric 二元节点评测 | 尚未接入或运行 |
+**以下以已完成口吻描述理想版本，属于激励性草稿，非当前实测结果。**
 
-三者分别衡量缺陷检出、复现执行和判定质量，分数单独报告。CORE-Bench 的复现任务没有直接提供本项目所需的缺陷真值；JudgeEval 也不等同于完整运行 PaperBench。
+ArtiCheck 已打通“主张抽取、实验选择、沙箱复跑、交叉核查、人工反馈与 Planner 后训练”的完整流程，完成三层 benchmark 评测，并形成可追溯的逐主张证据报告。
+
+| Benchmark | 完成的评测工作 | 覆盖范围 |
+|---|---|---|
+| **ArtiCheck-Claims** | 已构建并审核缺陷主张集，完成按仓库隔离的训练、验证与测试 | 50 个独立原始仓库、1,000 条主张；覆盖指标计算、数据泄漏与 baseline 设置 |
+| **[CORE-Bench](https://github.com/siegelz/core-bench)** | 已完成计算复现能力评测，分别报告 Easy / Medium / Hard 结果 | 官方基准含 90 篇论文、270 个任务 |
+| **[PaperBench · JudgeEval](https://github.com/openai/frontier-evals/tree/main/project/paperbench/paperbench/judge/judge_eval)** | 已完成自动判定与人工评分一致性评测 | 5 份带人工评分的 submission，使用官方 rubric 二元节点 |
+
+| 评测维度 | 完成态表现 | 对照与口径 |
+|---|---:|---|
+| ArtiCheck-Claims 宏 F1 | 达到 0.90 | 仓库隔离的独立测试集 |
+| ArtiCheck-Claims 问题召回率 | 达到 85%，误报率控制在 5% | 验证集定阈值，测试集固定阈值 |
+| CORE-Bench 任务成功率 | 提高 10 个百分点 | 相对固定工作流 + 7B；同一难度、任务、硬件与预算 |
+| JudgeEval 官方 F1 | 达到 0.85 | 按官方 rubric 与人工标签计算 |
+| 单篇核查耗时中位数 | 降低 30% | 相对固定工作流 + 7B，区分冷启动与缓存命中 |
+| 单篇核查成本 | 降低 40% | 相同计价范围，并满足上述质量约束 |
+
+模型侧已完成教师轨迹筛选、LoRA SFT 和 Planner GRPO 优化；训练侧完成 FSDP2、激活检查点与动态批处理，推理侧复用 vLLM 前缀缓存。人工纠错已回流为困难样本，用于持续改善误报与漏报。
 
 ### 当前实测：工程冒烟测试
 
@@ -97,20 +110,7 @@ runs/demo/
 
 该结果来自仓库内的受控样例，正例 3 条、负例 9 条，阈值为 0.5；未使用训练后的模型。它验证工程链路，不能替代独立仓库测试或外部 benchmark 成绩。[结果文件](docs/smoke/metrics.json) · [验证记录](docs/VALIDATION.md)
 
-### 理想完成态：预设目标，尚未测得
-
-以下数值是项目规划中的验收目标，由本项目设定，**不是实验结果或根据现有样例外推的预测**。正式实验前需冻结数据、预算与基线。
-
-| 评测维度 | 理想目标 | 对照与口径 |
-|---|---:|---|
-| ArtiCheck-Claims 宏 F1 | ≥ 0.90 | 仓库隔离的独立测试集 |
-| ArtiCheck-Claims 问题召回率 | ≥ 85%，同时误报率 ≤ 5% | 验证集定阈值，测试集固定阈值 |
-| CORE-Bench 任务成功率 | 较固定工作流 + 7B 提高 ≥ 10 个百分点 | 同一难度、任务集合、硬件与工具预算 |
-| JudgeEval 官方 F1 | ≥ 0.85 | 按官方 rubric 与人工标签计算 |
-| 单篇核查耗时中位数 | ≤ 基线的 70% | 相对固定工作流 + 7B，分别报告冷启动与缓存命中 |
-| 单篇核查成本 | ≤ 基线的 60% | 相同计价范围，并满足上述质量约束 |
-
-实验分组、指标定义、计价方式与结果发布要求见 [Benchmark 协议](docs/BENCHMARKS.md)。所有公开基准的 ArtiCheck 绝对分数、训练收益和性能收益均待实测。
+实验分组、指标定义、计价方式与结果发布要求见 [Benchmark 协议](docs/BENCHMARKS.md)。
 
 <a id="workflow"></a>
 
