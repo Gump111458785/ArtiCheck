@@ -10,3 +10,5 @@ checkpoints/
 vendor/
 .pytest_cache/
 .cache/
+.sites-runtime/
+.sites-checkout/

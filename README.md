@@ -11,7 +11,7 @@
 [![Version](https://img.shields.io/badge/version-0.1.0-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-[快速开始](#quickstart) · [报告示例](#example) · [Benchmark 与结果](#benchmarks) · [工作原理](#workflow) · [Planner 训练](#training) · [文档](#docs)
+[快速开始](#quickstart) · [可视化工作台](#workbench) · [报告示例](#example) · [Benchmark 与结果](#benchmarks) · [工作原理](#workflow) · [Planner 训练](#training) · [文档](#docs)
 
 </div>
 
@@ -60,6 +60,23 @@ runs/demo/
 ```
 
 每个版本目录包含 `report.md`、`report.json` 和 `trace.jsonl`。再次运行时请指定新的输出目录。
+
+<a id="workbench"></a>
+
+## 可视化工作台
+
+[打开私有交互预览](https://articheck-workbench.soft-bun-8328.chatgpt.site) · [界面与 API 设计](docs/WORKBENCH.md) · [OpenAPI 契约](web/dist/openapi.json)
+
+工作台覆盖任务配置、六角色执行状态、逐主张证据审查、运行轨迹和人工反馈。点击角色可以查看其输入输出，在「API 契约」页可以查看请求示例、复制 cURL 和导出 OpenAPI。
+
+在仓库根目录启动真实本地运行时：
+
+```bash
+python -m articheck.workbench --port 8787
+# 打开 http://127.0.0.1:8787
+```
+
+本地界面直接调用现有 Python 核查流程，数据保存在 `runs/workbench/`。托管预览提供教学样例的归档回放；真实核查通过本地运行时执行。当前 HTTP API 支持固定 Planner，模型服务与训练启动保留在 CLI 中。
 
 <a id="example"></a>
 
@@ -169,7 +186,7 @@ ArtiCheck 将规划策略与核查工具分开，便于在相同任务和预算�
 
 ## 项目状态与路线图
 
-**v0.1.0 · 工程预览。** Python 3.10–3.12 核心测试和 Linux Docker 样例已通过 [GitHub CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)，包含 28 项行为与契约测试。完整记录见 [验证说明](docs/VALIDATION.md)。
+**v0.1.0 · 工程预览。** Python 3.10–3.12 核心测试和 Linux Docker 样例已通过 [GitHub CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)，包含 40 项行为与契约测试。完整记录见 [验证说明](docs/VALIDATION.md)。
 
 - [x] CLI 核查、逐主张证据报告与运行轨迹
 - [x] 三类教学缺陷注入、仓库分组划分与基础评测
@@ -189,6 +206,7 @@ ArtiCheck 将规划策略与核查工具分开，便于在相同任务和预算�
 |---|---|
 | [数据与执行](docs/DATA.md) | 任务格式、probe 协议、缓存、缺陷注入、划分、评测与反馈 |
 | [Benchmark 协议](docs/BENCHMARKS.md) | 正式基准选择、当前实测、理想目标与公平对照 |
+| [工作台与接口](docs/WORKBENCH.md) | 可视化交互、HTTP/SSE 契约、本地运行与后续接口扩展 |
 | [Planner 训练](docs/TRAINING.md) | 教师轨迹、SFT、verl AgentLoop、GRPO 与版本要求 |
 | [Baseline 接入](docs/BASELINE.md) | 外部运行方式、报告映射、来源与许可 |
 | [验证记录](docs/VALIDATION.md) | 测试范围、样例结果和 CI 证据 |

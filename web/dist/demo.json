@@ -1,0 +1,2481 @@
+{
+  "source": "archived_trusted_fixture_runs",
+  "samples": [
+    {
+      "sample_id": "metric_average",
+      "manifest": {
+        "paper_id": "toy-artifact-v1-metric_average",
+        "repo_id": "toy-artifact-v1",
+        "repo": "artifact",
+        "cacheable": true,
+        "probe": [
+          "python3",
+          "probe.py"
+        ],
+        "paper_text": "Synthetic example: macro F1 is 0.7777778, splits are disjoint, and training budgets match.",
+        "claims": [
+          {
+            "id": "C1",
+            "text": "Reported score uses macro F1",
+            "kind": "metric",
+            "spec": {
+              "key": "macro_f1",
+              "expected": 0.7777777777777778,
+              "tolerance": 1e-06
+            }
+          },
+          {
+            "id": "C2",
+            "text": "Training and test data do not overlap",
+            "kind": "split_disjoint",
+            "spec": {
+              "train_key": "train_ids",
+              "test_key": "test_ids"
+            }
+          },
+          {
+            "id": "C3",
+            "text": "Baseline and method use equal training steps",
+            "kind": "baseline_equal",
+            "spec": {
+              "method_key": "method_steps",
+              "baseline_key": "baseline_steps"
+            }
+          }
+        ]
+      },
+      "report": {
+        "schema_version": 1,
+        "run_id": "627986d313604542a3f3f14f3aec6f2d",
+        "paper_id": "toy-artifact-v1-metric_average",
+        "repo_id": "toy-artifact-v1",
+        "repo_sha256": "94748c8da83aa608f7d36bbda661c5d72ad9d5f9c4f954c1c1d6dbc2870bedb7",
+        "policy": "FixedPlanner",
+        "sandbox": "local",
+        "findings": [
+          {
+            "claim_id": "C1",
+            "verdict": "issue",
+            "score": 1.0,
+            "reason": "Observed 0.8333333333333334; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+            "evidence_ids": [
+              "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+            ]
+          },
+          {
+            "claim_id": "C2",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+            "evidence_ids": [
+              "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+            ]
+          },
+          {
+            "claim_id": "C3",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+            "evidence_ids": [
+              "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+            ]
+          }
+        ],
+        "evidence": [
+          {
+            "id": "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4",
+            "tool": "artifact_probe",
+            "success": true,
+            "payload": {
+              "success": true,
+              "payload": {
+                "macro_f1": 0.8333333333333334,
+                "train_ids": [
+                  "train-1",
+                  "train-2",
+                  "train-3"
+                ],
+                "test_ids": [
+                  "test-1",
+                  "test-2"
+                ],
+                "method_steps": 100,
+                "baseline_steps": 100
+              },
+              "stdout": "{\"macro_f1\": 0.8333333333333334, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"test-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 100}\n",
+              "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+              "returncode": 0,
+              "timed_out": false,
+              "output_overflow": false,
+              "elapsed_seconds": 0.10558758291881531
+            },
+            "provenance": {
+              "cache_hit": false,
+              "repo_sha256": "94748c8da83aa608f7d36bbda661c5d72ad9d5f9c4f954c1c1d6dbc2870bedb7"
+            }
+          }
+        ],
+        "stop_reason": "complete",
+        "elapsed_seconds": 0.10808354103937745,
+        "usage": {
+          "tools": 1,
+          "tokens": 0,
+          "usd": 0
+        }
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "627986d313604542a3f3f14f3aec6f2d",
+          "kind": "preflight",
+          "data": {
+            "code": {
+              "files": [
+                "experiment.json",
+                "probe.py"
+              ],
+              "probe": [
+                "python3",
+                "probe.py"
+              ],
+              "note": "Inventory only; filenames are not scientific evidence"
+            },
+            "literature": {
+              "claims": [
+                {
+                  "id": "C1",
+                  "text": "Reported score uses macro F1",
+                  "kind": "metric",
+                  "spec": {
+                    "key": "macro_f1",
+                    "expected": 0.7777777777777778,
+                    "tolerance": 1e-06
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                },
+                {
+                  "id": "C2",
+                  "text": "Training and test data do not overlap",
+                  "kind": "split_disjoint",
+                  "spec": {
+                    "train_key": "train_ids",
+                    "test_key": "test_ids"
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                },
+                {
+                  "id": "C3",
+                  "text": "Baseline and method use equal training steps",
+                  "kind": "baseline_equal",
+                  "spec": {
+                    "method_key": "method_steps",
+                    "baseline_key": "baseline_steps"
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                }
+              ],
+              "paper_text": "Synthetic example: macro F1 is 0.7777778, splits are disjoint, and training budgets match.",
+              "extraction": "manifest",
+              "source": "human_review_required"
+            }
+          },
+          "repo_sha256": "94748c8da83aa608f7d36bbda661c5d72ad9d5f9c4f954c1c1d6dbc2870bedb7"
+        },
+        {
+          "schema_version": 1,
+          "run_id": "627986d313604542a3f3f14f3aec6f2d",
+          "kind": "decision",
+          "turn": 0,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [],
+            "tools_left": 8,
+            "findings": [],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "627986d313604542a3f3f14f3aec6f2d",
+          "kind": "tool",
+          "evidence": {
+            "id": "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4",
+            "tool": "artifact_probe",
+            "success": true,
+            "payload": {
+              "success": true,
+              "payload": {
+                "macro_f1": 0.8333333333333334,
+                "train_ids": [
+                  "train-1",
+                  "train-2",
+                  "train-3"
+                ],
+                "test_ids": [
+                  "test-1",
+                  "test-2"
+                ],
+                "method_steps": 100,
+                "baseline_steps": 100
+              },
+              "stdout": "{\"macro_f1\": 0.8333333333333334, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"test-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 100}\n",
+              "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+              "returncode": 0,
+              "timed_out": false,
+              "output_overflow": false,
+              "elapsed_seconds": 0.10558758291881531
+            },
+            "provenance": {
+              "cache_hit": false,
+              "repo_sha256": "94748c8da83aa608f7d36bbda661c5d72ad9d5f9c4f954c1c1d6dbc2870bedb7"
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "627986d313604542a3f3f14f3aec6f2d",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C1",
+            "verdict": "issue",
+            "score": 1.0,
+            "reason": "Observed 0.8333333333333334; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+            "evidence_ids": [
+              "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "627986d313604542a3f3f14f3aec6f2d",
+          "kind": "decision",
+          "turn": 1,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "issue",
+                "score": 1.0,
+                "reason": "Observed 0.8333333333333334; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "627986d313604542a3f3f14f3aec6f2d",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C2",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+            "evidence_ids": [
+              "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "627986d313604542a3f3f14f3aec6f2d",
+          "kind": "decision",
+          "turn": 2,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1",
+              "C2"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "issue",
+                "score": 1.0,
+                "reason": "Observed 0.8333333333333334; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C3"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "627986d313604542a3f3f14f3aec6f2d",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C3",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+            "evidence_ids": [
+              "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "627986d313604542a3f3f14f3aec6f2d",
+          "kind": "decision",
+          "turn": 3,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1",
+              "C2",
+              "C3"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "issue",
+                "score": 1.0,
+                "reason": "Observed 0.8333333333333334; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+                ]
+              },
+              {
+                "claim_id": "C3",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+                "evidence_ids": [
+                  "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "stop"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "627986d313604542a3f3f14f3aec6f2d",
+          "kind": "complete",
+          "report": {
+            "schema_version": 1,
+            "run_id": "627986d313604542a3f3f14f3aec6f2d",
+            "paper_id": "toy-artifact-v1-metric_average",
+            "repo_id": "toy-artifact-v1",
+            "repo_sha256": "94748c8da83aa608f7d36bbda661c5d72ad9d5f9c4f954c1c1d6dbc2870bedb7",
+            "policy": "FixedPlanner",
+            "sandbox": "local",
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "issue",
+                "score": 1.0,
+                "reason": "Observed 0.8333333333333334; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+                ]
+              },
+              {
+                "claim_id": "C3",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+                "evidence_ids": [
+                  "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4"
+                ]
+              }
+            ],
+            "evidence": [
+              {
+                "id": "a86c2fb150b61f8280987dcfc79fbe62e0ff787399cf038b21dfd382f48f2bb4",
+                "tool": "artifact_probe",
+                "success": true,
+                "payload": {
+                  "success": true,
+                  "payload": {
+                    "macro_f1": 0.8333333333333334,
+                    "train_ids": [
+                      "train-1",
+                      "train-2",
+                      "train-3"
+                    ],
+                    "test_ids": [
+                      "test-1",
+                      "test-2"
+                    ],
+                    "method_steps": 100,
+                    "baseline_steps": 100
+                  },
+                  "stdout": "{\"macro_f1\": 0.8333333333333334, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"test-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 100}\n",
+                  "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+                  "returncode": 0,
+                  "timed_out": false,
+                  "output_overflow": false,
+                  "elapsed_seconds": 0.10558758291881531
+                },
+                "provenance": {
+                  "cache_hit": false,
+                  "repo_sha256": "94748c8da83aa608f7d36bbda661c5d72ad9d5f9c4f954c1c1d6dbc2870bedb7",
+                  "sandbox": {
+                    "mode": "local_trusted",
+                    "python": "3.12.14 (main, Aug 25 2026, 13:50:33) [Clang 22.1.3 ]",
+                    "timeout": 30,
+                    "executable": {
+                      "path": "/usr/bin/python3",
+                      "mtime_ns": 1784757448000000000,
+                      "size": 118640
+                    }
+                  }
+                }
+              }
+            ],
+            "stop_reason": "complete",
+            "elapsed_seconds": 0.10808354103937745,
+            "usage": {
+              "tools": 1,
+              "tokens": 0,
+              "usd": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sample_id": "split_leakage",
+      "manifest": {
+        "paper_id": "toy-artifact-v1-split_leakage",
+        "repo_id": "toy-artifact-v1",
+        "repo": "artifact",
+        "cacheable": true,
+        "probe": [
+          "python3",
+          "probe.py"
+        ],
+        "paper_text": "Synthetic example: macro F1 is 0.7777778, splits are disjoint, and training budgets match.",
+        "claims": [
+          {
+            "id": "C1",
+            "text": "Reported score uses macro F1",
+            "kind": "metric",
+            "spec": {
+              "key": "macro_f1",
+              "expected": 0.7777777777777778,
+              "tolerance": 1e-06
+            }
+          },
+          {
+            "id": "C2",
+            "text": "Training and test data do not overlap",
+            "kind": "split_disjoint",
+            "spec": {
+              "train_key": "train_ids",
+              "test_key": "test_ids"
+            }
+          },
+          {
+            "id": "C3",
+            "text": "Baseline and method use equal training steps",
+            "kind": "baseline_equal",
+            "spec": {
+              "method_key": "method_steps",
+              "baseline_key": "baseline_steps"
+            }
+          }
+        ]
+      },
+      "report": {
+        "schema_version": 1,
+        "run_id": "ccd11a9064234a399f06c7980762fcaf",
+        "paper_id": "toy-artifact-v1-split_leakage",
+        "repo_id": "toy-artifact-v1",
+        "repo_sha256": "03b6c5bcebfeeb51a552947d04d39a8d3fac08a199bfafb5c78aa14e94a4ce51",
+        "policy": "FixedPlanner",
+        "sandbox": "local",
+        "findings": [
+          {
+            "claim_id": "C1",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+            "evidence_ids": [
+              "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+            ]
+          },
+          {
+            "claim_id": "C2",
+            "verdict": "issue",
+            "score": 1.0,
+            "reason": "Train/test overlap: 1 IDs; result limited to supplied probe",
+            "evidence_ids": [
+              "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+            ]
+          },
+          {
+            "claim_id": "C3",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+            "evidence_ids": [
+              "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+            ]
+          }
+        ],
+        "evidence": [
+          {
+            "id": "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023",
+            "tool": "artifact_probe",
+            "success": true,
+            "payload": {
+              "success": true,
+              "payload": {
+                "macro_f1": 0.7777777777777777,
+                "train_ids": [
+                  "train-1",
+                  "train-2",
+                  "train-3"
+                ],
+                "test_ids": [
+                  "train-1",
+                  "test-2"
+                ],
+                "method_steps": 100,
+                "baseline_steps": 100
+              },
+              "stdout": "{\"macro_f1\": 0.7777777777777777, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"train-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 100}\n",
+              "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+              "returncode": 0,
+              "timed_out": false,
+              "output_overflow": false,
+              "elapsed_seconds": 0.10475950001273304
+            },
+            "provenance": {
+              "cache_hit": false,
+              "repo_sha256": "03b6c5bcebfeeb51a552947d04d39a8d3fac08a199bfafb5c78aa14e94a4ce51"
+            }
+          }
+        ],
+        "stop_reason": "complete",
+        "elapsed_seconds": 0.10711312503553927,
+        "usage": {
+          "tools": 1,
+          "tokens": 0,
+          "usd": 0
+        }
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "ccd11a9064234a399f06c7980762fcaf",
+          "kind": "preflight",
+          "data": {
+            "code": {
+              "files": [
+                "experiment.json",
+                "probe.py"
+              ],
+              "probe": [
+                "python3",
+                "probe.py"
+              ],
+              "note": "Inventory only; filenames are not scientific evidence"
+            },
+            "literature": {
+              "claims": [
+                {
+                  "id": "C1",
+                  "text": "Reported score uses macro F1",
+                  "kind": "metric",
+                  "spec": {
+                    "key": "macro_f1",
+                    "expected": 0.7777777777777778,
+                    "tolerance": 1e-06
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                },
+                {
+                  "id": "C2",
+                  "text": "Training and test data do not overlap",
+                  "kind": "split_disjoint",
+                  "spec": {
+                    "train_key": "train_ids",
+                    "test_key": "test_ids"
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                },
+                {
+                  "id": "C3",
+                  "text": "Baseline and method use equal training steps",
+                  "kind": "baseline_equal",
+                  "spec": {
+                    "method_key": "method_steps",
+                    "baseline_key": "baseline_steps"
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                }
+              ],
+              "paper_text": "Synthetic example: macro F1 is 0.7777778, splits are disjoint, and training budgets match.",
+              "extraction": "manifest",
+              "source": "human_review_required"
+            }
+          },
+          "repo_sha256": "03b6c5bcebfeeb51a552947d04d39a8d3fac08a199bfafb5c78aa14e94a4ce51"
+        },
+        {
+          "schema_version": 1,
+          "run_id": "ccd11a9064234a399f06c7980762fcaf",
+          "kind": "decision",
+          "turn": 0,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [],
+            "tools_left": 8,
+            "findings": [],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "ccd11a9064234a399f06c7980762fcaf",
+          "kind": "tool",
+          "evidence": {
+            "id": "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023",
+            "tool": "artifact_probe",
+            "success": true,
+            "payload": {
+              "success": true,
+              "payload": {
+                "macro_f1": 0.7777777777777777,
+                "train_ids": [
+                  "train-1",
+                  "train-2",
+                  "train-3"
+                ],
+                "test_ids": [
+                  "train-1",
+                  "test-2"
+                ],
+                "method_steps": 100,
+                "baseline_steps": 100
+              },
+              "stdout": "{\"macro_f1\": 0.7777777777777777, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"train-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 100}\n",
+              "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+              "returncode": 0,
+              "timed_out": false,
+              "output_overflow": false,
+              "elapsed_seconds": 0.10475950001273304
+            },
+            "provenance": {
+              "cache_hit": false,
+              "repo_sha256": "03b6c5bcebfeeb51a552947d04d39a8d3fac08a199bfafb5c78aa14e94a4ce51"
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "ccd11a9064234a399f06c7980762fcaf",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C1",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+            "evidence_ids": [
+              "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "ccd11a9064234a399f06c7980762fcaf",
+          "kind": "decision",
+          "turn": 1,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "ccd11a9064234a399f06c7980762fcaf",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C2",
+            "verdict": "issue",
+            "score": 1.0,
+            "reason": "Train/test overlap: 1 IDs; result limited to supplied probe",
+            "evidence_ids": [
+              "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "ccd11a9064234a399f06c7980762fcaf",
+          "kind": "decision",
+          "turn": 2,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1",
+              "C2"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "issue",
+                "score": 1.0,
+                "reason": "Train/test overlap: 1 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C3"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "ccd11a9064234a399f06c7980762fcaf",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C3",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+            "evidence_ids": [
+              "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "ccd11a9064234a399f06c7980762fcaf",
+          "kind": "decision",
+          "turn": 3,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1",
+              "C2",
+              "C3"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "issue",
+                "score": 1.0,
+                "reason": "Train/test overlap: 1 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+                ]
+              },
+              {
+                "claim_id": "C3",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+                "evidence_ids": [
+                  "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "stop"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "ccd11a9064234a399f06c7980762fcaf",
+          "kind": "complete",
+          "report": {
+            "schema_version": 1,
+            "run_id": "ccd11a9064234a399f06c7980762fcaf",
+            "paper_id": "toy-artifact-v1-split_leakage",
+            "repo_id": "toy-artifact-v1",
+            "repo_sha256": "03b6c5bcebfeeb51a552947d04d39a8d3fac08a199bfafb5c78aa14e94a4ce51",
+            "policy": "FixedPlanner",
+            "sandbox": "local",
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "issue",
+                "score": 1.0,
+                "reason": "Train/test overlap: 1 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+                ]
+              },
+              {
+                "claim_id": "C3",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+                "evidence_ids": [
+                  "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023"
+                ]
+              }
+            ],
+            "evidence": [
+              {
+                "id": "a604632c907375220622787ccca3ee58a8f396d1f4e4368a409d8461189c9023",
+                "tool": "artifact_probe",
+                "success": true,
+                "payload": {
+                  "success": true,
+                  "payload": {
+                    "macro_f1": 0.7777777777777777,
+                    "train_ids": [
+                      "train-1",
+                      "train-2",
+                      "train-3"
+                    ],
+                    "test_ids": [
+                      "train-1",
+                      "test-2"
+                    ],
+                    "method_steps": 100,
+                    "baseline_steps": 100
+                  },
+                  "stdout": "{\"macro_f1\": 0.7777777777777777, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"train-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 100}\n",
+                  "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+                  "returncode": 0,
+                  "timed_out": false,
+                  "output_overflow": false,
+                  "elapsed_seconds": 0.10475950001273304
+                },
+                "provenance": {
+                  "cache_hit": false,
+                  "repo_sha256": "03b6c5bcebfeeb51a552947d04d39a8d3fac08a199bfafb5c78aa14e94a4ce51",
+                  "sandbox": {
+                    "mode": "local_trusted",
+                    "python": "3.12.14 (main, Aug 25 2026, 13:50:33) [Clang 22.1.3 ]",
+                    "timeout": 30,
+                    "executable": {
+                      "path": "/usr/bin/python3",
+                      "mtime_ns": 1784757448000000000,
+                      "size": 118640
+                    }
+                  }
+                }
+              }
+            ],
+            "stop_reason": "complete",
+            "elapsed_seconds": 0.10711312503553927,
+            "usage": {
+              "tools": 1,
+              "tokens": 0,
+              "usd": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sample_id": "baseline_budget",
+      "manifest": {
+        "paper_id": "toy-artifact-v1-baseline_budget",
+        "repo_id": "toy-artifact-v1",
+        "repo": "artifact",
+        "cacheable": true,
+        "probe": [
+          "python3",
+          "probe.py"
+        ],
+        "paper_text": "Synthetic example: macro F1 is 0.7777778, splits are disjoint, and training budgets match.",
+        "claims": [
+          {
+            "id": "C1",
+            "text": "Reported score uses macro F1",
+            "kind": "metric",
+            "spec": {
+              "key": "macro_f1",
+              "expected": 0.7777777777777778,
+              "tolerance": 1e-06
+            }
+          },
+          {
+            "id": "C2",
+            "text": "Training and test data do not overlap",
+            "kind": "split_disjoint",
+            "spec": {
+              "train_key": "train_ids",
+              "test_key": "test_ids"
+            }
+          },
+          {
+            "id": "C3",
+            "text": "Baseline and method use equal training steps",
+            "kind": "baseline_equal",
+            "spec": {
+              "method_key": "method_steps",
+              "baseline_key": "baseline_steps"
+            }
+          }
+        ]
+      },
+      "report": {
+        "schema_version": 1,
+        "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+        "paper_id": "toy-artifact-v1-baseline_budget",
+        "repo_id": "toy-artifact-v1",
+        "repo_sha256": "6391915c0dac5990e3acc1fc1192c1519fea867e72600d9f2084b4abb5c9f68a",
+        "policy": "FixedPlanner",
+        "sandbox": "local",
+        "findings": [
+          {
+            "claim_id": "C1",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+            "evidence_ids": [
+              "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+            ]
+          },
+          {
+            "claim_id": "C2",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+            "evidence_ids": [
+              "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+            ]
+          },
+          {
+            "claim_id": "C3",
+            "verdict": "issue",
+            "score": 1.0,
+            "reason": "Method steps=100; baseline steps=10; result limited to supplied probe",
+            "evidence_ids": [
+              "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+            ]
+          }
+        ],
+        "evidence": [
+          {
+            "id": "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7",
+            "tool": "artifact_probe",
+            "success": true,
+            "payload": {
+              "success": true,
+              "payload": {
+                "macro_f1": 0.7777777777777777,
+                "train_ids": [
+                  "train-1",
+                  "train-2",
+                  "train-3"
+                ],
+                "test_ids": [
+                  "test-1",
+                  "test-2"
+                ],
+                "method_steps": 100,
+                "baseline_steps": 10
+              },
+              "stdout": "{\"macro_f1\": 0.7777777777777777, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"test-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 10}\n",
+              "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+              "returncode": 0,
+              "timed_out": false,
+              "output_overflow": false,
+              "elapsed_seconds": 0.10220954194664955
+            },
+            "provenance": {
+              "cache_hit": false,
+              "repo_sha256": "6391915c0dac5990e3acc1fc1192c1519fea867e72600d9f2084b4abb5c9f68a"
+            }
+          }
+        ],
+        "stop_reason": "complete",
+        "elapsed_seconds": 0.10463033395353705,
+        "usage": {
+          "tools": 1,
+          "tokens": 0,
+          "usd": 0
+        }
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+          "kind": "preflight",
+          "data": {
+            "code": {
+              "files": [
+                "experiment.json",
+                "probe.py"
+              ],
+              "probe": [
+                "python3",
+                "probe.py"
+              ],
+              "note": "Inventory only; filenames are not scientific evidence"
+            },
+            "literature": {
+              "claims": [
+                {
+                  "id": "C1",
+                  "text": "Reported score uses macro F1",
+                  "kind": "metric",
+                  "spec": {
+                    "key": "macro_f1",
+                    "expected": 0.7777777777777778,
+                    "tolerance": 1e-06
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                },
+                {
+                  "id": "C2",
+                  "text": "Training and test data do not overlap",
+                  "kind": "split_disjoint",
+                  "spec": {
+                    "train_key": "train_ids",
+                    "test_key": "test_ids"
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                },
+                {
+                  "id": "C3",
+                  "text": "Baseline and method use equal training steps",
+                  "kind": "baseline_equal",
+                  "spec": {
+                    "method_key": "method_steps",
+                    "baseline_key": "baseline_steps"
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                }
+              ],
+              "paper_text": "Synthetic example: macro F1 is 0.7777778, splits are disjoint, and training budgets match.",
+              "extraction": "manifest",
+              "source": "human_review_required"
+            }
+          },
+          "repo_sha256": "6391915c0dac5990e3acc1fc1192c1519fea867e72600d9f2084b4abb5c9f68a"
+        },
+        {
+          "schema_version": 1,
+          "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+          "kind": "decision",
+          "turn": 0,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [],
+            "tools_left": 8,
+            "findings": [],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+          "kind": "tool",
+          "evidence": {
+            "id": "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7",
+            "tool": "artifact_probe",
+            "success": true,
+            "payload": {
+              "success": true,
+              "payload": {
+                "macro_f1": 0.7777777777777777,
+                "train_ids": [
+                  "train-1",
+                  "train-2",
+                  "train-3"
+                ],
+                "test_ids": [
+                  "test-1",
+                  "test-2"
+                ],
+                "method_steps": 100,
+                "baseline_steps": 10
+              },
+              "stdout": "{\"macro_f1\": 0.7777777777777777, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"test-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 10}\n",
+              "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+              "returncode": 0,
+              "timed_out": false,
+              "output_overflow": false,
+              "elapsed_seconds": 0.10220954194664955
+            },
+            "provenance": {
+              "cache_hit": false,
+              "repo_sha256": "6391915c0dac5990e3acc1fc1192c1519fea867e72600d9f2084b4abb5c9f68a"
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C1",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+            "evidence_ids": [
+              "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+          "kind": "decision",
+          "turn": 1,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C2",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+            "evidence_ids": [
+              "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+          "kind": "decision",
+          "turn": 2,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1",
+              "C2"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C3"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C3",
+            "verdict": "issue",
+            "score": 1.0,
+            "reason": "Method steps=100; baseline steps=10; result limited to supplied probe",
+            "evidence_ids": [
+              "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+          "kind": "decision",
+          "turn": 3,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1",
+              "C2",
+              "C3"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+                ]
+              },
+              {
+                "claim_id": "C3",
+                "verdict": "issue",
+                "score": 1.0,
+                "reason": "Method steps=100; baseline steps=10; result limited to supplied probe",
+                "evidence_ids": [
+                  "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "stop"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+          "kind": "complete",
+          "report": {
+            "schema_version": 1,
+            "run_id": "86c237fdc24146dbafa152f0d2e6ad42",
+            "paper_id": "toy-artifact-v1-baseline_budget",
+            "repo_id": "toy-artifact-v1",
+            "repo_sha256": "6391915c0dac5990e3acc1fc1192c1519fea867e72600d9f2084b4abb5c9f68a",
+            "policy": "FixedPlanner",
+            "sandbox": "local",
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+                ]
+              },
+              {
+                "claim_id": "C3",
+                "verdict": "issue",
+                "score": 1.0,
+                "reason": "Method steps=100; baseline steps=10; result limited to supplied probe",
+                "evidence_ids": [
+                  "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7"
+                ]
+              }
+            ],
+            "evidence": [
+              {
+                "id": "a89bbb6133a807bd87e52a1802ce77ad4f4177e78b91847918184dd0b32cdda7",
+                "tool": "artifact_probe",
+                "success": true,
+                "payload": {
+                  "success": true,
+                  "payload": {
+                    "macro_f1": 0.7777777777777777,
+                    "train_ids": [
+                      "train-1",
+                      "train-2",
+                      "train-3"
+                    ],
+                    "test_ids": [
+                      "test-1",
+                      "test-2"
+                    ],
+                    "method_steps": 100,
+                    "baseline_steps": 10
+                  },
+                  "stdout": "{\"macro_f1\": 0.7777777777777777, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"test-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 10}\n",
+                  "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+                  "returncode": 0,
+                  "timed_out": false,
+                  "output_overflow": false,
+                  "elapsed_seconds": 0.10220954194664955
+                },
+                "provenance": {
+                  "cache_hit": false,
+                  "repo_sha256": "6391915c0dac5990e3acc1fc1192c1519fea867e72600d9f2084b4abb5c9f68a",
+                  "sandbox": {
+                    "mode": "local_trusted",
+                    "python": "3.12.14 (main, Aug 25 2026, 13:50:33) [Clang 22.1.3 ]",
+                    "timeout": 30,
+                    "executable": {
+                      "path": "/usr/bin/python3",
+                      "mtime_ns": 1784757448000000000,
+                      "size": 118640
+                    }
+                  }
+                }
+              }
+            ],
+            "stop_reason": "complete",
+            "elapsed_seconds": 0.10463033395353705,
+            "usage": {
+              "tools": 1,
+              "tokens": 0,
+              "usd": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sample_id": "clean",
+      "manifest": {
+        "paper_id": "toy-artifact-v1-clean",
+        "repo_id": "toy-artifact-v1",
+        "repo": "artifact",
+        "cacheable": true,
+        "probe": [
+          "python3",
+          "probe.py"
+        ],
+        "paper_text": "Synthetic example: macro F1 is 0.7777778, splits are disjoint, and training budgets match.",
+        "claims": [
+          {
+            "id": "C1",
+            "text": "Reported score uses macro F1",
+            "kind": "metric",
+            "spec": {
+              "key": "macro_f1",
+              "expected": 0.7777777777777778,
+              "tolerance": 1e-06
+            }
+          },
+          {
+            "id": "C2",
+            "text": "Training and test data do not overlap",
+            "kind": "split_disjoint",
+            "spec": {
+              "train_key": "train_ids",
+              "test_key": "test_ids"
+            }
+          },
+          {
+            "id": "C3",
+            "text": "Baseline and method use equal training steps",
+            "kind": "baseline_equal",
+            "spec": {
+              "method_key": "method_steps",
+              "baseline_key": "baseline_steps"
+            }
+          }
+        ]
+      },
+      "report": {
+        "schema_version": 1,
+        "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+        "paper_id": "toy-artifact-v1-clean",
+        "repo_id": "toy-artifact-v1",
+        "repo_sha256": "be453a628a412e9d798a095abe0600b50403a029924abe5b4d66cc836c67b437",
+        "policy": "FixedPlanner",
+        "sandbox": "local",
+        "findings": [
+          {
+            "claim_id": "C1",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+            "evidence_ids": [
+              "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+            ]
+          },
+          {
+            "claim_id": "C2",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+            "evidence_ids": [
+              "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+            ]
+          },
+          {
+            "claim_id": "C3",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+            "evidence_ids": [
+              "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+            ]
+          }
+        ],
+        "evidence": [
+          {
+            "id": "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a",
+            "tool": "artifact_probe",
+            "success": true,
+            "payload": {
+              "success": true,
+              "payload": {
+                "macro_f1": 0.7777777777777777,
+                "train_ids": [
+                  "train-1",
+                  "train-2",
+                  "train-3"
+                ],
+                "test_ids": [
+                  "test-1",
+                  "test-2"
+                ],
+                "method_steps": 100,
+                "baseline_steps": 100
+              },
+              "stdout": "{\"macro_f1\": 0.7777777777777777, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"test-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 100}\n",
+              "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+              "returncode": 0,
+              "timed_out": false,
+              "output_overflow": false,
+              "elapsed_seconds": 0.1732472910080105
+            },
+            "provenance": {
+              "cache_hit": false,
+              "repo_sha256": "be453a628a412e9d798a095abe0600b50403a029924abe5b4d66cc836c67b437"
+            }
+          }
+        ],
+        "stop_reason": "complete",
+        "elapsed_seconds": 0.1764614999992773,
+        "usage": {
+          "tools": 1,
+          "tokens": 0,
+          "usd": 0
+        }
+      },
+      "events": [
+        {
+          "schema_version": 1,
+          "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+          "kind": "preflight",
+          "data": {
+            "code": {
+              "files": [
+                "experiment.json",
+                "probe.py"
+              ],
+              "probe": [
+                "python3",
+                "probe.py"
+              ],
+              "note": "Inventory only; filenames are not scientific evidence"
+            },
+            "literature": {
+              "claims": [
+                {
+                  "id": "C1",
+                  "text": "Reported score uses macro F1",
+                  "kind": "metric",
+                  "spec": {
+                    "key": "macro_f1",
+                    "expected": 0.7777777777777778,
+                    "tolerance": 1e-06
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                },
+                {
+                  "id": "C2",
+                  "text": "Training and test data do not overlap",
+                  "kind": "split_disjoint",
+                  "spec": {
+                    "train_key": "train_ids",
+                    "test_key": "test_ids"
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                },
+                {
+                  "id": "C3",
+                  "text": "Baseline and method use equal training steps",
+                  "kind": "baseline_equal",
+                  "spec": {
+                    "method_key": "method_steps",
+                    "baseline_key": "baseline_steps"
+                  },
+                  "source": "user_manifest",
+                  "probe": null
+                }
+              ],
+              "paper_text": "Synthetic example: macro F1 is 0.7777778, splits are disjoint, and training budgets match.",
+              "extraction": "manifest",
+              "source": "human_review_required"
+            }
+          },
+          "repo_sha256": "be453a628a412e9d798a095abe0600b50403a029924abe5b4d66cc836c67b437"
+        },
+        {
+          "schema_version": 1,
+          "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+          "kind": "decision",
+          "turn": 0,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [],
+            "tools_left": 8,
+            "findings": [],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C1"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+          "kind": "tool",
+          "evidence": {
+            "id": "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a",
+            "tool": "artifact_probe",
+            "success": true,
+            "payload": {
+              "success": true,
+              "payload": {
+                "macro_f1": 0.7777777777777777,
+                "train_ids": [
+                  "train-1",
+                  "train-2",
+                  "train-3"
+                ],
+                "test_ids": [
+                  "test-1",
+                  "test-2"
+                ],
+                "method_steps": 100,
+                "baseline_steps": 100
+              },
+              "stdout": "{\"macro_f1\": 0.7777777777777777, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"test-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 100}\n",
+              "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+              "returncode": 0,
+              "timed_out": false,
+              "output_overflow": false,
+              "elapsed_seconds": 0.1732472910080105
+            },
+            "provenance": {
+              "cache_hit": false,
+              "repo_sha256": "be453a628a412e9d798a095abe0600b50403a029924abe5b4d66cc836c67b437"
+            }
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C1",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+            "evidence_ids": [
+              "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+          "kind": "decision",
+          "turn": 1,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C2"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C2",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+            "evidence_ids": [
+              "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+          "kind": "decision",
+          "turn": 2,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1",
+              "C2"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "check",
+            "claim_id": "C3"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+          "kind": "audit",
+          "finding": {
+            "claim_id": "C3",
+            "verdict": "supported",
+            "score": 0.0,
+            "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+            "evidence_ids": [
+              "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+            ]
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+          "kind": "decision",
+          "turn": 3,
+          "observation": {
+            "claims": [
+              {
+                "id": "C1",
+                "text": "Reported score uses macro F1",
+                "kind": "metric",
+                "spec": {
+                  "key": "macro_f1",
+                  "expected": 0.7777777777777778,
+                  "tolerance": 1e-06
+                }
+              },
+              {
+                "id": "C2",
+                "text": "Training and test data do not overlap",
+                "kind": "split_disjoint",
+                "spec": {
+                  "train_key": "train_ids",
+                  "test_key": "test_ids"
+                }
+              },
+              {
+                "id": "C3",
+                "text": "Baseline and method use equal training steps",
+                "kind": "baseline_equal",
+                "spec": {
+                  "method_key": "method_steps",
+                  "baseline_key": "baseline_steps"
+                }
+              }
+            ],
+            "checked": [
+              "C1",
+              "C2",
+              "C3"
+            ],
+            "tools_left": 7,
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+                ]
+              },
+              {
+                "claim_id": "C3",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+                "evidence_ids": [
+                  "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+                ]
+              }
+            ],
+            "actions": [
+              "check",
+              "stop"
+            ]
+          },
+          "action": {
+            "action": "stop"
+          }
+        },
+        {
+          "schema_version": 1,
+          "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+          "kind": "complete",
+          "report": {
+            "schema_version": 1,
+            "run_id": "61f02f53c5a84f8f8dec17fb4ca86052",
+            "paper_id": "toy-artifact-v1-clean",
+            "repo_id": "toy-artifact-v1",
+            "repo_sha256": "be453a628a412e9d798a095abe0600b50403a029924abe5b4d66cc836c67b437",
+            "policy": "FixedPlanner",
+            "sandbox": "local",
+            "findings": [
+              {
+                "claim_id": "C1",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Observed 0.7777777777777777; expected 0.7777777777777778 ± 1e-06; result limited to supplied probe",
+                "evidence_ids": [
+                  "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+                ]
+              },
+              {
+                "claim_id": "C2",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Train/test overlap: 0 IDs; result limited to supplied probe",
+                "evidence_ids": [
+                  "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+                ]
+              },
+              {
+                "claim_id": "C3",
+                "verdict": "supported",
+                "score": 0.0,
+                "reason": "Method steps=100; baseline steps=100; result limited to supplied probe",
+                "evidence_ids": [
+                  "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a"
+                ]
+              }
+            ],
+            "evidence": [
+              {
+                "id": "6768d23d0ca6e9640f496306938d9232de9eb03af91fec1e79e0129c284e080a",
+                "tool": "artifact_probe",
+                "success": true,
+                "payload": {
+                  "success": true,
+                  "payload": {
+                    "macro_f1": 0.7777777777777777,
+                    "train_ids": [
+                      "train-1",
+                      "train-2",
+                      "train-3"
+                    ],
+                    "test_ids": [
+                      "test-1",
+                      "test-2"
+                    ],
+                    "method_steps": 100,
+                    "baseline_steps": 100
+                  },
+                  "stdout": "{\"macro_f1\": 0.7777777777777777, \"train_ids\": [\"train-1\", \"train-2\", \"train-3\"], \"test_ids\": [\"test-1\", \"test-2\"], \"method_steps\": 100, \"baseline_steps\": 100}\n",
+                  "stderr": "python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead\n",
+                  "returncode": 0,
+                  "timed_out": false,
+                  "output_overflow": false,
+                  "elapsed_seconds": 0.1732472910080105
+                },
+                "provenance": {
+                  "cache_hit": false,
+                  "repo_sha256": "be453a628a412e9d798a095abe0600b50403a029924abe5b4d66cc836c67b437",
+                  "sandbox": {
+                    "mode": "local_trusted",
+                    "python": "3.12.14 (main, Aug 25 2026, 13:50:33) [Clang 22.1.3 ]",
+                    "timeout": 30,
+                    "executable": {
+                      "path": "/usr/bin/python3",
+                      "mtime_ns": 1784757448000000000,
+                      "size": 118640
+                    }
+                  }
+                }
+              }
+            ],
+            "stop_reason": "complete",
+            "elapsed_seconds": 0.1764614999992773,
+            "usage": {
+              "tools": 1,
+              "tokens": 0,
+              "usd": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
