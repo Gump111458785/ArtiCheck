@@ -348,7 +348,8 @@ def handler_for(app: Workbench, static_root: Path):
                 if not target.is_relative_to(static_root.resolve()) or not target.is_file():
                     raise APIError("Resource not found", 404)
                 mime = {".html": "text/html", ".js": "application/javascript", ".css": "text/css",
-                        ".json": "application/json", ".svg": "image/svg+xml"}.get(target.suffix, "text/plain")
+                        ".json": "application/json", ".svg": "image/svg+xml",
+                        ".woff2": "font/woff2"}.get(target.suffix, "text/plain")
                 self.send_bytes(target.read_bytes(), mime)
             except (APIError, ValueError, KeyError) as exc:
                 self.send_json({"error": {"code": "request_error", "message": str(exc)}}, getattr(exc, "status", 400))

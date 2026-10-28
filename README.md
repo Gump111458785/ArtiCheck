@@ -65,7 +65,9 @@ runs/demo/
 
 ## 可视化工作台
 
-[打开私有交互预览](https://articheck-workbench.soft-bun-8328.chatgpt.site) · [界面与 API 设计](docs/WORKBENCH.md) · [OpenAPI 契约](web/dist/openapi.json)
+[打开私有交互预览](https://articheck-workbench.soft-bun-8328.chatgpt.site) · [界面与 API 设计](docs/WORKBENCH.md) · [界面设计记录](docs/WORKBENCH_DESIGN.md) · [OpenAPI 契约](web/dist/openapi.json)
+
+![ArtiCheck 工作台：主张与执行证据对照](docs/assets/workbench.png)
 
 工作台覆盖任务配置、六角色执行状态、逐主张证据审查、运行轨迹和人工反馈。点击角色可以查看其输入输出，在「API 契约」页可以查看请求示例、复制 cURL 和导出 OpenAPI。
 

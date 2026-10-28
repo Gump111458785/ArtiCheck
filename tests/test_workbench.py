@@ -139,6 +139,9 @@ class HTTPContractTests(unittest.TestCase):
     def test_health_static_and_contract(self):
         self.assertEqual(json.load(self.call("/api/health"))["mode"], "runtime")
         self.assertIn(b"ArtiCheck", self.call("/").read())
+        font = self.call("/fonts/ibm-plex-sans-latin.woff2")
+        self.assertEqual(font.headers.get_content_type(), "font/woff2")
+        self.assertEqual(font.read(4), b"wOF2")
         contract = json.load(self.call("/api/openapi.json"))
         self.assertEqual(contract["openapi"], "3.1.0")
         self.assertIn("/api/runs/{run_id}/feedback", contract["paths"])

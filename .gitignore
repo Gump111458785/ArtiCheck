@@ -12,3 +12,4 @@ vendor/
 .cache/
 .sites-runtime/
 .sites-checkout/
+.taste-skill/

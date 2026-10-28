@@ -23,6 +23,10 @@ node --check web/dist/app.js
 python -m unittest discover -s tests -v
 ```
 
+## 界面设计
+
+工作区以主张和证据对照为中心，指标摘要与六角色状态位于同一运行上下文。手机端折叠导航，主张与证据详情分屏呈现。具体设计与验证见 [设计记录](WORKBENCH_DESIGN.md)。
+
 ## 五个工作视图
 
 | 视图 | 用户操作 | 对应资源 |
