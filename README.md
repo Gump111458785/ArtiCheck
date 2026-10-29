@@ -77,7 +77,7 @@ runs/demo/
 2. **实验范围与主张**：登记主要结论、核心实验和目标层级，按八项复现条件补充依据；逐页阅读原文，编辑并人工确认报告值、单位、容差与出处，限定本次复现范围。
 3. **服务器核对**：读取本地运行主机，或在目标服务器运行只读脚本后上传 JSON；将带出处的实验要求与每卡空闲显存、可用内存和空闲磁盘比较，缺失指标保留未知。
 4. **运行条件**：登记数据、权重和计算要求，预检本地 `task.json`，将主张绑定到实际检查项。
-5. **完整实验**：核验真实文件、绑定冻结计划，启动可取消的 Docker 阶段与种子矩阵，读取独立指标和统计证据；也可查看与当前项目隔离的公开 CPU 归档案例。
+5. **完整实验**：将 PDF、ZIP 和计划导入本地不可变工作区，具名审核整篇清单与方法对应，启动可取消的 Docker 阶段与种子矩阵；核对实际配置、模型产物、独立指标、控制公平性和调参轨迹，读取分层验收及资源证据。
 6. **评估结果**：分别呈现材料准备、代码运行、指标对齐；进一步查看逐条证据、六角色轨迹与人工反馈。
 
 八项条件均可上传实际配置、清单与日志；JSON 只检查字段是否提供，材料登记不生成验证通过。各项完成范围与剩余缺口见 [八项能力核对](docs/IMPLEMENTATION_STATUS.md)。
@@ -121,10 +121,13 @@ python -m articheck.workbench --port 8787
 | 阶段证据 | 60 个 |
 | L2-SVM 准确率均值 | 96.76% |
 | 准确率样本标准差 | 0.31 个百分点 |
-| 执行器墙钟时长 | 144.42 秒 |
-| 全阶段子进程峰值 RSS 最大值 | 366.2 MiB |
+| 执行器墙钟时长 | 147.41 秒 |
+| 全阶段子进程峰值 RSS 最大值 | 366.4 MiB |
+| 容器外内存采样峰值（30 / 60 阶段有采样） | 370.6 MiB |
 
-[CI 与完整证据](https://github.com/Gump111458785/ArtiCheck/actions/runs/40857463535) · [案例命令与偏差](examples/liblinear_case/README.md) · [网页归档摘要](web/dist/samples/liblinear-reproduction.json)。时长包含执行器审计、构建和运行，不含准备脚本下载及基础镜像拉取；费用和 GPU 峰值未测。数据划分是明确声明的重新划分，代码采用现代作者版本；Figure 1、rcv1、Pegasos/SVMperf、原论文调参与计时曲线没有完成，因此不作为整篇论文或效率结论复现成绩。
+[CI 与完整证据](https://github.com/Gump111458785/ArtiCheck/actions/runs/40889691677) · [案例命令与偏差](examples/liblinear_case/README.md) · [网页归档摘要](web/dist/samples/liblinear-reproduction.json)。时长包含执行器审计、构建和运行，不含准备脚本下载及基础镜像拉取；费用和 GPU 峰值未测。数据划分是明确声明的重新划分，代码采用现代作者版本；Figure 1、rcv1、Pegasos/SVMperf、原论文调参与计时曲线没有完成，因此不作为整篇论文或效率结论复现成绩。
+
+八项能力的实现、代码位置与正反向验收见 [完成验收清单](docs/REPRODUCTION_COMPLETION_CHECKLIST.md)；本地材料、版本审核、公开数据获取及测量口径见 [执行证据说明](docs/EXECUTION_EVIDENCE.md)。
 
 ArtiCheck-Claims 独立仓库数据集、CORE-Bench 与 JudgeEval 尚无正式结果；SFT/GRPO 训练增益和效率收益尚未测量。
 
@@ -197,7 +200,7 @@ ArtiCheck 将规划策略与核查工具分开，便于在相同任务和预算�
 
 ## 项目状态与路线图
 
-**v0.1.0 · 工程预览。** Python 3.10–3.12 核心测试和 Linux Docker 样例已通过 [GitHub CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)，本地 79 项 Python 测试（78 通过，1 项 Docker 专项在 CI 执行）、44 项前端测试通过；新增资源采集与容量比较的 GPU 分支通过模拟数据验证。完整记录见 [验证说明](docs/VALIDATION.md)。
+**v0.1.0 · 工程预览。** Python 3.10–3.12 核心测试和 Linux Docker 样例已通过 [GitHub CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)，120 项 Python 测试在本地完成 116 项、4 项 Docker 专项在 CI 执行；47 项前端测试通过。GPU 采样与归属分支经过模拟验证，当前没有实卡测量成绩。完整记录见 [验证说明](docs/VALIDATION.md)。
 
 - [x] PDF / GitHub / ZIP 材料导入、逐页主张确认与分层评估界面
 - [x] 本地执行规范预检、主张绑定与材料来源记录

@@ -48,7 +48,7 @@
 
 ### 公开 CPU 案例
 
-LIBLINEAR Section 3.1 重构案例完成 3 个版本 × 5 个数据划分种子 = 15 次运行、60 个阶段。L2-SVM 准确率均值为 96.76%，样本标准差 0.31 个百分点；执行器耗时 144.42 秒，包含审计、构建与运行。归档来源是 [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/40857463535)，偏差和执行方式见 [案例说明](../examples/liblinear_case/README.md)。
+LIBLINEAR Section 3.1 重构案例完成 3 个版本 × 5 个数据划分种子 = 15 次运行、60 个阶段。L2-SVM 准确率均值为 96.76%，样本标准差 0.31 个百分点；执行器耗时 147.41 秒，包含审计、构建与运行。归档来源是 [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/40889691677)，偏差和执行方式见 [案例说明](../examples/liblinear_case/README.md)。
 
 这衡量执行链路，不是主张缺陷检测、Planner 训练或正式外部 benchmark 成绩。原论文划分未找回，现代代码、额外固定参数控制与原论文不完全相同；未覆盖的 Figure 1 / rcv1 / 外部求解器继续列为缺口。不同数据划分的配对 bootstrap 只适用于所声明协议，不表示原论文的所有统计结论成立。
 

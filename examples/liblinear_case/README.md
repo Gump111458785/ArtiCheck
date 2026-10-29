@@ -15,3 +15,5 @@ python -m articheck reproduce --plan runs/liblinear-input/plan.json --output run
 准备只下载和解析公开材料；作者代码仅在禁网 Docker 容器中编译/执行，没有本地降级。先下载基础镜像，再从 immutable RepoDigest 构建。
 
 主要偏差：现代作者版本不是原论文年代的代码；原始划分 ID 未找回，当前用明确的 80/20 seeded split；未重复 Figure 1 的调参与计时曲线、rcv1 和外部求解器。参考准确率只做带容差的对照，不能证明同一划分或论文完整结论。实际结果以 GitHub Actions 的 `liblinear-cpu-reproduction` 作业及下载证据为准，文档不预填成绩。
+
+最终验收：[40889691677](https://github.com/Gump111458785/ArtiCheck/actions/runs/40889691677)，代码 `ba90da5`。15 次运行、60 阶段，准确率均值 96.76%，执行器计时 147.41 秒。PDF 独立读回、环境重建、实际配置/模型产物、固定控制公平性与独立指标均有记录；有 30 个阶段的容器外内存采样。当前 training / conclusion 为 false，保留现代代码、重划分和未覆盖核心实验的实际边界。
