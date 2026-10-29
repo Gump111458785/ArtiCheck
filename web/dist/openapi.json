@@ -493,6 +493,390 @@
         ]
       }
     },
+    "/api/preflight": {
+      "post": {
+        "summary": "预检执行条件",
+        "description": "只检查工作区内的 manifest、代码目录、Docker 和声明的数据/权重路径；不运行 artifact。返回 manifest 指纹供启动前校验。",
+        "operationId": "post__api_preflight",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "manifest_sha256": "sha256",
+                  "can_execute": false,
+                  "checks": [
+                    {
+                      "id": "docker",
+                      "status": "blocked",
+                      "detail": "需要安装并启动 Docker"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ui-response": {
+          "manifest_sha256": "sha256",
+          "can_execute": false,
+          "checks": [
+            {
+              "id": "docker",
+              "status": "blocked",
+              "detail": "需要安装并启动 Docker"
+            }
+          ]
+        },
+        "x-ui-request": {
+          "task_path": "examples/task.json",
+          "resources": {
+            "data_required": false,
+            "weights_required": false
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreflightCreate"
+              },
+              "example": {
+                "task_path": "examples/task.json",
+                "resources": {
+                  "data_required": false,
+                  "weights_required": false
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-ArtiCheck-Client",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "workbench"
+            }
+          }
+        ]
+      }
+    },
+    "/api/repositories/inspect": {
+      "post": {
+        "summary": "读取公共 GitHub 目录",
+        "description": "仅从固定 GitHub API 读取公共仓库默认分支、提交版本和最多 5000 个文件目录。不 clone 或执行仓库，不使用本机 GitHub 凭据。",
+        "operationId": "post__api_repositories_inspect",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "kind": "github",
+                  "name": "owner/repository",
+                  "branch": "main",
+                  "commit": "commit-sha",
+                  "files": [
+                    {
+                      "path": "README.md"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ui-response": {
+          "kind": "github",
+          "name": "owner/repository",
+          "branch": "main",
+          "commit": "commit-sha",
+          "files": [
+            {
+              "path": "README.md"
+            }
+          ]
+        },
+        "x-ui-request": {
+          "repository_url": "https://github.com/1a1a11a/2026_paper_reproduce"
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "repository_url": "https://github.com/1a1a11a/2026_paper_reproduce"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-ArtiCheck-Client",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "workbench"
+            }
+          }
+        ]
+      }
+    },
     "/api/runs": {
       "get": {
         "summary": "核查运行列表",
@@ -2231,12 +2615,52 @@
           }
         }
       },
+      "PreflightCreate": {
+        "type": "object",
+        "required": [
+          "task_path"
+        ],
+        "properties": {
+          "task_path": {
+            "type": "string"
+          },
+          "resources": {
+            "type": "object",
+            "properties": {
+              "data_required": {
+                "type": "boolean"
+              },
+              "data_path": {
+                "type": "string"
+              },
+              "weights_required": {
+                "type": "boolean"
+              },
+              "weights_path": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
       "TaskCreate": {
         "type": "object",
         "properties": {
           "title": {
             "type": "string",
             "maxLength": 200
+          },
+          "paper_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "paper_text": {
+            "type": "string",
+            "maxLength": 120000
+          },
+          "manifest_sha256": {
+            "type": "string"
           },
           "sample_id": {
             "enum": [

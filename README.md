@@ -15,7 +15,7 @@
 
 </div>
 
-ArtiCheck 面向会议 Artifact Evaluation、课题组投稿前自查，以及科研 Agent 的评测与训练。输入**人工审核的主张清单和本地仓库快照**，系统选择检查项、执行 probe，并输出逐主张判定、执行证据和可审计轨迹。
+ArtiCheck 面向会议 Artifact Evaluation、课题组投稿前自查，以及科研 Agent 的评测与训练。从**论文 PDF 与代码材料**开始，对照原文确认实验主张、绑定本地执行入口，再输出逐主张判定、执行证据和可审计轨迹。CLI 也接受人工审核的任务清单与本地仓库快照。
 
 当前版本提供可运行的 CLI 核查流程与教学样例，以及独立的 Planner 训练接口。核心核查无需模型 API 或 GPU；模型服务与训练按需接入。
 
@@ -67,9 +67,16 @@ runs/demo/
 
 [打开私有交互预览](https://articheck-workbench.soft-bun-8328.chatgpt.site) · [界面与 API 设计](docs/WORKBENCH.md) · [界面设计记录](docs/WORKBENCH_DESIGN.md) · [OpenAPI 契约](web/dist/openapi.json)
 
-![ArtiCheck 工作台：主张与执行证据对照](docs/assets/workbench.png)
+![ArtiCheck 工作台：论文原文与实验主张对照](docs/assets/paper-claims.jpg)
 
-工作台覆盖任务配置、六角色执行状态、逐主张证据审查、运行轨迹和人工反馈。点击角色可以查看其输入输出，在「API 契约」页可以查看请求示例、复制 cURL 和导出 OpenAPI。
+工作台围绕一次具体实验组织为四个阶段：
+
+1. **论文与代码**：导入 PDF，读取 GitHub 公共仓库目录或代码 ZIP，记录材料指纹与仓库提交。
+2. **实验主张**：逐页阅读原文，编辑并人工确认报告值、单位、容差与出处，限定本次复现范围。
+3. **运行条件**：登记数据、权重和计算要求，预检本地 `task.json`，将主张绑定到实际检查项。
+4. **评估结果**：分别呈现材料准备、代码运行、指标对齐；进一步查看逐条证据、六角色轨迹与人工反馈。
+
+PDF 与 ZIP 保存在当前浏览器，PDF 正文由随仓库分发的 PDF.js 解析。扫描件与复杂表格可手工录入主张，候选文本始终需要人工确认。
 
 在仓库根目录启动真实本地运行时：
 
@@ -78,7 +85,7 @@ python -m articheck.workbench --port 8787
 # 打开 http://127.0.0.1:8787
 ```
 
-本地界面直接调用现有 Python 核查流程，数据保存在 `runs/workbench/`。托管预览提供教学样例的归档回放；真实核查通过本地运行时执行。当前 HTTP API 支持固定 Planner，模型服务与训练启动保留在 CLI 中。
+本地界面直接调用现有 Python 核查流程，数据保存在 `runs/workbench/`。托管预览支持材料准备、主张编辑和项目 JSON 导出，并提供教学样例归档回放。真实核查通过本地运行时执行；导入的项目需要明确的执行适配与 Docker 环境。当前 HTTP API 支持固定 Planner，模型服务与训练启动保留在 CLI 中。
 
 <a id="example"></a>
 
@@ -188,8 +195,10 @@ ArtiCheck 将规划策略与核查工具分开，便于在相同任务和预算�
 
 ## 项目状态与路线图
 
-**v0.1.0 · 工程预览。** Python 3.10–3.12 核心测试和 Linux Docker 样例已通过 [GitHub CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)，包含 40 项行为与契约测试。完整记录见 [验证说明](docs/VALIDATION.md)。
+**v0.1.0 · 工程预览。** Python 3.10–3.12 核心测试和 Linux Docker 样例已通过 [GitHub CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)，包含 48 项 Python 行为与契约测试、13 项前端数据与状态测试。完整记录见 [验证说明](docs/VALIDATION.md)。
 
+- [x] PDF / GitHub / ZIP 材料导入、逐页主张确认与分层评估界面
+- [x] 本地执行规范预检、主张绑定与材料来源记录
 - [x] CLI 核查、逐主张证据报告与运行轨迹
 - [x] 三类教学缺陷注入、仓库分组划分与基础评测
 - [x] baseline 报告导入与人工纠错记录
@@ -198,7 +207,7 @@ ArtiCheck 将规划策略与核查工具分开，便于在相同任务和预算�
 - [ ] 真实模型服务与 GPU 训练端到端验证
 - [ ] 动态补采样、课程训练与量化实验
 
-当前主张来自人工审核的任务清单，probe 也需审核；通用 PDF 主张抽取和任意仓库自动缺陷注入尚未实现。教学样例验证的是工程流程，真实论文效果、训练增益和效率指标有待独立实验。
+PDF 指标文本可生成待审核候选，执行主张与 probe 仍需人工确认；复杂表格、扫描件 OCR、任意仓库自动执行适配和通用缺陷注入尚未实现。教学样例验证的是工程流程，真实论文效果、训练增益和效率指标有待独立实验。
 
 <a id="docs"></a>
 
@@ -208,6 +217,7 @@ ArtiCheck 将规划策略与核查工具分开，便于在相同任务和预算�
 |---|---|
 | [数据与执行](docs/DATA.md) | 任务格式、probe 协议、缓存、缺陷注入、划分、评测与反馈 |
 | [Benchmark 协议](docs/BENCHMARKS.md) | 正式基准选择、当前实测、理想目标与公平对照 |
+| [需求与范围](docs/REQUIREMENTS.md) | 论文材料、实验范围、执行适配与结论边界 |
 | [工作台与接口](docs/WORKBENCH.md) | 可视化交互、HTTP/SSE 契约、本地运行与后续接口扩展 |
 | [Planner 训练](docs/TRAINING.md) | 教师轨迹、SFT、verl AgentLoop、GRPO 与版本要求 |
 | [Baseline 接入](docs/BASELINE.md) | 外部运行方式、报告映射、来源与许可 |
@@ -221,6 +231,8 @@ python -m unittest discover -s tests -v
 开发入口：核查流程位于 [`articheck/pipeline.py`](articheck/pipeline.py)，角色与规则位于 [`articheck/roles.py`](articheck/roles.py)，规划动作位于 [`articheck/planner.py`](articheck/planner.py)，训练适配位于 [`articheck/training/`](articheck/training/)。欢迎通过 [Issues](https://github.com/Gump111458785/ArtiCheck/issues) 提交问题或任务适配建议；报告执行问题时请附运行模式、任务结构和去除敏感信息后的日志。
 
 ## 来源与许可
+
+PDF 阅读器采用 [PDF.js](https://github.com/mozilla/pdf.js)，随仓库分发版本 6.4.299，Apache-2.0；内附字体与 CMap 各自许可见 `web/dist/vendor/pdfjs/`。
 
 业务 baseline 为 [Paper Reproducibility Agent](https://github.com/1a1a11a/2026_paper_reproduce)，通过独立进程与 JSON 报告对接，源码未包含在本仓库中。Planner 训练接口基于 [verl](https://github.com/verl-project/verl)，推理服务可接入 [vLLM](https://github.com/vllm-project/vllm)。
 

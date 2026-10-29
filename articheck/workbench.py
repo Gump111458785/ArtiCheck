@@ -4,7 +4,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import hashlib
 import math
+import os
+import re
+import shutil
+import subprocess
 import threading
 import time
 import uuid
@@ -12,7 +17,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, quote
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 from .data import DEFECTS, inject, read_jsonl
 from .feedback import record_feedback
@@ -34,6 +41,47 @@ class APIError(ValueError):
     def __init__(self, message, status=400):
         super().__init__(message)
         self.status = status
+
+
+def inspect_github_repository(body):
+    parsed = urlparse(str(body.get("repository_url", "")))
+    parts = parsed.path.rstrip("/").removesuffix(".git").strip("/").split("/")
+    if (parsed.scheme != "https" or parsed.netloc.lower() != "github.com" or len(parts) != 2
+            or not re.fullmatch(r"[A-Za-z0-9-]+", parts[0]) or not re.fullmatch(r"[\w.-]+", parts[1])
+            or parts[1] in {".", ".."}):
+        raise APIError("请使用 https://github.com/作者/仓库 格式")
+    owner, name = parts
+    base = f"https://api.github.com/repos/{owner}/{name}"
+    def get(path):
+        try:
+            request = Request(base + path, headers={"Accept": "application/vnd.github+json", "User-Agent": "ArtiCheck-Workbench"})
+            with urlopen(request, timeout=8) as response:
+                payload = response.read(5_000_001)
+            if len(payload) > 5_000_000:
+                raise APIError("仓库目录过大，请只导入本次实验所需的代码 ZIP", 413)
+            value = json.loads(payload)
+            if not isinstance(value, dict):
+                raise APIError("GitHub 返回了无效的目录信息", 502)
+            return value
+        except APIError:
+            raise
+        except HTTPError as exc:
+            raise APIError("GitHub 请求受限或仓库不可公开读取，请改用代码 ZIP", 502) from exc
+        except (URLError, TimeoutError, OSError, ValueError) as exc:
+            raise APIError("GitHub 目录读取失败，请稍后重试或导入代码 ZIP", 502) from exc
+    meta = get("")
+    branch = meta.get("default_branch")
+    if not isinstance(branch, str) or not 1 <= len(branch) <= 255:
+        raise APIError("GitHub 未返回有效的默认分支", 502)
+    commit = get("/commits/" + quote(branch, safe="")).get("sha", "")
+    if not re.fullmatch(r"[0-9a-f]{40,64}", commit):
+        raise APIError("GitHub 未返回有效的提交版本", 502)
+    tree = get("/git/trees/" + commit + "?recursive=1")
+    files = [{"path": item["path"], "size": item.get("size")} for item in tree.get("tree", []) if item.get("type") == "blob"]
+    if tree.get("truncated") or len(files) > 5000 or not files:
+        raise APIError("目录不完整、为空或超过 5000 个文件，请导入实验代码 ZIP", 413)
+    return {"kind": "github", "name": f"{owner}/{name}", "url": f"https://github.com/{owner}/{name}",
+            "branch": branch, "commit": commit, "files": files, "fetched_at": now()}
 
 
 class Workbench:
@@ -103,11 +151,21 @@ class Workbench:
                 if not path.is_relative_to(self.workspace) or not path.is_file():
                     raise APIError("task_path must identify a manifest inside the configured workspace")
                 source = Task.load(path)
+                if body.get("manifest_sha256") and hashlib.sha256(path.read_bytes()).hexdigest() != body["manifest_sha256"]:
+                    raise APIError("Manifest changed; run preflight again", 409)
                 if not source.repo.is_relative_to(self.workspace):
                     raise APIError("Artifact must be inside the configured workspace")
                 raw = json.loads(path.read_text())
                 raw["repo"] = str(source.repo)
                 trusted = False
+            if "paper_id" in body:
+                if not isinstance(body["paper_id"], str) or not 1 <= len(body["paper_id"]) <= 200:
+                    raise APIError("paper_id must contain 1–200 characters")
+                raw["paper_id"] = body["paper_id"]
+            if "paper_text" in body:
+                if not isinstance(body["paper_text"], str) or len(body["paper_text"]) > 120000:
+                    raise APIError("paper_text must be text up to 120000 characters")
+                raw["paper_text"] = body["paper_text"]
             if "claims" in body:
                 if not isinstance(body["claims"], list) or not 1 <= len(body["claims"]) <= 100:
                     raise APIError("Provide 1–100 claims")
@@ -122,6 +180,52 @@ class Workbench:
             path = self.storage / "tasks" / task_id / "task.json"
             dump(path, raw)
             return self._register(task_id, path, str(body.get("title", ""))[:200], trusted, sample)
+
+    def preflight(self, body):
+        path = (self.workspace / str(body.get("task_path", ""))).resolve()
+        if not path.is_relative_to(self.workspace) or not path.is_file():
+            raise APIError("task_path must identify a manifest inside the workspace")
+        task = Task.load(path)
+        if not task.repo.is_relative_to(self.workspace):
+            raise APIError("Artifact must be inside the workspace")
+        raw = json.loads(path.read_text())
+        files = []
+        for directory, names, filenames in os.walk(task.repo, followlinks=False):
+            names[:] = [name for name in names if name not in {".git", ".venv", "node_modules", "__pycache__"}]
+            for filename in filenames:
+                item = Path(directory) / filename
+                if item.is_file() and not item.is_symlink():
+                    files.append(item.relative_to(task.repo).as_posix())
+                if len(files) >= 2500:
+                    break
+            if len(files) >= 2500:
+                break
+        docker = shutil.which("docker")
+        reachable = False
+        if docker:
+            try:
+                result = subprocess.run([docker, "info", "--format", "{{.ServerVersion}}"], capture_output=True, timeout=3)
+                reachable = result.returncode == 0
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        resources = body.get("resources", {})
+        if not isinstance(resources, dict):
+            raise APIError("resources must be an object")
+        checks = [{"id": "manifest", "label": "执行规范", "status": "ready", "detail": str(path.relative_to(self.workspace))},
+                  {"id": "repository", "label": "本地代码目录", "status": "ready", "detail": task.repo.relative_to(self.workspace).as_posix()},
+                  {"id": "docker", "label": "Docker 执行环境", "status": "ready" if reachable else "blocked", "detail": "服务可连接" if reachable else "需要安装并启动 Docker"}]
+        for key, label in (("data", "数据集"), ("weights", "模型权重")):
+            required = resources.get(key+"_required", False)
+            if type(required) is not bool:
+                raise APIError("Resource requirement must be boolean")
+            value = str(resources.get(key+"_path", "")).strip()
+            target = (self.workspace / value).resolve() if value else None
+            present = bool(target and target.is_relative_to(self.workspace) and target.exists())
+            checks.append({"id": key, "label": label, "status": "ready" if not required or present else "blocked",
+                           "detail": "本范围无需该材料" if not required else value if present else "工作区内尚未找到所需路径"})
+        return {"manifest_path": path.relative_to(self.workspace).as_posix(), "manifest_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "manifest": raw, "paper_id": task.paper_id, "repo_id": task.repo_id, "probe": task.probe,
+                "files": files, "checks": checks, "can_execute": all(c["status"] == "ready" for c in checks)}
 
     def start_run(self, body):
         with self.lock:
@@ -349,7 +453,9 @@ def handler_for(app: Workbench, static_root: Path):
                     raise APIError("Resource not found", 404)
                 mime = {".html": "text/html", ".js": "application/javascript", ".css": "text/css",
                         ".json": "application/json", ".svg": "image/svg+xml",
-                        ".woff2": "font/woff2"}.get(target.suffix, "text/plain")
+                        ".woff2": "font/woff2", ".mjs": "application/javascript",
+                        ".pdf": "application/pdf", ".zip": "application/zip", ".wasm": "application/wasm", ".pfb": "application/octet-stream",
+                        ".ttf": "font/ttf"}.get(target.suffix, "text/plain")
                 self.send_bytes(target.read_bytes(), mime)
             except (APIError, ValueError, KeyError) as exc:
                 self.send_json({"error": {"code": "request_error", "message": str(exc)}}, getattr(exc, "status", 400))
@@ -391,6 +497,10 @@ def handler_for(app: Workbench, static_root: Path):
                 parts = path.strip("/").split("/")
                 if path == "/api/tasks":
                     return self.send_json(app.create_task(body), 201)
+                if path == "/api/preflight":
+                    return self.send_json(app.preflight(body))
+                if path == "/api/repositories/inspect":
+                    return self.send_json(inspect_github_repository(body))
                 if path == "/api/runs":
                     return self.send_json(app.start_run(body), 202)
                 if len(parts) == 4 and parts[:2] == ["api", "runs"]:

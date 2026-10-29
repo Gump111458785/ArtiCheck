@@ -8,6 +8,7 @@ runs/
 data/
 checkpoints/
 vendor/
+!web/dist/vendor/
 .pytest_cache/
 .cache/
 .sites-runtime/

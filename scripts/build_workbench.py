@@ -24,6 +24,8 @@ def contract():
         ("/api/health", "get", "运行时能力", "返回运行模式与支持的 Planner。", None, {"mode": "runtime", "supported_planners": ["fixed"]}),
         ("/api/tasks", "get", "任务清单", "读取已注册任务及其主张清单。", None, {"items": [{"id": "sample-metric_average", "claim_count": 3}]}),
         ("/api/tasks", "post", "创建任务", "注册工作区内的任务文件，或复制可信样例并编辑主张。", {"sample_id": "metric_average", "title": "指标计算核查"}, {"id": "task-id", "claim_count": 3}),
+        ("/api/preflight", "post", "预检执行条件", "只检查工作区内的 manifest、代码目录、Docker 和声明的数据/权重路径；不运行 artifact。返回 manifest 指纹供启动前校验。", {"task_path": "examples/task.json", "resources": {"data_required": False, "weights_required": False}}, {"manifest_sha256": "sha256", "can_execute": False, "checks": [{"id": "docker", "status": "blocked", "detail": "需要安装并启动 Docker"}]}),
+        ("/api/repositories/inspect", "post", "读取公共 GitHub 目录", "仅从固定 GitHub API 读取公共仓库默认分支、提交版本和最多 5000 个文件目录。不 clone 或执行仓库，不使用本机 GitHub 凭据。", {"repository_url": "https://github.com/1a1a11a/2026_paper_reproduce"}, {"kind": "github", "name": "owner/repository", "branch": "main", "commit": "commit-sha", "files": [{"path": "README.md"}]}),
         ("/api/runs", "get", "核查运行列表", "按创建时间倒序读取运行元数据。", None, {"items": [{"id": "run-id", "status": "completed"}]}),
         ("/api/runs", "post", "启动核查", "异步调用 Python review；HTTP 202 只表示任务已接收。", {"task_id": "sample-metric_average", "sandbox": "local", "planner": "fixed", "budget": {"max_tools": 8, "max_tokens": 32000, "max_seconds": 180, "max_usd": 1}}, {"id": "run-id", "status": "queued"}),
         ("/api/runs/{run_id}", "get", "运行详情", "返回真实状态、六角色阶段、判定、报告与反馈。", None, {"id": "run-id", "status": "completed", "report_id": "pipeline-report-id", "findings": [{"claim_id": "C1", "verdict": "issue", "evidence_ids": ["sha256"]}]}),
@@ -56,6 +58,8 @@ def contract():
                 schema = {"$ref": "#/components/schemas/RunCreate"}
             elif path == "/api/tasks":
                 schema = {"$ref": "#/components/schemas/TaskCreate"}
+            elif path == "/api/preflight":
+                schema = {"$ref": "#/components/schemas/PreflightCreate"}
             elif path.endswith("/feedback"):
                 schema = {"$ref": "#/components/schemas/FeedbackCreate"}
             operation["requestBody"] = {"required": True, "content": {"application/json": {"schema": schema, "example": example}}}
@@ -65,7 +69,8 @@ def contract():
             "servers": [{"url": "http://127.0.0.1:8787"}], "paths": paths,
             "components": {"schemas": {
                 "Claim": {"type": "object", "required": ["id", "text", "kind", "spec"], "properties": {"id": string, "text": string, "kind": {"enum": ["metric", "split_disjoint", "baseline_equal"]}, "spec": {"type": "object"}, "probe": {"type": ["array", "null"], "items": string}}},
-                "TaskCreate": {"type": "object", "properties": {"title": {"type": "string", "maxLength": 200}, "sample_id": {"enum": ["clean", "metric_average", "split_leakage", "baseline_budget"]}, "task_path": string, "claims": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/components/schemas/Claim"}}}, "oneOf": [{"required": ["sample_id"]}, {"required": ["task_path"]}]},
+                "PreflightCreate": {"type": "object", "required": ["task_path"], "properties": {"task_path": string, "resources": {"type": "object", "properties": {"data_required": {"type": "boolean"}, "data_path": string, "weights_required": {"type": "boolean"}, "weights_path": string}}}},
+                "TaskCreate": {"type": "object", "properties": {"title": {"type": "string", "maxLength": 200}, "paper_id": {"type": "string", "minLength": 1, "maxLength": 200}, "paper_text": {"type": "string", "maxLength": 120000}, "manifest_sha256": string, "sample_id": {"enum": ["clean", "metric_average", "split_leakage", "baseline_budget"]}, "task_path": string, "claims": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/components/schemas/Claim"}}}, "oneOf": [{"required": ["sample_id"]}, {"required": ["task_path"]}]},
                 "RunCreate": {"type": "object", "required": ["task_id"], "properties": {"task_id": string, "planner": {"const": "fixed"}, "sandbox": {"enum": ["docker", "local"], "default": "docker"}, "budget": {"type": "object", "additionalProperties": False, "properties": {"max_tools": {"type": "integer", "minimum": 0, "maximum": 50}, "max_tokens": {"type": "integer", "minimum": 0, "maximum": 200000}, "max_seconds": {"type": "number", "minimum": 0, "maximum": 600}, "max_usd": {"type": "number", "minimum": 0, "maximum": 100}}}}},
                 "FeedbackCreate": {"type": "object", "required": ["claim_id", "label", "reviewer", "reason"], "properties": {"claim_id": string, "label": {"type": "integer", "enum": [0, 1]}, "reviewer": {"type": "string", "minLength": 1}, "reason": {"type": "string", "minLength": 1}}},
                 "RunStatus": {"enum": ["queued", "running", "completed", "failed", "cancelled"]},

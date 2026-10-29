@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import hashlib
+import io
 import tempfile
 import threading
 import time
@@ -12,10 +14,28 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-from articheck.workbench import APIError, ROOT, Workbench, handler_for
+from articheck.workbench import APIError, ROOT, Workbench, handler_for, inspect_github_repository
 
 
 class WorkbenchTests(unittest.TestCase):
+    def test_repository_inspection_is_public_only_and_pins_tree_revision(self):
+        sha = "a" * 40
+        responses = [{"default_branch": "main"}, {"sha": sha},
+                     {"truncated": False, "tree": [{"type": "blob", "path": "README.md", "size": 12}]}]
+        with patch("articheck.workbench.urlopen", side_effect=[io.BytesIO(json.dumps(r).encode()) for r in responses]) as get:
+            result = inspect_github_repository({"repository_url": "https://github.com/owner/repo"})
+        self.assertEqual(result["commit"], sha)
+        self.assertEqual(result["files"][0]["path"], "README.md")
+        self.assertEqual(get.call_args_list[2].args[0].full_url, f"https://api.github.com/repos/owner/repo/git/trees/{sha}?recursive=1")
+        self.assertNotIn("Authorization", get.call_args_list[0].args[0].headers)
+
+    def test_repository_url_cannot_target_other_hosts_or_api_families(self):
+        with patch("articheck.workbench.urlopen") as get:
+            for url in ("http://github.com/a/b", "https://localhost/a/b", "https://github.com/a/b/issues", "https://github.com/a/..", "https://u:p@github.com/a/b"):
+                with self.assertRaises(APIError):
+                    inspect_github_repository({"repository_url": url})
+            get.assert_not_called()
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.app = Workbench(ROOT, Path(self.tmp.name) / "state")
@@ -112,6 +132,42 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(row["status"], "cancelled")
             self.assertIsNone(row["report"])
 
+    def test_preflight_checks_manifest_resources_and_unavailable_docker(self):
+        with patch("articheck.workbench.shutil.which", return_value=None):
+            result = self.app.preflight({"task_path": "examples/task.json", "resources": {"data_required": True, "data_path": "missing-data"}})
+        self.assertFalse(result["can_execute"])
+        checks = {c["id"]: c for c in result["checks"]}
+        self.assertEqual(checks["docker"]["status"], "blocked")
+        self.assertEqual(checks["data"]["status"], "blocked")
+        self.assertIn("probe.py", result["files"])
+        self.assertEqual(len(result["manifest_sha256"]), 64)
+
+    def test_preflight_is_scoped_and_does_not_execute_artifact_commands(self):
+        for path in ("/etc/passwd", "../task.json", ""):
+            with self.assertRaises(APIError):
+                self.app.preflight({"task_path": path})
+        with patch("articheck.workbench.shutil.which", return_value=None), patch("articheck.workbench.subprocess.run") as run:
+            self.app.preflight({"task_path": "examples/task.json"})
+            run.assert_not_called()
+
+    def test_preflight_ready_with_available_docker_and_required_resource_path(self):
+        with patch("articheck.workbench.shutil.which", return_value="/docker"), patch("articheck.workbench.subprocess.run") as run:
+            run.return_value.returncode = 0
+            result = self.app.preflight({"task_path": "examples/task.json", "resources": {"data_required": True, "data_path": "examples"}})
+        self.assertTrue(result["can_execute"])
+        self.assertEqual(run.call_args.args[0], ["/docker", "info", "--format", "{{.ServerVersion}}"])
+
+    def test_uploaded_paper_provenance_is_attached_to_created_task(self):
+        task = self.app.create_task({"task_path": "examples/task.json", "paper_id": "pdf-sha256:abc", "paper_text": "Page 1: verified quote"})
+        self.assertEqual(task["paper_id"], "pdf-sha256:abc")
+        self.assertEqual(task["manifest"]["paper_text"], "Page 1: verified quote")
+
+    def test_changed_manifest_digest_is_rejected_before_task_creation(self):
+        digest = hashlib.sha256((ROOT / "examples/task.json").read_bytes()).hexdigest()
+        with self.assertRaises(APIError) as cm:
+            self.app.create_task({"task_path": "examples/task.json", "manifest_sha256": digest[:-1] + ("0" if digest[-1] != "0" else "1")})
+        self.assertEqual(cm.exception.status, 409)
+
 
 class HTTPContractTests(unittest.TestCase):
     @classmethod
@@ -142,6 +198,8 @@ class HTTPContractTests(unittest.TestCase):
         font = self.call("/fonts/ibm-plex-sans-latin.woff2")
         self.assertEqual(font.headers.get_content_type(), "font/woff2")
         self.assertEqual(font.read(4), b"wOF2")
+        self.assertEqual(self.call("/intake.mjs").headers.get_content_type(), "application/javascript")
+        self.assertEqual(self.call("/samples/articheck-method-note.pdf").read(5), b"%PDF-")
         contract = json.load(self.call("/api/openapi.json"))
         self.assertEqual(contract["openapi"], "3.1.0")
         self.assertIn("/api/runs/{run_id}/feedback", contract["paths"])
@@ -153,6 +211,14 @@ class HTTPContractTests(unittest.TestCase):
             with self.assertRaises(urllib.error.HTTPError) as cm:
                 self.call("/api/tasks", {"sample_id": "clean"}, headers)
             self.assertEqual(cm.exception.code, 403)
+
+    def test_preflight_http_contract_reports_real_checks_without_starting_run(self):
+        with patch("articheck.workbench.shutil.which", return_value=None):
+            result = json.load(self.call("/api/preflight", {"task_path": "examples/task.json"}))
+        self.assertFalse(result["can_execute"])
+        self.assertEqual(result["manifest"]["claims"][0]["id"], "C1")
+        self.assertIn("manifest_sha256", result)
+        self.assertTrue(any(c["id"] == "docker" and c["status"] == "blocked" for c in result["checks"]))
 
     def test_full_http_review_feedback_download_and_events(self):
         task = json.load(self.call("/api/tasks", {"sample_id": "split_leakage", "title": "HTTP fixture"}))
