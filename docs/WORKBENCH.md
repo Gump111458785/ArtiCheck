@@ -137,7 +137,7 @@ node --test tests/frontend/intake.test.mjs
 python -m unittest discover -s tests -v
 ```
 
-共 15 个 HTTP 操作。`scripts/build_workbench.py` 会重新执行教学 fixture 并更新归档数据；仅修改 API 契约时，可直接调用该脚本中的 `contract()` 生成 `openapi.json`，避免无关的样例时间戳变化。
+共 16 个 HTTP 操作。`scripts/build_workbench.py` 会重新执行教学 fixture 并更新归档数据；仅修改 API 契约时，可直接调用该脚本中的 `contract()` 生成 `openapi.json`，避免无关的样例时间戳变化。
 
 
 ## 双工作区
@@ -147,3 +147,26 @@ python -m unittest discover -s tests -v
 「系统自评」为独立 `#evaluation` 路由。教学真值来源是 clean / metric_average / split_leakage / baseline_budget 的固定注入映射，判定从 `demo.json` 归档报告读取。过滤逐例列表不改变总体指标的计算范围。导出格式 `articheck-system-evaluation-v1` 带数据来源；外部未运行基准的 results 为 null。自评方案保存不触发远程模型调用或训练。
 
 前端新增模块：`assessment-core.mjs`（八项条件、覆盖统计与教学聚合）、`assessment.mjs`（项目评审）、`self-evaluation.mjs`（系统自评）。生产静态资源没有安装或构建步骤。
+
+
+## 服务器与材料证据（2026-10-29）
+
+七阶段项目新增「服务器核对」。本地工作台的 `POST /api/environment/inspect` 在用户点击后采集服务所在主机，受现有 loopback Host/Origin 与客户端请求头约束；不采集访问者的远端服务器、不执行论文代码。返回 `articheck-environment-v1` 和当前 probe 的实际分配限制。纯静态私有预览禁用本地采集，保留上传和下载采集脚本。
+
+目标服务器可运行：
+
+```bash
+python3 collect-environment.py --disk-path /path/to/experiment --output environment.json
+# 已安装 ArtiCheck 时也可使用
+python -m articheck.environment --disk-path /path/to/experiment --output environment.json
+```
+
+采集固定字段：时间、OS/架构/Python、CPU 逻辑核数、总/可用 RAM、所选文件系统总/空闲空间、NVIDIA 每卡名称/总量/空闲显存/驱动。Linux 可读时纳入 cgroup v2 内存上限；macOS 的可用内存保留 null。未探测指标为 null，不是零；不读取 hostname、GPU UUID、密钥、进程列表或完整环境变量。JSON 上传经过字段白名单、非负数、总量/可用量与 GPU 序号校验，额外字段不进入解析后的报告。
+
+`paper_review.resource_check` 保存目标名称、人工确认、要求出处与实验范围、结构化下限、报告来源/时间/指纹/数据。15 分钟内且已确认的快照才参与判断；GPU 按单卡空闲显存筛选，不合并多卡。输出只有 unknown / blocked / snapshot_fits，不能生成可运行保证。上传不能冒充已连接的本地执行器。前端在已声明数字要求的用户项目中将核对不足作为启动阻塞；它不是后端调度器或安全边界。
+
+当前 probe 为默认无 GPU、1 CPU、1 GiB 内存、最长 600 秒。主机满足与执行器可分配资源独立核对。长时训练、框架/CUDA 兼容、远程设备分配及峰值监测未实现。
+
+`paper_review.materials` 保存八项材料的原始 Blob、名称、实际 SHA256、上传时间、JSON 字段有无或文本摘录。每项最多 8 份、每份最大 2 MB，预览/项目导出最多保留 8,000 字符；原文件只保存在当前浏览器。配置、数据清单、锁文件与构建日志的内容不会被执行。JSON 字段有无检查不等于哈希比对、环境构建或参数一致性核验。新增/移除材料恢复未核查状态。
+
+逐项入口、证据含义及明确缺口见 [八项能力核对](IMPLEMENTATION_STATUS.md)。

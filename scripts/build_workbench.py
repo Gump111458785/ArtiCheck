@@ -24,6 +24,7 @@ def contract():
         ("/api/health", "get", "运行时能力", "返回运行模式与支持的 Planner。", None, {"mode": "runtime", "supported_planners": ["fixed"]}),
         ("/api/tasks", "get", "任务清单", "读取已注册任务及其主张清单。", None, {"items": [{"id": "sample-metric_average", "claim_count": 3}]}),
         ("/api/tasks", "post", "创建任务", "注册工作区内的任务文件，或复制可信样例并编辑主张。", {"sample_id": "metric_average", "title": "指标计算核查"}, {"id": "task-id", "claim_count": 3}),
+        ("/api/environment/inspect", "post", "采集本地运行主机", "用户主动触发的只读快照：CPU、可用内存、所选工作区文件系统、NVIDIA GPU 及当前执行器限制。不采集主机名、凭据或进程信息；不保证实验可运行。", {}, {"format": "articheck-environment-v1", "gpus": None, "memory": {"available_bytes": None}, "executor": {"gpu_enabled": False, "memory_limit_bytes": 1073741824}}),
         ("/api/preflight", "post", "预检执行条件", "只检查工作区内的 manifest、代码目录、Docker 和声明的数据/权重路径；不运行 artifact。返回 manifest 指纹供启动前校验。", {"task_path": "examples/task.json", "resources": {"data_required": False, "weights_required": False}}, {"manifest_sha256": "sha256", "can_execute": False, "checks": [{"id": "docker", "status": "blocked", "detail": "需要安装并启动 Docker"}]}),
         ("/api/repositories/inspect", "post", "读取公共 GitHub 目录", "仅从固定 GitHub API 读取公共仓库默认分支、提交版本和最多 5000 个文件目录。不 clone 或执行仓库，不使用本机 GitHub 凭据。", {"repository_url": "https://github.com/1a1a11a/2026_paper_reproduce"}, {"kind": "github", "name": "owner/repository", "branch": "main", "commit": "commit-sha", "files": [{"path": "README.md"}]}),
         ("/api/runs", "get", "核查运行列表", "按创建时间倒序读取运行元数据。", None, {"items": [{"id": "run-id", "status": "completed"}]}),

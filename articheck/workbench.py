@@ -22,6 +22,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 from .data import DEFECTS, inject, read_jsonl
+from .environment import collect_environment
 from .feedback import record_feedback
 from .pipeline import review
 from .runtime import Budget
@@ -497,6 +498,10 @@ def handler_for(app: Workbench, static_root: Path):
                 parts = path.strip("/").split("/")
                 if path == "/api/tasks":
                     return self.send_json(app.create_task(body), 201)
+                if path == "/api/environment/inspect":
+                    report = collect_environment(app.workspace)
+                    report["executor"] = {"mode": "docker_probe", "gpu_enabled": False, "memory_limit_bytes": 1073741824, "cpu_limit": 1, "max_seconds": 600}
+                    return self.send_json(report)
                 if path == "/api/preflight":
                     return self.send_json(app.preflight(body))
                 if path == "/api/repositories/inspect":

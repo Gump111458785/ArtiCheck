@@ -186,6 +186,15 @@ class HTTPContractTests(unittest.TestCase):
         cls.app.close()
         cls.tmp.cleanup()
 
+    def test_environment_snapshot_is_explicit_guarded_and_discloses_executor_limits(self):
+        with patch("articheck.workbench.collect_environment", return_value={"format":"articheck-environment-v1", "gpus":None}) as collect:
+            with self.call("/api/environment/inspect", {}) as response:
+                report=json.load(response)
+        self.assertEqual(report["format"], "articheck-environment-v1")
+        self.assertFalse(report["executor"]["gpu_enabled"])
+        self.assertEqual(report["executor"]["memory_limit_bytes"], 1073741824)
+        collect.assert_called_once_with(self.app.workspace)
+
     def call(self, path, body=None, headers=None):
         h = {"X-ArtiCheck-Client": "workbench", "Content-Type": "application/json"}
         h.update(headers or {})
