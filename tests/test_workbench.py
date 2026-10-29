@@ -186,6 +186,27 @@ class HTTPContractTests(unittest.TestCase):
         cls.app.close()
         cls.tmp.cleanup()
 
+    def test_reproduction_audit_reads_actual_files_without_execution(self):
+        from test_reproduction import fixture
+        root = Path(self.tmp.name) / "reproduction"
+        root.mkdir()
+        path, plan, repo = fixture(root)
+        # This test server's workspace is set in setUpClass.
+        original = self.app.workspace
+        self.app.workspace = root.resolve()
+        try:
+            with self.call("/api/reproduction/audit", {"plan_path": "plan.json"}) as response:
+                result = json.load(response)
+            self.assertEqual(result["format"], "articheck-reproduction-audit-v1")
+            self.assertEqual(result["blocking_failures"], 0)
+            self.assertTrue(any(c["code"] == "regression:hyperparameters" for c in result["checks"]))
+            self.assertFalse((root / "run").exists())
+            with self.assertRaises(urllib.error.HTTPError) as failure:
+                self.call("/api/reproduction/audit", {"plan_path": "../outside.json"})
+            self.assertEqual(failure.exception.code, 400)
+        finally:
+            self.app.workspace = original
+
     def test_environment_snapshot_is_explicit_guarded_and_discloses_executor_limits(self):
         with patch("articheck.workbench.collect_environment", return_value={"format":"articheck-environment-v1", "gpus":None}) as collect:
             with self.call("/api/environment/inspect", {}) as response:

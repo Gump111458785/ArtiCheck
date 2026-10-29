@@ -1,0 +1,1 @@
+A synthetic test document. Figure 1 compares prediction error. Figure 2 is another core experiment.

@@ -77,8 +77,29 @@ def main():
     feedback.add_argument("--reviewer", required=True)
     feedback.add_argument("--reason", required=True)
 
+    reproduction = sub.add_parser("reproduce", help="Audit or execute a frozen multi-stage reproduction plan")
+    reproduction.add_argument("--plan", type=Path, required=True)
+    reproduction.add_argument("--output", type=Path, required=True)
+    reproduction.add_argument("--check-only", action="store_true", help="Read actual materials without running artifact code")
+    reproduction.add_argument("--sandbox", choices=["docker", "local"], default="docker")
+    reproduction.add_argument("--allow-local-trusted", action="store_true", help="Only for trusted user-owned fixtures")
+
     args = parser.parse_args()
-    if args.command == "run":
+    if args.command == "reproduce":
+        if args.check_only:
+            from .reproduction.audit import audit_plan
+            result = audit_plan(args.plan)
+            dump(args.output, result)
+            print(json.dumps({"report": str(args.output), "blocking_failures": result["blocking_failures"]}))
+            if result['blocking_failures']:
+                raise SystemExit(2)
+        else:
+            from .reproduction.engine import reproduce
+            result = asyncio.run(reproduce(args.plan, args.output, mode=args.sandbox, allow_local_trusted=args.allow_local_trusted))
+            print(json.dumps({"report": str(args.output/'report.json'), "status": result['status']}))
+            if result['status'] != 'completed':
+                raise SystemExit(2)
+    elif args.command == "run":
         planner = FixedPlanner()
         if args.planner == "model":
             from .llm import OpenAIPlannerClient

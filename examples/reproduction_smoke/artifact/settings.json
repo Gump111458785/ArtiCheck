@@ -1,0 +1,9 @@
+{
+  "hyperparameters": {
+    "fit": "least_squares"
+  },
+  "initialization": "closed_form",
+  "augmentation": "none",
+  "selection": "all training examples",
+  "stopping": "closed form solution"
+}

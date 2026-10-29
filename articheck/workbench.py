@@ -23,6 +23,7 @@ from urllib.error import HTTPError, URLError
 
 from .data import DEFECTS, inject, read_jsonl
 from .environment import collect_environment
+from .reproduction.audit import audit_plan
 from .feedback import record_feedback
 from .pipeline import review
 from .runtime import Budget
@@ -78,7 +79,7 @@ def inspect_github_repository(body):
     if not re.fullmatch(r"[0-9a-f]{40,64}", commit):
         raise APIError("GitHub 未返回有效的提交版本", 502)
     tree = get("/git/trees/" + commit + "?recursive=1")
-    files = [{"path": item["path"], "size": item.get("size")} for item in tree.get("tree", []) if item.get("type") == "blob"]
+    files = [{"path": item["path"], "size": item.get("size"), "git_blob_sha": item.get("sha")} for item in tree.get("tree", []) if item.get("type") == "blob"]
     if tree.get("truncated") or len(files) > 5000 or not files:
         raise APIError("目录不完整、为空或超过 5000 个文件，请导入实验代码 ZIP", 413)
     return {"kind": "github", "name": f"{owner}/{name}", "url": f"https://github.com/{owner}/{name}",
@@ -498,6 +499,11 @@ def handler_for(app: Workbench, static_root: Path):
                 parts = path.strip("/").split("/")
                 if path == "/api/tasks":
                     return self.send_json(app.create_task(body), 201)
+                if path == "/api/reproduction/audit":
+                    plan_path = (app.workspace / str(body.get("plan_path", ""))).resolve()
+                    if not plan_path.is_relative_to(app.workspace) or not plan_path.is_file():
+                        raise APIError("plan_path must identify a reproduction plan inside the workspace")
+                    return self.send_json(audit_plan(plan_path, workspace=app.workspace, imported=body.get("imported_snapshot")))
                 if path == "/api/environment/inspect":
                     report = collect_environment(app.workspace)
                     report["executor"] = {"mode": "docker_probe", "gpu_enabled": False, "memory_limit_bytes": 1073741824, "cpu_limit": 1, "max_seconds": 600}

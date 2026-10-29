@@ -1,0 +1,211 @@
+{
+  "format": "articheck-reproduction-plan-v1",
+  "paper": {
+    "path": "paper.txt",
+    "sha256": "8460a6e8e3afdd9a8fd6eeb74ea21a60fb936402ba5ee3f232d9bf2795a23569",
+    "version": "synthetic v1",
+    "pages": [
+      {
+        "number": 1,
+        "text": "A synthetic test document. Figure 1 compares prediction error. Figure 2 is another core experiment."
+      }
+    ],
+    "conclusions": [
+      {
+        "id": "C1",
+        "text": "Test conclusion"
+      }
+    ],
+    "experiments": [
+      {
+        "id": "E1",
+        "labels": [
+          "figure-1"
+        ],
+        "page": 1,
+        "quote": "Figure 1 compares prediction error.",
+        "core": true
+      }
+    ],
+    "inventory_review": {
+      "complete": false
+    }
+  },
+  "repository": {
+    "path": "artifact",
+    "files": [
+      {
+        "path": "experiment.py",
+        "sha256": "da3c494d6bce59320bd0bfc146732e7acccc97c4127e77f388458a725e920d8e"
+      },
+      {
+        "path": "data.json",
+        "sha256": "cc9b7e10682e4270b9c7bf5e528bcbbed4d3d7c79e33b264e1458bd33b8639e1"
+      }
+    ],
+    "components": {
+      "method": [
+        "experiment.py"
+      ],
+      "preprocess": [
+        "experiment.py"
+      ],
+      "train": [
+        "experiment.py"
+      ],
+      "evaluate": [
+        "experiment.py"
+      ]
+    }
+  },
+  "datasets": [
+    {
+      "id": "synthetic",
+      "source": {
+        "url": "generated:test",
+        "version": "v1",
+        "license": "self-owned"
+      },
+      "files": [
+        {
+          "path": "data.json",
+          "sha256": "cc9b7e10682e4270b9c7bf5e528bcbbed4d3d7c79e33b264e1458bd33b8639e1"
+        }
+      ],
+      "splits": {
+        "train": {
+          "path": "train.ids",
+          "sha256": "ea6df06cd701b31d8edd20773a9b6b6dbd9916057a6cdbb40ddfde5b5723c265",
+          "source": "disjoint generated IDs"
+        },
+        "test": {
+          "path": "test.ids",
+          "sha256": "ef500251fd985b5f2fd3e5b464022f06622f280c5313473c2f561d3857af3c32",
+          "source": "disjoint generated IDs"
+        }
+      },
+      "preprocessing_not_applicable": "Generated fixture is already numeric"
+    }
+  ],
+  "environment": {},
+  "resources": {
+    "max_seconds": 60,
+    "cpus": 1,
+    "memory_bytes": 1073741824,
+    "price_per_hour_usd": 0
+  },
+  "experiments": [
+    {
+      "id": "regression",
+      "paper_experiment": "E1",
+      "seeds": [
+        11,
+        22,
+        33,
+        44,
+        55
+      ],
+      "config": {
+        "path": "settings.json",
+        "sha256": "c3af76b9767a3c8b12fd778c90ebc14295629b26cea250a2df2919c637963dc1",
+        "expected": {
+          "hyperparameters": {
+            "fit": "least_squares"
+          },
+          "initialization": "closed_form",
+          "augmentation": "none",
+          "selection": "all training examples",
+          "stopping": "closed form solution"
+        },
+        "source": "synthetic test protocol"
+      },
+      "variants": [
+        {
+          "id": "method",
+          "role": "method"
+        },
+        {
+          "id": "baseline",
+          "role": "baseline"
+        },
+        {
+          "id": "ablation",
+          "role": "ablation"
+        }
+      ],
+      "stages": [
+        {
+          "id": "prepare",
+          "argv": [
+            "python3",
+            "{repo}/experiment.py",
+            "prepare",
+            "{config}"
+          ],
+          "needs": [],
+          "inputs": [
+            "repo:data.json",
+            "config.json"
+          ],
+          "outputs": [
+            "prepared.json"
+          ]
+        },
+        {
+          "id": "train",
+          "argv": [
+            "python3",
+            "{repo}/experiment.py",
+            "train",
+            "{config}"
+          ],
+          "needs": [
+            "prepare"
+          ],
+          "inputs": [
+            "prepared.json",
+            "config.json"
+          ],
+          "outputs": [
+            "model.json",
+            "used-config.json"
+          ]
+        },
+        {
+          "id": "evaluate",
+          "argv": [
+            "python3",
+            "{repo}/experiment.py",
+            "evaluate",
+            "{config}"
+          ],
+          "needs": [
+            "train"
+          ],
+          "inputs": [
+            "model.json",
+            "prepared.json"
+          ],
+          "outputs": [
+            "metrics.json"
+          ]
+        }
+      ],
+      "metric": {
+        "path": "metrics.json",
+        "key": "mse",
+        "direction": "lower"
+      },
+      "comparisons": [
+        {
+          "method": "method",
+          "other": "baseline"
+        },
+        {
+          "method": "method",
+          "other": "ablation"
+        }
+      ]
+    }
+  ]
+}
