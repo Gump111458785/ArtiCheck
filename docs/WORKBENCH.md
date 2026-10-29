@@ -138,3 +138,12 @@ python -m unittest discover -s tests -v
 ```
 
 共 15 个 HTTP 操作。`scripts/build_workbench.py` 会重新执行教学 fixture 并更新归档数据；仅修改 API 契约时，可直接调用该脚本中的 `contract()` 生成 `openapi.json`，避免无关的样例时间戳变化。
+
+
+## 双工作区
+
+「论文复现」新增实验覆盖与八项条件；目标层级、验收协议及独立复现记录都是项目的一部分。评审通过 `paper_review` 字段随项目导出，原有 `assessment` 保留为执行分层结果，材料替换使条件状态失效并保留旧说明待复核。当前运行 API 仍接收原有明确的 probe 任务，不把检查清单转换成训练任务。
+
+「系统自评」为独立 `#evaluation` 路由。教学真值来源是 clean / metric_average / split_leakage / baseline_budget 的固定注入映射，判定从 `demo.json` 归档报告读取。过滤逐例列表不改变总体指标的计算范围。导出格式 `articheck-system-evaluation-v1` 带数据来源；外部未运行基准的 results 为 null。自评方案保存不触发远程模型调用或训练。
+
+前端新增模块：`assessment-core.mjs`（八项条件、覆盖统计与教学聚合）、`assessment.mjs`（项目评审）、`self-evaluation.mjs`（系统自评）。生产静态资源没有安装或构建步骤。

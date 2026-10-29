@@ -21,7 +21,7 @@ jobs:
         run: |
           node --check web/dist/app.js
           node --check web/dist/intake.mjs
-          node --test tests/frontend/intake.test.mjs
+          node --test tests/frontend/*.test.mjs
       - run: for script in scripts/*.sh; do bash -n "$script" || exit; done
       - run: python -m articheck demo --sandbox local --output runs/ci-demo
       - name: Test the Docker execution path

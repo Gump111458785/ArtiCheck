@@ -65,14 +65,16 @@ runs/demo/
 
 ## 可视化工作台
 
-[打开私有交互预览](https://articheck-workbench.soft-bun-8328.chatgpt.site) · [界面与 API 设计](docs/WORKBENCH.md) · [界面设计记录](docs/WORKBENCH_DESIGN.md) · [OpenAPI 契约](web/dist/openapi.json)
+[打开私有交互预览](https://articheck-workbench.soft-bun-8328.chatgpt.site) · [双工作区需求](docs/REQUIREMENTS.md) · [界面与 API 设计](docs/WORKBENCH.md) · [界面设计记录](docs/WORKBENCH_DESIGN.md) · [OpenAPI 契约](web/dist/openapi.json)
 
 ![ArtiCheck 工作台：论文原文与实验主张对照](docs/assets/paper-claims.jpg)
 
-工作台围绕一次具体实验组织为四个阶段：
+工作台区分两个评估对象：**论文复现**记录第三方论文的实验覆盖与执行证据；**系统自评**查看 ArtiCheck 的逐例判定、数据来源与对照实验协议。
+
+论文项目包含「论文与代码 → 实验覆盖 → 复现条件 → 实验主张 → 运行条件 → 评估结果」六个阶段，主要操作如下：
 
 1. **论文与代码**：导入 PDF，读取 GitHub 公共仓库目录或代码 ZIP，记录材料指纹与仓库提交。
-2. **实验主张**：逐页阅读原文，编辑并人工确认报告值、单位、容差与出处，限定本次复现范围。
+2. **实验范围与主张**：登记主要结论、核心实验和目标层级，按八项复现条件补充依据；逐页阅读原文，编辑并人工确认报告值、单位、容差与出处，限定本次复现范围。
 3. **运行条件**：登记数据、权重和计算要求，预检本地 `task.json`，将主张绑定到实际检查项。
 4. **评估结果**：分别呈现材料准备、代码运行、指标对齐；进一步查看逐条证据、六角色轨迹与人工反馈。
 
@@ -195,7 +197,7 @@ ArtiCheck 将规划策略与核查工具分开，便于在相同任务和预算�
 
 ## 项目状态与路线图
 
-**v0.1.0 · 工程预览。** Python 3.10–3.12 核心测试和 Linux Docker 样例已通过 [GitHub CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)，包含 48 项 Python 行为与契约测试、13 项前端数据与状态测试。完整记录见 [验证说明](docs/VALIDATION.md)。
+**v0.1.0 · 工程预览。** Python 3.10–3.12 核心测试和 Linux Docker 样例已通过 [GitHub CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)，包含 48 项 Python 行为与契约测试、22 项前端数据与状态测试。完整记录见 [验证说明](docs/VALIDATION.md)。
 
 - [x] PDF / GitHub / ZIP 材料导入、逐页主张确认与分层评估界面
 - [x] 本地执行规范预检、主张绑定与材料来源记录
