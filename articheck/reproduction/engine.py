@@ -17,6 +17,7 @@ from .executor import StageExecutor
 from .protocol import fingerprint, load_json, load_plan, relative_path
 from .statistics import evaluate_experiment
 from .verification import recompute_metric, verify_splits
+from .acceptance import verify_training, verify_fairness, evaluate_levels
 
 
 def utc():
@@ -72,7 +73,7 @@ async def build_environment(plan, repo, output, *, mode, deadline, cancel=None):
 
 
 async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=False, workspace=None, cancel=None, imported=None):
-    plan, source_repo = load_plan(plan_path, workspace)
+    plan, source_repo, original_plan_sha = load_plan(plan_path, workspace, with_digest=True)
     if mode == 'local' and not allow_local_trusted:
         raise ValueError('Local mode requires explicit trust; Docker is required for third-party code')
     output = Path(output).resolve()
@@ -113,8 +114,8 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
             raise ValueError('Copied snapshot no longer matches the verified materials')
         report['source_manifest_sha256'] = fingerprint(output/'source-files.json')['sha256']
         report['plan'] = plan
-        report['plan_sha256'] = hashlib.sha256(Path(plan_path).read_bytes()).hexdigest()
-        if report['plan_sha256'] != audit['plan_sha256']:
+        report['plan_sha256'] = original_plan_sha
+        if report['plan_sha256'] != audit['plan_sha256'] or hashlib.sha256(Path(plan_path).read_bytes()).hexdigest()!=original_plan_sha:
             raise ValueError('Plan changed during source verification')
         save()
         environment = await build_environment(plan, snapshot, output, mode=mode, deadline=deadline, cancel=cancel)
@@ -158,7 +159,8 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                     dump(work/'config.json', cfg)
                     config_digest = fingerprint(work/'config.json')['sha256']
                     row = {'experiment': exp['id'], 'variant': variant['id'], 'role': variant['role'], 'seed': seed,
-                           'config_sha256': config_digest, 'status': 'running', 'stages': [], 'metric': None}
+                           'config_sha256': config_digest, 'configuration':cfg,
+                           'execution_limits':{'image':environment.get('image'),'cpus':executor.cpus,'memory_bytes':executor.memory,'stage_timeouts':{s['id']:s.get('timeout_seconds',300) for s in exp['stages']}}, 'status': 'running', 'stages': [], 'metric': None}
                     rows.append(row); report['runs'].append(row)
                     passed = set()
                     for stage in exp['stages']:
@@ -172,6 +174,14 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                         for name in stage['inputs']:
                             origin, rel = (snapshot, name[5:]) if name.startswith('repo:') else (work, name)
                             inputs[name] = fingerprint(relative_path(origin, rel))
+                        if stage.get('kind')=='train' and exp.get('split_ids') and not row.get('split_verification'):
+                            row['status']='failed';row['error']='Generated splits must be verified before training';break
+                        prior_models={}
+                        training_spec=exp.get('training_evidence',{})
+                        if training_spec.get('stage_id')==stage['id']:
+                            for name in training_spec.get('model_outputs',[]):
+                                candidate=relative_path(work,name,exists=False)
+                                if candidate.exists():prior_models[name]=fingerprint(candidate)
                         argv = materialize(stage['argv'], snapshot, work, seed, variant['id'], mode)
                         result = await executor.execute(snapshot, work, argv,
                                     timeout=min(stage.get('timeout_seconds', 300), deadline-time.monotonic()),
@@ -183,8 +193,24 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                                 result['output_fingerprints'][name] = fingerprint(relative_path(work, name))
                             except (OSError, ValueError) as error:
                                 result['status'] = 'failed'; result['output_error'] = str(error)
+                        for name,before in inputs.items():
+                            if name in stage['outputs']:continue
+                            origin,rel=(snapshot,name[5:]) if name.startswith('repo:') else (work,name)
+                            try:
+                                if fingerprint(relative_path(origin,rel))!=before:
+                                    result['status']='failed';result['output_error']='Undeclared mutation of input: '+name
+                            except (OSError,ValueError):
+                                result['status']='failed';result['output_error']='Declared input removed: '+name
+                        if stage.get('kind')=='train':row['training_inputs']={k:v for k,v in inputs.items() if k!='config.json'}
                         if fingerprint(work/'config.json')['sha256'] != config_digest:
                             result['status'] = 'failed'; result['output_error'] = 'Frozen run configuration was modified'
+                        try:
+                            if exp.get('split_ids') and all((work/item['path']).is_file() for item in exp['split_ids'].values()):
+                                row['split_verification']=verify_splits(work,exp['split_ids'])
+                            training=verify_training(work,exp,stage,cfg,prior_models) if result['status']=='completed' else None
+                            if training:row['training_evidence']=training
+                        except (OSError,ValueError,KeyError) as error:
+                            result['status']='failed';result['output_error']=str(error)
                         result['output_occupancy_bytes'] = disk_bytes(work)
                         dump(work/(stage['id']+'-execution.json'), result)
                         if result['status'] == 'cancelled':
@@ -209,12 +235,24 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                                 if abs(row['metric']-row['independent_metric']['value']) > 1e-12:
                                     raise ValueError('Artifact-reported metric disagrees with independent recomputation')
                                 row['metric'] = row['independent_metric']['value']
+                            if row.get('training_evidence'):
+                                for name,expected in row['training_evidence']['model_fingerprints'].items():
+                                    if fingerprint(relative_path(work,name))!=expected:raise ValueError('Trained model changed after its recorded training stage')
+                                used=exp['training_evidence']['used_config_path']
+                                if load_json(relative_path(work,used))!=cfg:raise ValueError('Used configuration changed after training')
                             row['metric_file'] = fingerprint(relative_path(work, exp['metric']['path']))
                             row['status'] = 'completed'
                         except (OSError, ValueError, KeyError, TypeError) as error:
                             row['status'] = 'failed'; row['error'] = str(error)
                     save()
-            report['experiments'].append(evaluate_experiment(exp, rows))
+            acceptance=evaluate_experiment(exp,rows)
+            acceptance['fairness']=verify_fairness(exp,rows)
+            if acceptance['fairness']['status']!='verified':
+                acceptance['status']='inconclusive'
+                for comparison in acceptance['comparisons']:
+                    comparison['statistical_status']=comparison['status'];comparison['status']='inconclusive'
+                    comparison['reason']='Predeclared control/data/selection conditions are not verified'
+            report['experiments'].append(acceptance)
         # Final source integrity prevents mutations in explicit trusted local mode being overlooked.
         modified = [name for name, digest in source_files.items() if fingerprint(relative_path(snapshot, name)) != digest]
         if modified:
@@ -246,13 +284,6 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
         report['measurement'] = {'sampled_stage_count': len(rss), 'stage_count': len(stages), 'max_child_rss_bytes': max(rss) if rss else None,
                                  'output_occupancy_bytes': occupied, 'gpu_peak_memory_bytes': None,
                                  'limitations': ['Output occupancy is not peak disk usage.', 'getrusage is child-process instrumentation; GPU is not measured.', 'Container cgroup fields are instrumentation reports, not a hostile-code attestation.']}
-        coverage_failures = [c for c in report.get('audit', {}).get('checks', []) if c['dimension'] == 'scope' and c['status'] != 'pass']
-        report['levels'] = {'run': report['status'] == 'completed',
-                            'environment_rebuilt': report.get('environment', {}).get('status') == 'built' and report.get('environment', {}).get('verification') == 'passed' if report.get('environment') else False,
-                            'training': False, 'conclusion': False}
-        # A successful command is not automatically proof of training or main conclusions.
-        report['level_requirements'] = {'training': 'Requires declared training-stage and model provenance validation',
-                                        'conclusion': 'Requires complete paper inventory, controls and supported comparisons',
-                                        'unresolved_scope_checks': len(coverage_failures)}
+        report['levels'],report['level_requirements']=evaluate_levels(plan,report.get('audit',{}),report.get('environment'),report['runs'],report['experiments'],report['status'])
         save()
     return report

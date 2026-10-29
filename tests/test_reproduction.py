@@ -24,54 +24,68 @@ def write(path, value):
     return path
 
 
-def fixture(root):
-    repo = root/'artifact';repo.mkdir()
-    paper = write(root/'paper.txt', 'A synthetic test document. Figure 1 compares prediction error. Figure 2 is another core experiment.')
-    code = write(repo/'experiment.py', '''import json, sys, random
+def fixture(root, complete=False):
+    repo=root/'artifact';repo.mkdir()
+    statement='Linear regression improves prediction error over the declared controls.'
+    paper=write(root/'paper.txt','Synthetic test document. '+statement+' Figure 1 compares prediction error.'+('' if complete else ' Figure 2 is another core experiment.'))
+    code=write(repo/'experiment.py', r'''import json, sys, random
 from pathlib import Path
-stage, cfg_path = sys.argv[1:]
-cfg=json.loads(Path(cfg_path).read_text()); seed=cfg['seed'];variant=cfg['variant']['id']
+stage,cfg_path=sys.argv[1:]
+cfg=json.loads(Path(cfg_path).read_text());seed=cfg['seed'];settings=cfg['variant']['settings']
 if stage=='prepare':
-    Path('prepared.json').write_text(Path(sys.argv[0]).with_name('data.json').read_text())
+    for name in ['data.json','train.ids','test.ids']:
+        Path('prepared.json' if name=='data.json' else name).write_text(Path(sys.argv[0]).with_name(name).read_text())
 elif stage=='train':
     data=json.loads(Path('prepared.json').read_text());rng=random.Random(seed)
     rows=rng.choices(data['train'],k=len(data['train']))
     xs=[x for x,y in rows];ys=[y for x,y in rows];mx=sum(xs)/len(xs);my=sum(ys)/len(ys)
-    slope=sum((x-mx)*(y-my) for x,y in rows)/sum((x-mx)**2 for x in xs) if variant!='baseline' else 0
-    intercept=my-slope*mx if variant!='ablation' else 0
+    slope=sum((x-mx)*(y-my) for x,y in rows)/sum((x-mx)**2 for x in xs) if settings['algorithm']=='linear' else 0
+    intercept=my-slope*mx if settings['fit_intercept'] else 0
     Path('model.json').write_text(json.dumps({'slope':slope,'intercept':intercept}))
     Path('used-config.json').write_text(Path(cfg_path).read_text())
 elif stage=='evaluate':
     model=json.loads(Path('model.json').read_text());data=json.loads(Path('prepared.json').read_text())
-    error=sum((model['slope']*x+model['intercept']-y)**2 for x,y in data['test'])/len(data['test'])
+    predictions=[model['slope']*x+model['intercept'] for x,y in data['test']]
+    error=sum((prediction-y)**2 for prediction,(x,y) in zip(predictions,data['test']))/len(predictions)
     Path('metrics.json').write_text(json.dumps({'mse':error}))
+    Path('predictions.jsonl').write_text(''.join(json.dumps({'id':'test-'+str(i),'prediction':prediction})+'\n' for i,prediction in enumerate(predictions)))
 ''')
-    data=write(repo/'data.json',{'train':[[x,2*x+5+((x%3)-1)*.1] for x in range(-10,11)],'test':[[x+.5,2*(x+.5)+5] for x in range(-5,5)]})
+    dataset={'train':[[x,2*x+5+((x%3)-1)*.1] for x in range(-10,11)],'test':[[x+.5,2*(x+.5)+5] for x in range(-5,5)]}
+    write(repo/'data.json',dataset)
+    write(repo/'targets.jsonl',''.join(json.dumps({'id':'test-'+str(i),'target':y})+'\n' for i,(x,y) in enumerate(dataset['test'])))
     write(repo/'train.ids','\n'.join('train-'+str(x) for x in range(21)))
     write(repo/'test.ids','\n'.join('test-'+str(x) for x in range(10)))
-    settings={'hyperparameters':{'fit':'least_squares'},'initialization':'closed_form','augmentation':'none','selection':'all training examples','stopping':'closed form solution'}
-    cfg=write(repo/'settings.json',settings)
+    settings={'hyperparameters':{'fit':'least_squares'},'initialization':'closed_form','augmentation':'none','selection':'all training examples; no tuning','stopping':'closed form solution'}
+    write(repo/'settings.json',settings)
     def entry(name):return {'path':name,'sha256':fingerprint(repo/name)['sha256']}
     plan={'format':FORMAT,'paper':{'path':'paper.txt','sha256':fingerprint(paper)['sha256'],'version':'synthetic v1',
-         'pages':[{'number':1,'text':paper.read_text()}],'conclusions':[{'id':'C1','text':'Test conclusion'}],
-         'experiments':[{'id':'E1','labels':['figure-1'],'page':1,'quote':'Figure 1 compares prediction error.','core':True}],
-         'inventory_review':{'complete':False}},
-         'repository':{'path':'artifact','files':[entry('experiment.py'),entry('data.json')],
-                       'components':{k:['experiment.py'] for k in ('method','preprocess','train','evaluate')}},
-         'datasets':[{'id':'synthetic','source':{'url':'generated:test','version':'v1','license':'self-owned'},'files':[entry('data.json')],
-                      'splits':{n:{**entry(n+'.ids'),'source':'disjoint generated IDs'} for n in ('train','test')},'preprocessing_not_applicable':'Generated fixture is already numeric'}],
-         'environment':{},'resources':{'max_seconds':60,'cpus':1,'memory_bytes':1024**3,'price_per_hour_usd':0},
-         'experiments':[{'id':'regression','paper_experiment':'E1','seeds':[11,22,33,44,55],
-                        'config':{**entry('settings.json'),'expected':settings,'source':'synthetic test protocol'},
-                        'variants':[{'id':'method','role':'method'},{'id':'baseline','role':'baseline'},{'id':'ablation','role':'ablation'}],
-                        'stages':[{'id':'prepare','argv':[sys.executable,'{repo}/experiment.py','prepare','{config}'],'needs':[], 'inputs':['repo:data.json','config.json'],'outputs':['prepared.json']},
-                                  {'id':'train','argv':[sys.executable,'{repo}/experiment.py','train','{config}'],'needs':['prepare'],'inputs':['prepared.json','config.json'],'outputs':['model.json','used-config.json']},
-                                  {'id':'evaluate','argv':[sys.executable,'{repo}/experiment.py','evaluate','{config}'],'needs':['train'],'inputs':['model.json','prepared.json'],'outputs':['metrics.json']}],
-                        'metric':{'path':'metrics.json','key':'mse','direction':'lower'},
-                        'comparisons':[{'method':'method','other':'baseline'},{'method':'method','other':'ablation'}]}]}
+          'pages':[{'number':1,'text':paper.read_text()}],
+          'conclusions':[{'id':'C1','text':statement,'page':1,'quote':statement}],
+          'experiments':[{'id':'E1','labels':['figure-1'],'page':1,'quote':'Figure 1 compares prediction error.','core':True,'conclusion_ids':['C1']}],
+          'inventory_review':{'complete':complete,'reviewer':'synthetic-fixture-reviewer' if complete else '', 'notes':'Complete self-owned synthetic inventory' if complete else ''}},
+          'repository':{'path':'artifact','files':[entry(n) for n in ['experiment.py','data.json','targets.jsonl','train.ids','test.ids','settings.json']],
+                        'components':{k:['experiment.py'] for k in ('method','preprocess','train','evaluate')},
+                        'method_review':{'verified':complete,'reviewer':'synthetic-fixture-reviewer' if complete else '', 'source':'Synthetic paper p1 and experiment.py','notes':'Known linear fit, constant control, and no-intercept ablation'}},
+          'datasets':[{'id':'synthetic','source':{'url':'generated:test','version':'v1','license':'self-owned'},'files':[entry('data.json'),entry('targets.jsonl')],
+                       'splits':{n:{**entry(n+'.ids'),'source':'disjoint generated IDs'} for n in ('train','test')},'preprocessing_not_applicable':'Generated fixture is already numeric'}],
+          'environment':{},'resources':{'max_seconds':60,'cpus':1,'memory_bytes':1024**3,'price_per_hour_usd':0},
+          'experiments':[{'id':'regression','paper_experiment':'E1','seeds':[11,22,33,44,55],
+              'config':{**entry('settings.json'),'expected':settings,'source':'synthetic test protocol'},
+              'variants':[{'id':'method','role':'method','settings':{'algorithm':'linear','fit_intercept':True}},
+                          {'id':'baseline','role':'baseline','settings':{'algorithm':'constant','fit_intercept':True}},
+                          {'id':'ablation','role':'ablation','settings':{'algorithm':'linear','fit_intercept':False}}],
+              'stages':[{'id':'prepare','kind':'prepare','argv':[sys.executable,'{repo}/experiment.py','prepare','{config}'],'needs':[], 'inputs':['repo:data.json','repo:train.ids','repo:test.ids','config.json'],'outputs':['prepared.json','train.ids','test.ids']},
+                        {'id':'train','kind':'train','argv':[sys.executable,'{repo}/experiment.py','train','{config}'],'needs':['prepare'],'inputs':['prepared.json','config.json'],'outputs':['model.json','used-config.json']},
+                        {'id':'evaluate','kind':'evaluate','argv':[sys.executable,'{repo}/experiment.py','evaluate','{config}'],'needs':['train'],'inputs':['model.json','prepared.json'],'outputs':['metrics.json','predictions.jsonl']}],
+              'training_evidence':{'stage_id':'train','model_outputs':['model.json'],'used_config_path':'used-config.json'},
+              'split_ids':{'train':{'path':'train.ids','count':21},'test':{'path':'test.ids','count':10}},
+              'fairness':{'source':'Synthetic controlled protocol: fixed data/seed/budget, only algorithm or intercept changes','selection_protocol':'none',
+                          'allowed_variant_differences':{'baseline':['algorithm'],'ablation':['fit_intercept']}},
+              'metric':{'path':'metrics.json','key':'mse','direction':'lower','implementation':'mse','records_path':'predictions.jsonl',
+                        'targets_path':'targets.jsonl','targets_sha256':fingerprint(repo/'targets.jsonl')['sha256'],'ids_path':'test.ids'},
+              'comparisons':[{'method':'method','other':'baseline'},{'method':'method','other':'ablation'}]}]}
     path=write(root/'plan.json',plan)
     return path,plan,repo
-
 
 class ReproductionAuditTests(unittest.TestCase):
     def setUp(self):
@@ -222,7 +236,7 @@ class ReproductionExecutionTests(unittest.IsolatedAsyncioTestCase):
 class ReproductionDockerTests(unittest.IsolatedAsyncioTestCase):
     async def test_clean_build_image_verification_and_full_matrix_in_containers(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);path,plan,repo=fixture(root)
+            root=Path(tmp);path,plan,repo=fixture(root,complete=True)
             dockerfile=write(repo/'Dockerfile','FROM python:3.11-slim\n')
             plan['environment']={'dockerfile':'Dockerfile','dockerfile_sha256':fingerprint(dockerfile)['sha256'],
                                  'verify':[['python3','-c','import sys; assert sys.version_info[:2] == (3,11)']]}
@@ -232,6 +246,8 @@ class ReproductionDockerTests(unittest.IsolatedAsyncioTestCase):
             result=await reproduce(path,root/'docker-run')
             self.assertEqual(result['status'],'completed',result['errors'])
             self.assertTrue(result['levels']['environment_rebuilt'])
+            self.assertTrue(result['levels']['training'],result['level_requirements'])
+            self.assertTrue(result['levels']['conclusion'],result['level_requirements'])
             self.assertTrue(result['environment']['image'].startswith('sha256:'))
             self.assertEqual(result['environment']['network'],'none')
             self.assertEqual(len(result['runs']),15)

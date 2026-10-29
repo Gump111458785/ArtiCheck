@@ -30,3 +30,4 @@ jobs:
           docker pull python:3.11-slim
           python -m articheck demo --sandbox docker --output runs/docker-demo
           ARTICHECK_TEST_DOCKER=1 python -m unittest discover -s tests -p test_reproduction.py -v
+          ARTICHECK_TEST_DOCKER=1 python -m unittest discover -s tests -p test_material_http.py -v

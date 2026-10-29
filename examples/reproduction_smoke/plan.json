@@ -2,18 +2,20 @@
   "format": "articheck-reproduction-plan-v1",
   "paper": {
     "path": "paper.txt",
-    "sha256": "8460a6e8e3afdd9a8fd6eeb74ea21a60fb936402ba5ee3f232d9bf2795a23569",
+    "sha256": "ec03b2da9f560f2b14453606588fa171a68b3379d44ec0273076ba5e56e31aa2",
     "version": "synthetic v1",
     "pages": [
       {
         "number": 1,
-        "text": "A synthetic test document. Figure 1 compares prediction error. Figure 2 is another core experiment."
+        "text": "Synthetic test document. Linear regression improves prediction error over the declared controls. Figure 1 compares prediction error."
       }
     ],
     "conclusions": [
       {
         "id": "C1",
-        "text": "Test conclusion"
+        "text": "Linear regression improves prediction error over the declared controls.",
+        "page": 1,
+        "quote": "Linear regression improves prediction error over the declared controls."
       }
     ],
     "experiments": [
@@ -24,11 +26,16 @@
         ],
         "page": 1,
         "quote": "Figure 1 compares prediction error.",
-        "core": true
+        "core": true,
+        "conclusion_ids": [
+          "C1"
+        ]
       }
     ],
     "inventory_review": {
-      "complete": false
+      "complete": true,
+      "reviewer": "synthetic-fixture-reviewer",
+      "notes": "Complete self-owned synthetic inventory"
     }
   },
   "repository": {
@@ -36,11 +43,27 @@
     "files": [
       {
         "path": "experiment.py",
-        "sha256": "da3c494d6bce59320bd0bfc146732e7acccc97c4127e77f388458a725e920d8e"
+        "sha256": "b71b84f17d846e242cab32500da6bc7c6ad712cda93972c50d88d7a66731d8bd"
       },
       {
         "path": "data.json",
         "sha256": "cc9b7e10682e4270b9c7bf5e528bcbbed4d3d7c79e33b264e1458bd33b8639e1"
+      },
+      {
+        "path": "targets.jsonl",
+        "sha256": "afffb2e8f685dd6a89fe574bd75b7a5a94cd9ab2ea725bc855b27f9d6f358e3c"
+      },
+      {
+        "path": "train.ids",
+        "sha256": "ea6df06cd701b31d8edd20773a9b6b6dbd9916057a6cdbb40ddfde5b5723c265"
+      },
+      {
+        "path": "test.ids",
+        "sha256": "ef500251fd985b5f2fd3e5b464022f06622f280c5313473c2f561d3857af3c32"
+      },
+      {
+        "path": "settings.json",
+        "sha256": "3aeb11277c0b5105ebff0426fa26b7b5f7d02c598a018bf096ac358992aca7f0"
       }
     ],
     "components": {
@@ -56,6 +79,12 @@
       "evaluate": [
         "experiment.py"
       ]
+    },
+    "method_review": {
+      "verified": true,
+      "reviewer": "synthetic-fixture-reviewer",
+      "source": "Synthetic paper p1 and experiment.py",
+      "notes": "Known linear fit, constant control, and no-intercept ablation"
     }
   },
   "datasets": [
@@ -70,6 +99,10 @@
         {
           "path": "data.json",
           "sha256": "cc9b7e10682e4270b9c7bf5e528bcbbed4d3d7c79e33b264e1458bd33b8639e1"
+        },
+        {
+          "path": "targets.jsonl",
+          "sha256": "afffb2e8f685dd6a89fe574bd75b7a5a94cd9ab2ea725bc855b27f9d6f358e3c"
         }
       ],
       "splits": {
@@ -87,9 +120,19 @@
       "preprocessing_not_applicable": "Generated fixture is already numeric"
     }
   ],
-  "environment": {},
+  "environment": {
+    "dockerfile": "Dockerfile",
+    "dockerfile_sha256": "9bba4755ce79ecdd46f26c87f61325865c9051e8d99bf8bb095ba8edcb5ca7b7",
+    "verify": [
+      [
+        "python3",
+        "-c",
+        "import sys; assert sys.version_info[:2] == (3,11)"
+      ]
+    ]
+  },
   "resources": {
-    "max_seconds": 60,
+    "max_seconds": 240,
     "cpus": 1,
     "memory_bytes": 1073741824,
     "price_per_hour_usd": 0
@@ -107,14 +150,14 @@
       ],
       "config": {
         "path": "settings.json",
-        "sha256": "c3af76b9767a3c8b12fd778c90ebc14295629b26cea250a2df2919c637963dc1",
+        "sha256": "3aeb11277c0b5105ebff0426fa26b7b5f7d02c598a018bf096ac358992aca7f0",
         "expected": {
           "hyperparameters": {
             "fit": "least_squares"
           },
           "initialization": "closed_form",
           "augmentation": "none",
-          "selection": "all training examples",
+          "selection": "all training examples; no tuning",
           "stopping": "closed form solution"
         },
         "source": "synthetic test protocol"
@@ -122,20 +165,33 @@
       "variants": [
         {
           "id": "method",
-          "role": "method"
+          "role": "method",
+          "settings": {
+            "algorithm": "linear",
+            "fit_intercept": true
+          }
         },
         {
           "id": "baseline",
-          "role": "baseline"
+          "role": "baseline",
+          "settings": {
+            "algorithm": "constant",
+            "fit_intercept": true
+          }
         },
         {
           "id": "ablation",
-          "role": "ablation"
+          "role": "ablation",
+          "settings": {
+            "algorithm": "linear",
+            "fit_intercept": false
+          }
         }
       ],
       "stages": [
         {
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "{repo}/experiment.py",
@@ -145,14 +201,19 @@
           "needs": [],
           "inputs": [
             "repo:data.json",
+            "repo:train.ids",
+            "repo:test.ids",
             "config.json"
           ],
           "outputs": [
-            "prepared.json"
+            "prepared.json",
+            "train.ids",
+            "test.ids"
           ]
         },
         {
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "{repo}/experiment.py",
@@ -173,6 +234,7 @@
         },
         {
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "{repo}/experiment.py",
@@ -187,14 +249,49 @@
             "prepared.json"
           ],
           "outputs": [
-            "metrics.json"
+            "metrics.json",
+            "predictions.jsonl"
           ]
         }
       ],
+      "training_evidence": {
+        "stage_id": "train",
+        "model_outputs": [
+          "model.json"
+        ],
+        "used_config_path": "used-config.json"
+      },
+      "split_ids": {
+        "train": {
+          "path": "train.ids",
+          "count": 21
+        },
+        "test": {
+          "path": "test.ids",
+          "count": 10
+        }
+      },
+      "fairness": {
+        "source": "Synthetic controlled protocol: fixed data/seed/budget, only algorithm or intercept changes",
+        "selection_protocol": "none",
+        "allowed_variant_differences": {
+          "baseline": [
+            "algorithm"
+          ],
+          "ablation": [
+            "fit_intercept"
+          ]
+        }
+      },
       "metric": {
         "path": "metrics.json",
         "key": "mse",
-        "direction": "lower"
+        "direction": "lower",
+        "implementation": "mse",
+        "records_path": "predictions.jsonl",
+        "targets_path": "targets.jsonl",
+        "targets_sha256": "afffb2e8f685dd6a89fe574bd75b7a5a94cd9ab2ea725bc855b27f9d6f358e3c",
+        "ids_path": "test.ids"
       },
       "comparisons": [
         {

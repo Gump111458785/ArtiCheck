@@ -1,6 +1,6 @@
 # ArtiCheck Workbench：界面与接口
 
-工作台把现有 Python 核查链路封装为可操作的界面，并用实际交互检验接口设计。前端为原生 HTML / CSS / JavaScript，无需 Node 依赖安装；本地服务使用 Python 标准库。
+工作台把现有 Python 核查链路封装为可操作的界面，并用实际交互检验接口设计。前端为原生 HTML / CSS / JavaScript，无需 Node 依赖安装；本地 HTTP 服务使用 Python 标准库，PDF 正文提取使用固定版本 pypdf。
 
 ## 运行方式
 
@@ -137,7 +137,7 @@ node --test tests/frontend/intake.test.mjs
 python -m unittest discover -s tests -v
 ```
 
-共 22 个 HTTP 操作。`scripts/build_workbench.py` 会重新执行教学 fixture 并更新归档数据；仅修改 API 契约时，可直接调用该脚本中的 `contract()` 生成 `openapi.json`，避免无关的样例时间戳变化。
+共 26 个 HTTP 操作。`scripts/build_workbench.py` 会重新执行教学 fixture 并更新归档数据；仅修改 API 契约时，可直接调用该脚本中的 `contract()` 生成 `openapi.json`，避免无关的样例时间戳变化。
 
 
 ## 双工作区

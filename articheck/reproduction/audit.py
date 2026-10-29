@@ -4,19 +4,20 @@ import ast
 import hashlib
 import itertools
 import json
+import os
 import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .protocol import DIMENSIONS, fingerprint, load_json, load_plan, relative_path
+from .protocol import DIMENSIONS, fingerprint, load_json, load_plan, relative_path, validate_snapshot, object_value
 
 SETTINGS = ('hyperparameters', 'initialization', 'augmentation', 'selection', 'stopping')
 
 
 def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
     """Read actual bytes only; never imports or executes artifact code."""
-    plan, repo = load_plan(path, workspace)
+    plan, repo, plan_sha = load_plan(path, workspace, with_digest=True)
     base = Path(path).resolve().parent
     if repo_override is not None:
         repo = Path(repo_override).resolve()
@@ -24,7 +25,7 @@ def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
     def add(dimension, code, status, detail, evidence=None):
         checks.append({'dimension': dimension, 'code': code, 'status': status, 'detail': detail,
                        'evidence': evidence or {}})
-    def file_check(dimension, entry, root=repo):
+    def file_check(dimension, entry, root=repo, origin=None):
         name = entry.get('path', '')
         try:
             target = relative_path(root, name)
@@ -33,7 +34,7 @@ def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
             key = 'sha256' if entry.get('sha256') else 'git_blob_sha'
             status = 'pass' if expected and actual[key] == expected else 'fail' if expected else 'unknown'
             add(dimension, 'file:' + name, status, 'Content digest compared' if expected else 'No reference digest supplied',
-                {'path': name, 'actual': actual, 'expected': {key: expected}})
+                {'path': name, 'actual': actual, 'expected': {key: expected}, 'reference_source': origin or 'declared_manifest'})
             return target, actual, status
         except (OSError, ValueError) as error:
             add(dimension, 'file:' + name, 'fail', str(error))
@@ -71,10 +72,20 @@ def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
         grounded = bool(quote and quote in page_map.get(row.get('page'), ''))
         add('scope', 'citation:' + str(row.get('id')), 'pass' if grounded else 'fail', 'Inventory citation checked against page text',
             {'page': row.get('page'), 'quote': quote})
-    classified = set(itertools.chain.from_iterable(x.get('labels', []) for x in inventory)) | set(paper.get('excluded_references', {}))
+    exclusions=paper.get('excluded_references',{})
+    classified = set(itertools.chain.from_iterable(x.get('labels', []) for x in inventory))
+    for label,reason in exclusions.items():
+        valid=isinstance(reason,str) and bool(reason.strip())
+        add('scope','excluded:'+label,'pass' if valid else 'review_required','Excluded figure/table needs an explicit reason',{'reason':reason})
+        if valid:classified.add(label)
     for label, item in candidates.items():
         add('scope', 'unclassified:' + label, 'pass' if label in classified else 'review_required',
             'Figure/table reference classified' if label in classified else 'Unclassified paper reference; may be a missing experiment or a citation', item)
+    for claim in paper.get('conclusions',[]):
+        quote=claim.get('quote','')
+        add('scope','conclusion_source:'+str(claim.get('id')),
+            'pass' if isinstance(quote,str) and quote and quote in page_map.get(claim.get('page'),'') else 'review_required',
+            'Main conclusion requires a grounded paper-page citation',{'page':claim.get('page'),'quote':quote})
     selected = {e.get('paper_experiment') for e in plan['experiments']}
     for row in inventory:
         if row.get('core'):
@@ -85,7 +96,7 @@ def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
     add('scope', 'inventory_review', 'pass' if review.get('complete') is True and review.get('reviewer') and review.get('notes') else 'review_required',
         'Human inventory review is a declaration, not inferred from selected easy experiments', review)
 
-    source = imported or plan['repository']
+    source = validate_snapshot(imported) if imported is not None else plan['repository']
     expected_files = source.get('files', [])
     if not isinstance(expected_files, list) or len(expected_files) > 5000:
         raise ValueError('Reference snapshot must contain at most 5000 files')
@@ -96,7 +107,36 @@ def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
         if entry.get('path') in seen:
             raise ValueError('Duplicate snapshot path')
         seen.add(entry.get('path'))
-        file_check('code', entry)
+        file_check('code', entry, origin='imported_snapshot' if imported is not None else 'plan_reference')
+    if imported is not None:
+        # The selected upload and the paper-plan reference are independent constraints.
+        # Never replace a bad paper reference with a newly hashed upload.
+        for entry in plan['repository'].get('files', []):
+            file_check('code', entry, origin='plan_reference')
+            seen.add(entry['path'])
+    declared=set(seen)
+    for exp in plan['experiments']:
+        if exp.get('config',{}).get('path'):declared.add(exp['config']['path'])
+    for lock in plan['environment'].get('lockfiles',[]):declared.add(lock['path'])
+    if plan['environment'].get('dockerfile'):declared.add(plan['environment']['dockerfile'])
+    if not plan['datasets']:
+        add('data','dataset_provenance','unknown','Declare actual data provenance or a source-grounded generator protocol')
+    for dataset in plan['datasets']:
+        declared.update(x['path'] for x in dataset.get('files',[]))
+        declared.update(x['path'] for x in dataset.get('splits',{}).values())
+        for step in dataset.get('preprocessing',[]):
+            declared.update(x['path'] for x in step.get('inputs',[])+step.get('outputs',[]))
+    extras=[];inventory_count=0
+    for directory,dirs,files in os.walk(repo,followlinks=False):
+        dirs[:]=[d for d in dirs if d not in {'.git','.venv','node_modules','__pycache__'}]
+        for name in dirs+files:
+            item=Path(directory)/name
+            if item.is_symlink():add('code','source_symlink','fail','Source contains a symlink',{'path':item.relative_to(repo).as_posix()})
+        for name in files:
+            rel=(Path(directory)/name).relative_to(repo).as_posix();inventory_count+=1
+            if inventory_count>10000:raise ValueError('Source inventory exceeds 10000 files')
+            if rel not in declared:extras.append(rel)
+    add('code','undeclared_source_files','fail' if extras else 'pass','Actual source inventory compared with imported and explicitly declared inputs',{'extra_files':extras[:100],'extra_count':len(extras)})
     expected_commit = source.get('commit') or plan['repository'].get('commit')
     if expected_commit and repo_override is None:
         # Do not run git from an artifact-controlled configuration or invoke hooks.
@@ -183,8 +223,8 @@ def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
         try:
             cfg = exp.get('config', {})
             target, actual, matched = file_check('settings', cfg)
-            settings = load_json(target) if target else {}
-            expected = cfg.get('expected', {})
+            settings = object_value(load_json(target),'configuration file') if target else {}
+            expected = object_value(cfg.get('expected', {}),'expected configuration')
             for key in SETTINGS:
                 present = key in expected and expected[key] is not None and expected[key] != ''
                 add('settings', eid + ':' + key, 'pass' if present and settings.get(key) == expected[key] and matched == 'pass' else 'fail', 'Actual configuration compared with declared paper setting', {'expected': expected.get(key), 'actual': settings.get(key), 'source': cfg.get('source')})
@@ -200,6 +240,8 @@ def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
     add('resources', 'runtime_measurement', 'unknown', 'Need measured execution resources, elapsed time and declared pricing; host snapshot is insufficient')
     summary = {d: {s: sum(c['dimension'] == d and c['status'] == s for c in checks) for s in ('pass', 'fail', 'unknown', 'review_required')} for d in DIMENSIONS}
     return {'format': 'articheck-reproduction-audit-v1', 'created_at': datetime.now(timezone.utc).isoformat(),
-            'plan_sha256': hashlib.sha256(Path(path).read_bytes()).hexdigest(), 'checks': checks, 'dimensions': summary,
+            'plan_sha256': plan_sha, 'imported_material': {k:imported[k] for k in ('kind','archive_sha256','commit') if imported and k in imported}, 'checks': checks, 'dimensions': summary,
             'paper_candidates': list(candidates.values()), 'blocking_failures': sum(c['status'] == 'fail' for c in checks),
+            'coverage':{'inventory_review':review,'method_review':semantic,'conclusions':paper.get('conclusions',[]),
+                        'excluded_references':exclusions,'experiments':[{**item,'execution_ids':[e['id'] for e in plan['experiments'] if e.get('paper_experiment')==item['id']]} for item in inventory]},
             'limitations': ['Scope/method review are explicit reviewer declarations.', 'No artifact code executed by audit.', 'Audit alone never certifies successful reproduction.']}

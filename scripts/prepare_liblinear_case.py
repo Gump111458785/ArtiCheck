@@ -109,7 +109,10 @@ def prepare(destination, base_image):
               'variants':[{'id':'l2-svm','role':'method','settings':{'solver':1,'C':1}},
                           {'id':'logistic-control','role':'baseline','settings':{'solver':0,'C':1}},
                           {'id':'regularization-control','role':'ablation','settings':{'solver':1,'C':.001}}],
-              'stages':[{'id':kind,'argv':['python3','{repo}/articheck_adapter.py',kind,'{config}'],
+              'training_evidence':{'stage_id':'train','used_config_path':'used-config.json','model_outputs':['model.txt']},
+              'fairness':{'source':'Section 3.1 C=1; ArtiCheck additional fixed controls, without tuning',
+                          'selection_protocol':'none','allowed_variant_differences':{'logistic-control':['solver'],'regularization-control':['C']}},
+              'stages':[{'id':kind,'kind':kind,'argv':['python3','{repo}/articheck_adapter.py',kind,'{config}'],
                          'needs':[] if i==0 else [previous], 'inputs':inputs, 'outputs':outputs,'timeout_seconds':180}
                         for i,(kind,previous,inputs,outputs) in enumerate([
                             ('prepare','', ['repo:news20.binary.bz2','config.json'], ['train.svm','test.svm','train.ids','test.ids','split-provenance.json']),

@@ -24,6 +24,7 @@ from urllib.error import HTTPError, URLError
 from .data import DEFECTS, inject, read_jsonl
 from .environment import collect_environment
 from .reproduction.service import ReproductionService
+from .reproduction.materials import MaterialStore, LIMITS as MATERIAL_LIMITS
 from .feedback import record_feedback
 from .pipeline import review
 from .runtime import Budget
@@ -95,7 +96,8 @@ class Workbench:
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="articheck")
         self.tasks, self.runs, self.controls = {}, {}, {}
         self.feedback_file = self.storage / "feedback.jsonl"
-        self.reproduction = ReproductionService(self.workspace, self.storage / "reproductions")
+        self.materials = MaterialStore(self.workspace)
+        self.reproduction = ReproductionService(self.workspace, self.storage / "reproductions", materials=self.materials)
         self._restore()
         for sample in ("metric_average", "split_leakage", "baseline_budget", "clean"):
             task_id = "sample-" + sample
@@ -424,6 +426,9 @@ def handler_for(app: Workbench, static_root: Path):
                 if path.path == "/api/health":
                     return self.send_json({"service": "articheck", "version": 1, "mode": "runtime",
                                            "supported_planners": ["fixed"], "local_samples_only": True})
+                if len(parts) == 3 and parts[:2] == ["api", "materials"]:
+                    app.materials.workspace=app.workspace
+                    return self.send_json(app.materials.get(parts[2]))
                 if path.path == "/api/reproduction/runs":
                     return self.send_json({"items": [app.reproduction.get(key) for key in list(app.reproduction.jobs)]})
                 if len(parts) >= 4 and parts[:3] == ["api", "reproduction", "runs"]:
@@ -502,6 +507,13 @@ def handler_for(app: Workbench, static_root: Path):
             try:
                 self.safe(True)
                 length = int(self.headers.get("Content-Length", 0))
+                upload_parts=urlparse(self.path).path.strip('/').split('/')
+                if len(upload_parts)==4 and upload_parts[:2]==['api','materials'] and upload_parts[3] in MATERIAL_LIMITS:
+                    if not 1<=length<=MATERIAL_LIMITS[upload_parts[3]]:
+                        raise APIError('Material upload exceeds limit',413)
+                    app.materials.workspace=app.workspace
+                    self.connection.settimeout(30)
+                    return self.send_json(app.materials.upload(upload_parts[2],upload_parts[3],self.rfile,length),201)
                 maximum = 2_000_000 if urlparse(self.path).path == "/api/reproduction/audit" else 256000
                 if not 1 <= length <= maximum:
                     raise APIError(f"JSON body required; maximum {maximum} bytes", 413)
@@ -510,11 +522,18 @@ def handler_for(app: Workbench, static_root: Path):
                     raise APIError("JSON object required")
                 path = urlparse(self.path).path
                 parts = path.strip("/").split("/")
+                if path == "/api/materials":
+                    app.materials.workspace=app.workspace
+                    return self.send_json(app.materials.create(body),201)
+                if len(parts)==4 and parts[:2]==['api','materials'] and parts[3]=='bind':
+                    app.materials.workspace=app.workspace
+                    return self.send_json(app.materials.bind(parts[2],body))
                 if path == "/api/tasks":
                     return self.send_json(app.create_task(body), 201)
                 if path == "/api/reproduction/audit":
                     # Workspace can be explicitly reconfigured by the hosting app.
                     app.reproduction.workspace = app.workspace
+                    app.materials.workspace = app.workspace
                     return self.send_json(app.reproduction.audit(body))
                 if path == "/api/reproduction/runs":
                     return self.send_json(app.reproduction.start(body), 202)

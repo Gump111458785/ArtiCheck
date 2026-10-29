@@ -14,3 +14,5 @@ vendor/
 .sites-runtime/
 .sites-checkout/
 .taste-skill/
+
+.articheck-inputs/

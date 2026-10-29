@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import threading
 import time
 import uuid
@@ -20,8 +21,8 @@ def now():return datetime.now(timezone.utc).isoformat()
 
 
 class ReproductionService:
-    def __init__(self, workspace, storage):
-        self.workspace=Path(workspace).resolve();self.storage=Path(storage).resolve()
+    def __init__(self, workspace, storage, materials=None):
+        self.workspace=Path(workspace).resolve();self.storage=Path(storage).resolve();self.materials=materials
         self.storage.mkdir(parents=True,exist_ok=True)
         self.lock=threading.RLock();self.pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='reproduction')
         self.jobs={};self.controls={};self.tokens={};self.cached_reports={}
@@ -42,8 +43,24 @@ class ReproductionService:
     def audit(self, body):
         path=self.path(body.get('plan_path',''))
         imported=body.get('imported_snapshot')
+        bundle=None
+        if body.get('material_bundle_id'):
+            if self.materials is None:raise ValueError('Material import service unavailable')
+            bundle=self.materials.get(body['material_bundle_id'])
+            if bundle['status']!='bound' or (self.workspace/bundle['plan_path']).resolve()!=path:
+                raise ValueError('Material bundle is not bound to this execution plan')
+            if bundle['project_id']!=body.get('project_id'):raise ValueError('Material bundle belongs to another project')
+            imported=bundle['imported_snapshot']
+        expected_archive=body.get('archive_sha256')
+        if expected_archive is not None and (not isinstance(expected_archive,str) or not re.fullmatch('[0-9a-f]{64}',expected_archive)):
+            raise ValueError('archive_sha256 must be a content SHA256')
+        code_bound=expected_archive is None or bundle is not None and bundle['files']['archive']['sha256']==expected_archive
         result=audit_plan(path,workspace=self.workspace,imported=imported)
         expected_paper=body.get('paper_sha256')
+        if expected_paper is not None and (not isinstance(expected_paper,str) or not re.fullmatch('[0-9a-f]{64}',expected_paper)):
+            raise ValueError('paper_sha256 must be a content SHA256')
+        if body.get('project_id') is not None and (not isinstance(body['project_id'],str) or not 1 <= len(body['project_id']) <= 200):
+            raise ValueError('project_id must be text up to 200 characters')
         plan,_=load_plan(path,self.workspace)
         if expected_paper and plan['paper'].get('sha256')!=expected_paper:
             result['checks'].append({'dimension':'scope','code':'project_paper_binding','status':'fail','detail':'Execution-plan paper digest differs from the imported project PDF','evidence':{}})
@@ -52,16 +69,23 @@ class ReproductionService:
         if body.get('project_id') and not expected_paper:
             result['checks'].append({'dimension':'scope','code':'project_paper_binding','status':'unknown','detail':'Current project has no imported PDF content digest; cannot bind this execution plan to it','evidence':{}})
             result['dimensions']['scope']['unknown']+=1
+        if expected_archive is not None:
+            status='pass' if code_bound else 'fail' if bundle else 'unknown'
+            result['checks'].append({'dimension':'code','code':'project_archive_binding','status':status,
+                                    'detail':'Project ZIP fingerprint compared with the immutable uploaded archive and extracted content','evidence':{'archive_sha256':expected_archive}})
+            result['dimensions']['code'][status]+=1
+            if status=='fail':result['blocking_failures']+=1
         with self.lock:
             self.tokens={k:v for k,v in self.tokens.items() if time.monotonic()-v['created'] < 900 or v.get('job_id')}
             if len(self.tokens)>=1000:raise ValueError('Audit token limit reached')
             token=uuid.uuid4().hex
-            self.tokens[token]={'path':path,'sha':result['plan_sha256'],'imported':imported,'result':result,'created':time.monotonic(),'project_id':body.get('project_id'),'paper_bound':bool(expected_paper)}
+            self.tokens[token]={'path':path,'sha':result['plan_sha256'],'imported':imported,'result':result,'created':time.monotonic(),'project_id':body.get('project_id'),'paper_bound':bool(expected_paper),'code_bound':code_bound}
         return {**result,'audit_token':token,'expires_in_seconds':900}
 
     def start(self, body):
         if body.get('sandbox','docker')!='docker':raise ValueError('Workbench reproduction jobs only accept Docker; no local fallback')
         with self.lock:
+            if not isinstance(body.get('audit_token'),str):raise ValueError('audit_token must be text')
             token=self.tokens.get(body.get('audit_token'))
             if not token:raise ValueError('Run material audit before starting an experiment')
             if token.get('job_id'):return self.get(token['job_id'])
@@ -70,6 +94,7 @@ class ReproductionService:
                 raise ValueError('Plan changed since material audit; audit again')
             if token['project_id'] and not token['paper_bound']:
                 raise ValueError('Import the project PDF and bind its actual content digest before execution')
+            if not token['code_bound']:raise ValueError('Import and bind the current project ZIP before execution')
             failures=[c for c in token['result']['checks'] if c['status']=='fail' and (c['dimension'] in ('code','data','settings','environment') or c['code']=='project_paper_binding' or c['dimension']=='scope' and c['code'].startswith('file:'))]
             if failures:raise ValueError('Material contradictions must be resolved before execution')
             if sum(j['status'] in ('queued','running') for j in self.jobs.values())>=20:

@@ -1,1 +1,1 @@
-A synthetic test document. Figure 1 compares prediction error. Figure 2 is another core experiment.
+Synthetic test document. Linear regression improves prediction error over the declared controls. Figure 1 compares prediction error.
