@@ -207,6 +207,73 @@ class HTTPContractTests(unittest.TestCase):
         finally:
             self.app.workspace = original
 
+    def test_reproduction_jobs_require_audit_bindings_and_are_idempotent(self):
+        from test_reproduction import fixture
+        root = Path(self.tmp.name) / "reproduction-jobs"
+        root.mkdir()
+        path, plan, repo = fixture(root)
+        original = self.app.workspace
+        self.app.workspace = root.resolve()
+        try:
+            with self.call("/api/reproduction/audit", {"plan_path": "plan.json"}) as response:
+                audit = json.load(response)
+            with self.assertRaises(urllib.error.HTTPError):
+                self.call("/api/reproduction/runs", {"audit_token": audit["audit_token"], "sandbox": "local"})
+            with self.call("/api/reproduction/runs", {"audit_token": audit["audit_token"]}) as response:
+                self.assertEqual(response.status, 202)
+                job = json.load(response)
+            with self.call("/api/reproduction/runs", {"audit_token": audit["audit_token"]}) as response:
+                self.assertEqual(json.load(response)["id"], job["id"])
+            deadline=time.monotonic()+5
+            while time.monotonic()<deadline:
+                with self.call("/api/reproduction/runs/"+job["id"]) as response:
+                    state=json.load(response)
+                if state["status"] in ("failed","completed","cancelled"):break
+                time.sleep(.02)
+            # This fixture has no Dockerfile: the job must fail before any artifact stage.
+            self.assertEqual(state["status"],"failed")
+            with self.call("/api/reproduction/runs/"+job["id"]+"/report") as response:
+                report=json.load(response)
+            self.assertEqual(report["runs"],[])
+            self.assertFalse(report["levels"]["run"])
+        finally:
+            self.app.workspace=original
+            self.app.reproduction.workspace=original
+
+    def test_reproduction_plan_edits_and_wrong_project_paper_block_start(self):
+        from test_reproduction import fixture
+        root=Path(self.tmp.name)/"reproduction-stale"
+        root.mkdir();path,plan,repo=fixture(root)
+        original=self.app.workspace;self.app.workspace=root.resolve()
+        try:
+            with self.call("/api/reproduction/audit",{"plan_path":"plan.json"}) as response:
+                token=json.load(response)["audit_token"]
+            path.write_text(path.read_text()+"\n")
+            with self.assertRaises(urllib.error.HTTPError):
+                self.call("/api/reproduction/runs",{"audit_token":token})
+            with self.call("/api/reproduction/audit",{"plan_path":"plan.json","paper_sha256":"0"*64}) as response:
+                audit=json.load(response)
+            self.assertTrue(any(c["code"]=="project_paper_binding" and c["status"]=="fail" for c in audit["checks"]))
+            with self.assertRaises(urllib.error.HTTPError):
+                self.call("/api/reproduction/runs",{"audit_token":audit["audit_token"]})
+        finally:
+            self.app.workspace=original
+            self.app.reproduction.workspace=original
+
+    def test_project_cannot_start_a_plan_without_its_pdf_digest(self):
+        from test_reproduction import fixture
+        root=Path(self.tmp.name)/"reproduction-no-pdf"
+        root.mkdir();fixture(root)
+        original=self.app.workspace;self.app.workspace=root.resolve()
+        try:
+            with self.call("/api/reproduction/audit",{"plan_path":"plan.json","project_id":"current-paper"}) as response:
+                audit=json.load(response)
+            self.assertTrue(any(c["code"]=="project_paper_binding" and c["status"]=="unknown" for c in audit["checks"]))
+            with self.assertRaises(urllib.error.HTTPError):
+                self.call("/api/reproduction/runs",{"audit_token":audit["audit_token"]})
+        finally:
+            self.app.workspace=original;self.app.reproduction.workspace=original
+
     def test_environment_snapshot_is_explicit_guarded_and_discloses_executor_limits(self):
         with patch("articheck.workbench.collect_environment", return_value={"format":"articheck-environment-v1", "gpus":None}) as collect:
             with self.call("/api/environment/inspect", {}) as response:

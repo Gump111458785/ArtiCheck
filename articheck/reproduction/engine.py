@@ -47,7 +47,7 @@ def materialize(argv, repo, work, seed, variant, mode):
     return result
 
 
-async def build_environment(plan, repo, output, *, mode, deadline):
+async def build_environment(plan, repo, output, *, mode, deadline, cancel=None):
     spec = plan['environment']
     if mode == 'local':
         return {'status': 'not_rebuilt', 'scope': 'explicitly trusted local fixture only', 'image': None}
@@ -60,7 +60,7 @@ async def build_environment(plan, repo, output, *, mode, deadline):
     argv = [docker, 'build', '--no-cache', '--network=none', '--pull=false', '--iidfile', str(iid), '-f', str(dockerfile), str(repo)]
     client = StageExecutor('local', allow_local_trusted=True)
     timeout = min(float(spec.get('build_timeout_seconds', 600)), max(.01, deadline-time.monotonic()))
-    result = await client.execute(repo, output, argv, timeout=timeout, measurement=False, environment={'HOME': str(Path.home())})
+    result = await client.execute(repo, output, argv, timeout=timeout, measurement=False, environment={'HOME': str(Path.home())}, cancel=cancel)
     dump(output/'environment-build.json', result)
     if result['status'] != 'completed' or not iid.is_file():
         return {'status': 'failed', 'log': 'environment-build.json', 'image': None}
@@ -71,7 +71,7 @@ async def build_environment(plan, repo, output, *, mode, deadline):
             'network': 'none', 'cache': False, 'log': 'environment-build.json'}
 
 
-async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=False, workspace=None, cancel=None):
+async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=False, workspace=None, cancel=None, imported=None):
     plan, source_repo = load_plan(plan_path, workspace)
     if mode == 'local' and not allow_local_trusted:
         raise ValueError('Local mode requires explicit trust; Docker is required for third-party code')
@@ -92,11 +92,11 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
     def interrupted():
         return cancel is not None and cancel.is_set()
     try:
-        audit = audit_plan(plan_path, workspace=workspace)
+        audit = audit_plan(plan_path, workspace=workspace, imported=imported)
         report['audit'] = audit
         dump(output/'audit.json', audit)
         # No artifact execution when actual identity/data/config bytes contradict references.
-        hard = [c for c in audit['checks'] if c['status'] == 'fail' and c['dimension'] in ('code', 'data', 'settings', 'environment')]
+        hard = [c for c in audit['checks'] if c['status'] == 'fail' and (c['dimension'] in ('code', 'data', 'settings', 'environment') or c['dimension'] == 'scope' and c['code'].startswith('file:'))]
         if hard:
             raise ValueError('Material verification failed before execution: '+', '.join(c['code'] for c in hard[:8]))
         # Freeze actual source bytes to separate execution from subsequent working-tree edits.
@@ -107,8 +107,8 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                 raise ValueError('Source symlinks are not executable evidence')
         source_files = {p.relative_to(snapshot).as_posix(): fingerprint(p) for p in snapshot.rglob('*') if p.is_file()}
         dump(output/'source-files.json', source_files)
-        snapshot_audit = audit_plan(plan_path, workspace=workspace, repo_override=snapshot)
-        snapshot_failures = [c for c in snapshot_audit['checks'] if c['status'] == 'fail' and c['dimension'] in ('code', 'data', 'settings', 'environment')]
+        snapshot_audit = audit_plan(plan_path, workspace=workspace, imported=imported, repo_override=snapshot)
+        snapshot_failures = [c for c in snapshot_audit['checks'] if c['status'] == 'fail' and (c['dimension'] in ('code', 'data', 'settings', 'environment') or c['dimension'] == 'scope' and c['code'].startswith('file:'))]
         if snapshot_failures:
             raise ValueError('Copied snapshot no longer matches the verified materials')
         report['source_manifest_sha256'] = fingerprint(output/'source-files.json')['sha256']
@@ -117,8 +117,10 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
         if report['plan_sha256'] != audit['plan_sha256']:
             raise ValueError('Plan changed during source verification')
         save()
-        environment = await build_environment(plan, snapshot, output, mode=mode, deadline=deadline)
+        environment = await build_environment(plan, snapshot, output, mode=mode, deadline=deadline, cancel=cancel)
         report['environment'] = environment
+        if interrupted():
+            raise asyncio.CancelledError()
         if environment['status'] == 'failed':
             raise RuntimeError('Clean environment build failed; see environment-build.json')
         resources = plan['resources']

@@ -1,0 +1,18 @@
+import {ensureAssessment} from './assessment-core.mjs';
+export const reproductionStatuses={queued:'排队中',running:'执行中',completed:'执行完成',failed:'执行失败',cancelled:'已停止'};
+export function reproductionState(project){const a=ensureAssessment(project);a.reproduction??={plan_path:'',audit:null,job:null,report:null,source:null,stale:false};return a.reproduction;}
+export function auditCounts(audit){const counts={pass:0,fail:0,unknown:0,review_required:0};for(const c of audit?.checks||[]){if(Object.hasOwn(counts,c.status))counts[c.status]++;}return counts;}
+export function validateReproductionReport(value){
+ const finite=v=>v===null||v===undefined||typeof v==='number'&&Number.isFinite(v);
+ if(value?.format!=='articheck-reproduction-report-v1'||!Object.hasOwn(reproductionStatuses,value.status)||!Array.isArray(value.runs)||!Array.isArray(value.experiments))throw Error('请选择 ArtiCheck 完整实验证据报告');
+ if(value.runs.length>10000||value.experiments.length>100)throw Error('报告中的运行数量超过界面限制');
+ if(value.errors!==undefined&&(!Array.isArray(value.errors)||value.errors.some(x=>typeof x!=='string')))throw Error('报告错误记录格式无效');
+ if(!finite(value.elapsed_seconds)||!finite(value.cost?.compute_estimate_usd))throw Error('报告耗时或费用无效');
+ if(value.plan?.experiments!==undefined&&(!Array.isArray(value.plan.experiments)||value.plan.experiments.some(e=>!Array.isArray(e.seeds)||!Array.isArray(e.variants))))throw Error('报告计划矩阵无效');
+ for(const level of Object.values(value.levels||{}))if(typeof level!=='boolean')throw Error('报告层级状态无效');
+ for(const row of value.runs){if(!['running','completed','failed','cancelled'].includes(row.status)||!finite(row.metric)||!Array.isArray(row.stages)||row.stages.length>500||!Number.isInteger(row.seed))throw Error('报告包含无效运行或指标');for(const stage of row.stages)if(!['completed','failed','cancelled'].includes(stage.status)||!finite(stage.elapsed_seconds))throw Error('报告阶段记录无效');}
+ for(const exp of value.experiments){if(!exp.variants||typeof exp.variants!=='object'||Array.isArray(exp.variants)||!Array.isArray(exp.comparisons))throw Error('统计结果格式无效');for(const v of Object.values(exp.variants)){if(!Number.isInteger(v.n)||v.n<0||!finite(v.mean)||!finite(v.sample_std))throw Error('报告汇总数值无效');}for(const c of exp.comparisons){if(!['supported','not_supported','inconclusive'].includes(c.status)||!Array.isArray(c.paired_seeds)||c.paired_seeds.some(s=>!Number.isInteger(s))||c.confidence_interval!==null&&(!Array.isArray(c.confidence_interval)||c.confidence_interval.length!==2||c.confidence_interval.some(n=>typeof n!=='number'||!Number.isFinite(n))))throw Error('配对统计记录无效');}}
+ return value;
+}
+export function reproductionSummary(report){const rows=report?.runs||[];return {expected:report?.plan?.experiments?.reduce((n,e)=>n+(e.seeds?.length||0)*(e.variants?.length||0),0)??null,completed:rows.filter(r=>r.status==='completed').length,failed:rows.filter(r=>r.status==='failed').length,recorded:rows.length,stages:rows.reduce((n,r)=>n+(r.stages?.length||0),0)};}
+export function startBlocker(state,mode){if(mode!=='runtime')return '启动完整实验需要连接本地工作台。';if(!state.audit?.audit_token)return '先读取并核验工作区内的实验计划和实际材料。';if(state.audit?.checks?.some(c=>c.code==='project_paper_binding'&&c.status!=='pass'))return '当前计划尚未绑定本项目的 PDF 内容指纹。';if(state.stale)return '材料已变化，需要重新核验。';if(state.job&&['queued','running'].includes(state.job.status))return '当前完整实验尚未结束。';if(state.audit.checks.some(c=>c.status==='fail'&&(['code','data','settings','environment'].includes(c.dimension)||c.code==='project_paper_binding'||c.dimension==='scope'&&c.code.startsWith('file:'))))return '代码、数据、配置或论文身份存在矛盾，请先解决。';return '';}

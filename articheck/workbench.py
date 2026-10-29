@@ -23,7 +23,7 @@ from urllib.error import HTTPError, URLError
 
 from .data import DEFECTS, inject, read_jsonl
 from .environment import collect_environment
-from .reproduction.audit import audit_plan
+from .reproduction.service import ReproductionService
 from .feedback import record_feedback
 from .pipeline import review
 from .runtime import Budget
@@ -95,6 +95,7 @@ class Workbench:
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="articheck")
         self.tasks, self.runs, self.controls = {}, {}, {}
         self.feedback_file = self.storage / "feedback.jsonl"
+        self.reproduction = ReproductionService(self.workspace, self.storage / "reproductions")
         self._restore()
         for sample in ("metric_average", "split_leakage", "baseline_budget", "clean"):
             task_id = "sample-" + sample
@@ -375,6 +376,7 @@ class Workbench:
                 raise APIError(str(exc)) from exc
 
     def close(self):
+        self.reproduction.close()
         for run_id in list(self.controls):
             try:
                 self.cancel(run_id)
@@ -422,6 +424,16 @@ def handler_for(app: Workbench, static_root: Path):
                 if path.path == "/api/health":
                     return self.send_json({"service": "articheck", "version": 1, "mode": "runtime",
                                            "supported_planners": ["fixed"], "local_samples_only": True})
+                if path.path == "/api/reproduction/runs":
+                    return self.send_json({"items": [app.reproduction.get(key) for key in list(app.reproduction.jobs)]})
+                if len(parts) >= 4 and parts[:3] == ["api", "reproduction", "runs"]:
+                    if len(parts) == 4:
+                        return self.send_json(app.reproduction.get(parts[3]))
+                    if len(parts) == 5 and parts[4] == "report":
+                        report = app.reproduction.report(parts[3])
+                        if report is None:
+                            raise APIError("Reproduction report not ready", 409)
+                        return self.send_json(report)
                 if path.path == "/api/tasks":
                     return self.send_json({"items": [app.get_task(key) for key in list(app.tasks)]})
                 if path.path == "/api/runs":
@@ -490,8 +502,9 @@ def handler_for(app: Workbench, static_root: Path):
             try:
                 self.safe(True)
                 length = int(self.headers.get("Content-Length", 0))
-                if not 1 <= length <= 256000:
-                    raise APIError("JSON body required; maximum 256 KB", 413)
+                maximum = 2_000_000 if urlparse(self.path).path == "/api/reproduction/audit" else 256000
+                if not 1 <= length <= maximum:
+                    raise APIError(f"JSON body required; maximum {maximum} bytes", 413)
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise APIError("JSON object required")
@@ -500,10 +513,13 @@ def handler_for(app: Workbench, static_root: Path):
                 if path == "/api/tasks":
                     return self.send_json(app.create_task(body), 201)
                 if path == "/api/reproduction/audit":
-                    plan_path = (app.workspace / str(body.get("plan_path", ""))).resolve()
-                    if not plan_path.is_relative_to(app.workspace) or not plan_path.is_file():
-                        raise APIError("plan_path must identify a reproduction plan inside the workspace")
-                    return self.send_json(audit_plan(plan_path, workspace=app.workspace, imported=body.get("imported_snapshot")))
+                    # Workspace can be explicitly reconfigured by the hosting app.
+                    app.reproduction.workspace = app.workspace
+                    return self.send_json(app.reproduction.audit(body))
+                if path == "/api/reproduction/runs":
+                    return self.send_json(app.reproduction.start(body), 202)
+                if len(parts) == 5 and parts[:3] == ["api", "reproduction", "runs"] and parts[4] == "cancel":
+                    return self.send_json(app.reproduction.cancel(parts[3]))
                 if path == "/api/environment/inspect":
                     report = collect_environment(app.workspace)
                     report["executor"] = {"mode": "docker_probe", "gpu_enabled": False, "memory_limit_bytes": 1073741824, "cpu_limit": 1, "max_seconds": 600}

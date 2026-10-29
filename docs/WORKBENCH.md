@@ -137,7 +137,7 @@ node --test tests/frontend/intake.test.mjs
 python -m unittest discover -s tests -v
 ```
 
-共 16 个 HTTP 操作。`scripts/build_workbench.py` 会重新执行教学 fixture 并更新归档数据；仅修改 API 契约时，可直接调用该脚本中的 `contract()` 生成 `openapi.json`，避免无关的样例时间戳变化。
+共 22 个 HTTP 操作。`scripts/build_workbench.py` 会重新执行教学 fixture 并更新归档数据；仅修改 API 契约时，可直接调用该脚本中的 `contract()` 生成 `openapi.json`，避免无关的样例时间戳变化。
 
 
 ## 双工作区
@@ -170,3 +170,12 @@ python -m articheck.environment --disk-path /path/to/experiment --output environ
 `paper_review.materials` 保存八项材料的原始 Blob、名称、实际 SHA256、上传时间、JSON 字段有无或文本摘录。每项最多 8 份、每份最大 2 MB，预览/项目导出最多保留 8,000 字符；原文件只保存在当前浏览器。配置、数据清单、锁文件与构建日志的内容不会被执行。JSON 字段有无检查不等于哈希比对、环境构建或参数一致性核验。新增/移除材料恢复未核查状态。
 
 逐项入口、证据含义及明确缺口见 [八项能力核对](IMPLEMENTATION_STATUS.md)。
+
+
+## 完整实验工作区与异步任务
+
+新增「完整实验」为第八阶段。`POST /api/reproduction/audit` 读取工作区内 plan.json 的真实材料，可绑定项目 PDF 指纹及 GitHub blob SHA；此接口 JSON 上限 2 MB，其他 POST 仍为 256 KB。返回 15 分钟内有效的 audit_token；它不随项目导出。
+
+`POST /api/reproduction/runs` 用该 token 幂等提交 Docker 任务。计划变化、材料矛盾或项目 PDF 未绑定时拒绝。GET 同一路径列任务，GET `/api/reproduction/runs/{run_id}` 读取真实状态/进度，GET `.../report` 返回 JSON 证据，POST `.../cancel` 停止。运行元数据位于独立 reproductions 目录，重启前未终结的任务标记失败，不自动重跑。长时任务与旧 probe 的六角色界面分开。
+
+网页支持材料核验维度切换、启动/刷新/停止、报告导入与导出、逐次和逐阶段证据展开。原始 JSON 按需装载，阅读阶段证据时暂停自动刷新。材料变更使审计失效，保留历史报告并标注过期。用户导入的报告显示其声明来源，不冒充已连接主机的执行。公开 CPU 案例独立展示，不写入当前论文结果。
