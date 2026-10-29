@@ -65,7 +65,7 @@ elif stage=='evaluate':
           'inventory_review':{'complete':complete,'reviewer':'synthetic-fixture-reviewer' if complete else '', 'notes':'Complete self-owned synthetic inventory' if complete else ''}},
           'repository':{'path':'artifact','files':[entry(n) for n in ['experiment.py','data.json','targets.jsonl','train.ids','test.ids','settings.json']],
                         'components':{k:['experiment.py'] for k in ('method','preprocess','train','evaluate')},
-                        'method_review':{'verified':complete,'reviewer':'synthetic-fixture-reviewer' if complete else '', 'source':'Synthetic paper p1 and experiment.py','notes':'Known linear fit, constant control, and no-intercept ablation'}},
+                        'method_review':{'verified':complete,'reviewer':'synthetic-fixture-reviewer' if complete else '', 'source':'Synthetic paper p1 and experiment.py','notes':'Known linear fit, constant control, and no-intercept ablation','citations':[{'page':1,'quote':statement,'paths':['experiment.py']}]}},
           'datasets':[{'id':'synthetic','source':{'url':'generated:test','version':'v1','license':'self-owned'},'files':[entry('data.json'),entry('targets.jsonl')],
                        'splits':{n:{**entry(n+'.ids'),'source':'disjoint generated IDs'} for n in ('train','test')},'preprocessing_not_applicable':'Generated fixture is already numeric'}],
           'environment':{},'resources':{'max_seconds':60,'cpus':1,'memory_bytes':1024**3,'price_per_hour_usd':0},

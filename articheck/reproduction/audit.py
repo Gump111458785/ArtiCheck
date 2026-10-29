@@ -10,7 +10,8 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .protocol import DIMENSIONS, fingerprint, load_json, load_plan, relative_path, validate_snapshot, object_value
+from .protocol import DIMENSIONS, fingerprint, load_json, load_plan, relative_path, validate_snapshot, object_value, same_json
+from .paper_text import extract_paper
 
 SETTINGS = ('hyperparameters', 'initialization', 'augmentation', 'selection', 'stopping')
 
@@ -52,6 +53,18 @@ def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
             pages = load_json(target)
     if not isinstance(pages, list) or len(pages) > 500 or any(not isinstance(p, dict) or type(p.get('number')) is not int or not isinstance(p.get('text'), str) for p in pages):
         raise ValueError('Paper pages must contain number/text records')
+    if paper.get('path'):
+        try:
+            actual_pages,origin=extract_paper(relative_path(base,paper['path']))
+            if actual_pages is not None:
+                matches=same_json([{'number':p['number'],'text':p['text']} for p in pages],actual_pages)
+                add('scope','paper_text_origin','pass' if matches else 'fail','Citations use independently extracted paper text; supplied text mismatch remains a contradiction',origin)
+                pages=actual_pages
+            else:
+                add('scope','paper_text_origin','unknown','Paper text extraction format is unsupported',origin);pages=[]
+        except (OSError,ValueError) as error:
+            add('scope','paper_text_origin','fail',str(error));pages=[]
+    else:pages=[]
     page_map = {p['number']: p['text'] for p in pages}
     if len(page_map) != len(pages):
         raise ValueError('Duplicate paper page numbers')
@@ -159,8 +172,16 @@ def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
             except (OSError, ValueError, SyntaxError) as error:
                 add('code', 'component:' + component + ':' + name, 'fail', str(error))
     semantic = plan['repository'].get('method_review', {})
-    add('code', 'method_correspondence', 'pass' if semantic.get('reviewer') and semantic.get('source') and semantic.get('notes') and semantic.get('verified') is True else 'review_required',
-        'File existence cannot prove that a method implements the paper; explicit source-grounded review required', semantic)
+    semantic_grounded=bool(semantic.get('citations'))
+    for index,citation in enumerate(semantic.get('citations',[])):
+        grounded=citation['quote'] in page_map.get(citation['page'],'') and bool(citation['paths']);files={}
+        for name in citation['paths']:
+            try:files[name]=fingerprint(relative_path(repo,name))
+            except (OSError,ValueError):grounded=False
+        semantic_grounded=semantic_grounded and grounded
+        add('code','method_source:'+str(index),'pass' if grounded else 'fail','Method mapping quote checked against PDF text and actual source files',{'citation':citation,'files':files})
+    add('code', 'method_correspondence', 'pass' if semantic_grounded and semantic.get('reviewer') and semantic.get('source') and semantic.get('notes') and semantic.get('verified') is True else 'review_required',
+        'File existence cannot prove method semantics; requires a named review with actual page/quote/file mappings', semantic)
 
     for dataset in plan['datasets']:
         did = str(dataset.get('id', 'dataset'))
@@ -245,7 +266,7 @@ def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
             expected = object_value(cfg.get('expected', {}),'expected configuration')
             for key in SETTINGS:
                 present = key in expected and expected[key] is not None and expected[key] != ''
-                add('settings', eid + ':' + key, 'pass' if present and settings.get(key) == expected[key] and matched == 'pass' else 'fail', 'Actual configuration compared with declared paper setting', {'expected': expected.get(key), 'actual': settings.get(key), 'source': cfg.get('source')})
+                add('settings', eid + ':' + key, 'pass' if present and same_json(settings.get(key),expected[key]) and matched == 'pass' else 'fail', 'Actual configuration compared with declared paper setting', {'expected': expected.get(key), 'actual': settings.get(key), 'source': cfg.get('source')})
             if not cfg.get('source'):
                 add('settings', eid + ':source', 'unknown', 'Settings need paper/README citations')
         except (OSError, ValueError) as error:

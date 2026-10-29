@@ -19,11 +19,16 @@ def read_json_bytes(path, max_bytes=MAX_PLAN_BYTES):
 
 
 def decode_json(raw):
-    return json.loads(raw.decode('utf-8'),parse_constant=lambda s: (_ for _ in ()).throw(ValueError('Nonfinite JSON')))
+    return json.loads(raw.decode('utf-8'),parse_float=lambda s:finite(float(s)),parse_constant=lambda s: (_ for _ in ()).throw(ValueError('Nonfinite JSON')))
 
 
 def load_json(path, *, max_bytes=MAX_PLAN_BYTES):
     return decode_json(read_json_bytes(path,max_bytes))
+
+
+def same_json(left,right):
+    """Frozen configuration equality must distinguish booleans from numbers."""
+    return json.dumps(left,sort_keys=True,allow_nan=False,separators=(',',':'))==json.dumps(right,sort_keys=True,allow_nan=False,separators=(',',':'))
 
 
 def relative_path(root, value, *, exists=True):
@@ -149,6 +154,14 @@ def validate_plan(plan):
     for key in ('inventory_review',):
         object_value(plan['paper'].get(key, {}), key)
     object_value(plan['repository'].get('method_review', {}), 'method review')
+    for citation in object_rows(plan['repository'].get('method_review',{}).get('citations',[]),'method review citations',100):
+        if type(citation.get('page')) is not int or citation['page']<1 or not isinstance(citation.get('quote'),str) or not citation['quote']:raise ValueError('Method correspondence citation needs a page and original quote')
+        text_paths(citation.get('paths'),'method correspondence files')
+    for review in [plan['paper'].get('inventory_review',{}),plan['repository'].get('method_review',{})]:
+        for key in ('reviewer','source','notes'):
+            if review.get(key) is not None and (not isinstance(review[key],str) or len(review[key])>20000):raise ValueError('Review identity, source and notes must be bounded text')
+        for key in ('complete','verified'):
+            if review.get(key) is not None and type(review[key]) is not bool:raise ValueError('Review confirmation must be boolean')
     validate_files(plan['environment'].get('lockfiles', []), 'lockfiles')
     environment_expected=object_value(plan['environment'].get('expected',{}),'expected image environment')
     if set(environment_expected)-{'python','packages','architecture','cuda'}:raise ValueError('Unknown expected environment field')
@@ -161,6 +174,8 @@ def validate_plan(plan):
     if cuda.get('runtime') is not None and (not isinstance(cuda['runtime'],str) or not re.fullmatch(r'\d+\.\d+(?:\.\d+)?',cuda['runtime'])):raise ValueError('CUDA runtime version must be numeric')
     if cuda.get('required') and not plan['resources'].get('gpu_devices'):raise ValueError('CUDA compatibility verification requires explicitly selected GPU devices')
     requirements=object_value(plan['resources'].get('requirements',{}),'execution resource requirements')
+    gpu_devices=plan['resources'].get('gpu_devices',[])
+    if not isinstance(gpu_devices,list) or len(gpu_devices)>16 or any(type(v) is not int or not 0<=v<1024 for v in gpu_devices) or len(set(gpu_devices))!=len(gpu_devices):raise ValueError('GPU devices must be up to 16 distinct nonnegative integer indices')
     for key in ('cpus','memory_bytes','disk_free_bytes','daemon_cpus','daemon_memory_bytes'):
         if requirements.get(key) is not None:finite(requirements[key],minimum=0)
     verifies = plan['environment'].get('verify', [])
@@ -197,6 +212,20 @@ def validate_plan(plan):
         object_value(exp.get('config', {}), 'experiment config')
         object_value(exp.get('config', {}).get('expected', {}), 'expected configuration')
         object_value(exp.get('fairness', {}), 'fairness protocol')
+        policy=exp.get('fairness',{})
+        text_paths(policy.get('allowed_input_differences',[]),'allowed control input differences')
+        if policy.get('source') is not None and not isinstance(policy['source'],str):raise ValueError('Fairness source must be text')
+        if policy.get('selection_protocol') not in (None,'none','validation_only'):raise ValueError('Unsupported model-selection protocol')
+        if policy.get('selection_protocol')=='validation_only':
+            budget=object_value(policy.get('tuning_budget',{}),'tuning budget')
+            if type(budget.get('max_trials')) is not int or not 1<=budget['max_trials']<=100:raise ValueError('Tuning budget requires 1–100 trials')
+            finite(budget.get('max_seconds'),minimum=1)
+            space=object_value(policy.get('search_space',{}),'frozen search space')
+            if not 1<=len(space)<=50 or any(not isinstance(values,list) or not 1<=len(values)<=100 or any(isinstance(v,(dict,list)) for v in values) for values in space.values()):raise ValueError('Search space must contain bounded scalar choices')
+            metric=object_value(policy.get('validation_metric',{}),'validation metric')
+            if metric.get('implementation') not in ('accuracy','macro_f1','mse','mae') or metric.get('direction') not in ('higher','lower'):raise ValueError('Validation selection requires an independent metric and direction')
+            text_paths([metric.get('targets_path'),metric.get('ids_path')],'validation metric paths')
+            if not isinstance(metric.get('targets_sha256'),str) or not re.fullmatch('[0-9a-f]{64}',metric['targets_sha256']):raise ValueError('Validation labels require a frozen target hash')
         object_value(exp.get('training_evidence', {}), 'training evidence')
         object_value(exp.get('split_ids', {}), 'generated split definitions')
         for name,item in exp.get('split_ids',{}).items():
@@ -209,6 +238,7 @@ def validate_plan(plan):
             identifier(training.get('stage_id'))
             text_paths([training.get('used_config_path')],'used configuration output')
             text_paths(training.get('model_outputs'),'model output paths')
+            if training.get('selection_record_path') is not None:text_paths([training['selection_record_path']],'selection record output')
         differences=object_value(exp.get('fairness',{}).get('allowed_variant_differences',{}),'allowed variant factors')
         for names in differences.values():
             if not isinstance(names,list) or any(not isinstance(n,str) for n in names):raise ValueError('Variant factor names must be lists of text')
@@ -259,6 +289,8 @@ def validate_plan(plan):
             finite(comparison.get('minimum_effect', 0), minimum=0)
     for key, minimum in [('memory_bytes',1),('cpus',.1),('disk_limit_bytes',1),('project_disk_limit_bytes',1),('price_per_hour_usd',0)]:
         if plan['resources'].get(key) is not None:finite(plan['resources'][key],minimum=minimum)
+    if type(plan['resources'].get('acquisition_max_bytes',512*1024**2)) is not int or not 1<=plan['resources'].get('acquisition_max_bytes',512*1024**2)<=10*1024**3:raise ValueError('Acquisition total byte budget must be between 1 byte and 10 GiB')
+    if not 1<=finite(plan['resources'].get('acquisition_max_seconds',300))<=86400:raise ValueError('Acquisition time budget must be 1 second to 1 day')
     finite(plan['resources'].get('max_seconds', 3600), minimum=1)
     if plan['resources'].get('max_seconds', 3600) > 7*86400:
         raise ValueError('Total budget exceeds seven days')

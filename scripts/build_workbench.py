@@ -26,6 +26,7 @@ def contract():
         ("/api/materials/{bundle_id}", "get", "读取不可变材料回执", "返回实际上传内容指纹、PDF 提取器来源、ZIP 逐文件清单及绑定信息。", None, {"id":"bundle-id","status":"collecting","files":{}}),
         ("/api/materials/{bundle_id}/{kind}", "post", "上传 PDF、ZIP 或计划原始内容", "kind 为 paper/archive/plan；分别限 20 MiB、50 MiB、2 MB。原始二进制正文，需要 Content-Length。PDF 独立解析，ZIP 拒绝穿越、链接、重复及超限解包；文件不能覆盖。", {}, {"id":"bundle-id","status":"collecting","files":{}}),
         ("/api/materials/{bundle_id}/bind", "post", "绑定论文代码与计划", "选择 ZIP 内代码根目录，仅重定位计划材料路径，保留原计划参考指纹及前后计划 SHA256。矛盾不被自动修正。", {"code_root":"package"}, {"id":"bundle-id","status":"bound","plan_path":".articheck-inputs/bundle-id/bound-plan.json"}),
+        ("/api/materials/{bundle_id}/review", "post", "保存整篇清单与方法审核新版本", "限定修改 paper 的清单/结论/审核/排除理由，以及 repository.method_review；需要审核人和当前计划 SHA256，原计划及代码数据命令保持不可变。旧审计 token 失效。", {"reviewer":"reviewer-id","parent_plan_sha256":"0"*64,"review":{"paper":{},"repository":{}}}, {"id":"bundle-id","status":"bound","active_plan_sha256":"0"*64}),
         ("/api/tasks", "get", "任务清单", "读取已注册任务及其主张清单。", None, {"items": [{"id": "sample-metric_average", "claim_count": 3}]}),
         ("/api/tasks", "post", "创建任务", "注册工作区内的任务文件，或复制可信样例并编辑主张。", {"sample_id": "metric_average", "title": "指标计算核查"}, {"id": "task-id", "claim_count": 3}),
         ("/api/reproduction/audit", "post", "核验复现实验材料", "读取本地 reproduction-plan-v1 指定的真实文件，核对代码/数据内容指纹、样本划分交集、配置值及论文实验覆盖；不执行 artifact。", {"plan_path": "experiments/reproduction-plan.json"}, {"format": "articheck-reproduction-audit-v1", "blocking_failures": 0, "checks": []}),

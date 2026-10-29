@@ -72,6 +72,13 @@ class MaterialHTTPTests(unittest.TestCase):
             with self.assertRaises(urllib.error.HTTPError):self.request('/api/reproduction/runs',{'audit_token':result['audit_token']})
         result=self.request('/api/reproduction/audit',{**expected,'archive_sha256':'0'*64,'plan_path':receipt['plan_path'],'material_bundle_id':receipt['id']})
         with self.assertRaises(urllib.error.HTTPError):self.request('/api/reproduction/runs',{'audit_token':result['audit_token']})
+    def test_scope_review_invalidates_old_audit_and_preserves_immutable_input(self):
+        receipt,audit,expected=self.import_bundle()
+        updated=self.request('/api/materials/'+receipt['id']+'/review',{'reviewer':'http-reviewer','review':receipt['review'],'parent_plan_sha256':receipt['active_plan_sha256']})
+        self.assertNotEqual(receipt['plan_path'],updated['plan_path'])
+        with self.assertRaises(urllib.error.HTTPError):self.request('/api/reproduction/runs',{'audit_token':audit['audit_token']})
+        fresh=self.request('/api/reproduction/audit',{**expected,'plan_path':updated['plan_path'],'material_bundle_id':updated['id']})
+        self.assertNotEqual(audit['plan_sha256'],fresh['plan_sha256']);self.assertEqual(fresh['blocking_failures'],0)
     def test_binary_upload_has_same_origin_guard_and_size_limit(self):
         bundle=self.request('/api/materials',{'project_id':'x','paper_sha256':hashlib.sha256(self.pdf).hexdigest(),'archive_sha256':'0'*64})
         for headers in [{'Origin':'https://untrusted.example'},{'X-ArtiCheck-Client':''}]:

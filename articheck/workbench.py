@@ -528,6 +528,9 @@ def handler_for(app: Workbench, static_root: Path):
                 if len(parts)==4 and parts[:2]==['api','materials'] and parts[3]=='bind':
                     app.materials.workspace=app.workspace
                     return self.send_json(app.materials.bind(parts[2],body))
+                if len(parts)==4 and parts[:2]==['api','materials'] and parts[3]=='review':
+                    app.materials.workspace=app.workspace
+                    return self.send_json(app.materials.review(parts[2],body))
                 if path == "/api/tasks":
                     return self.send_json(app.create_task(body), 201)
                 if path == "/api/reproduction/audit":

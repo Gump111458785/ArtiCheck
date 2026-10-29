@@ -14,12 +14,13 @@ from ..environment import collect_environment
 from ..schema import dump
 from .audit import audit_plan
 from .executor import StageExecutor
-from .protocol import fingerprint, load_json, load_plan, relative_path
+from .protocol import fingerprint, load_json, load_plan, relative_path, same_json
 from .statistics import evaluate_experiment
 from .verification import recompute_metric, verify_splits
 from .acceptance import verify_training, verify_fairness, evaluate_levels
 from .runtime_environment import daemon_snapshot, requirement_checks, inspect_image
 from .monitor import ExternalMonitor
+from .gpu_monitor import kernel_identity
 
 
 def utc():
@@ -154,6 +155,10 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
         environment['compatibility']=await inspect_image(executor,snapshot,env_work,plan['environment'].get('expected',{}),min(60,max(.01,deadline-time.monotonic())),cancel)
         if environment['compatibility']['status']=='failed':
             raise ValueError('Actual image Python/package/CUDA environment contradicts the declared requirements')
+        observed=environment['compatibility'].get('observed',{})
+        if resources.get('gpu_devices'):
+            executor.gpu_uuids=[d['uuid'] for d in observed.get('nvidia_devices',[]) if isinstance(d.get('uuid'),str)]
+            host_kernel=kernel_identity();executor.same_kernel=bool(host_kernel and host_kernel==observed.get('kernel_identity_sha256'))
         save()
         for exp in plan['experiments']:
             rows = []
@@ -220,7 +225,7 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                         try:
                             if exp.get('split_ids') and all((work/item['path']).is_file() for item in exp['split_ids'].values()):
                                 row['split_verification']=verify_splits(work,exp['split_ids'])
-                            training=verify_training(work,exp,stage,cfg,prior_models) if result['status']=='completed' else None
+                            training=verify_training(work,exp,stage,cfg,prior_models,repo=snapshot,elapsed=result['elapsed_seconds']) if result['status']=='completed' else None
                             if training:row['training_evidence']=training
                         except (OSError,ValueError,KeyError) as error:
                             result['status']='failed';result['output_error']=str(error)
@@ -252,7 +257,7 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                                 for name,expected in row['training_evidence']['model_fingerprints'].items():
                                     if fingerprint(relative_path(work,name))!=expected:raise ValueError('Trained model changed after its recorded training stage')
                                 used=exp['training_evidence']['used_config_path']
-                                if load_json(relative_path(work,used))!=cfg:raise ValueError('Used configuration changed after training')
+                                if not same_json(load_json(relative_path(work,used)),cfg):raise ValueError('Used configuration changed after training')
                             row['metric_file'] = fingerprint(relative_path(work, exp['metric']['path']))
                             row['status'] = 'completed'
                         except (OSError, ValueError, KeyError, TypeError) as error:
@@ -305,7 +310,7 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
             report['errors'].append('Output collection: '+str(error))
         report['measurement'] = {'sampled_stage_count': len(rss), 'stage_count': len(stages), 'max_child_rss_bytes': max(rss) if rss else None,
                                  'output_occupancy_bytes': occupied, 'gpu_peak_memory_bytes': None,
-                                 'limitations': ['Output occupancy is not peak disk usage.', 'getrusage is child-process instrumentation; GPU is not measured.', 'Container cgroup fields are instrumentation reports, not a hostile-code attestation.']}
+                                 'limitations': ['Output occupancy is not peak disk usage.', 'getrusage is child-process instrumentation; GPU scope and sample coverage are reported separately.', 'Container cgroup fields are instrumentation reports, not a hostile-code attestation.']}
         external=[s['external_resources'] for s in stages if s.get('external_resources')]
         memory=[s['sampled_peak_container_memory_bytes'] for s in external if s.get('sampled_peak_container_memory_bytes') is not None]
         report['measurement']['external']={'source':'Client sampler outside artifact container','sampled_container_stages':len(memory),
@@ -313,6 +318,8 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
             'sampled_peak_run_output_bytes':max((s.get('sampled_peak_output_bytes') or 0 for s in external),default=None),
             'scope':'Maximum sampled per-stage/per-run occupancy; not sum of concurrent runs or peak total project disk; raw samples coverage in each stage'}
         report['measurement']['project_output_sampling']=project_monitor.report
+        gpu_peaks=[s['sampled_peak_gpu_process_total_bytes'] for s in external if s.get('sampled_peak_gpu_process_total_bytes') is not None]
+        report['measurement'].update(gpu_peak_memory_bytes=max(gpu_peaks) if gpu_peaks else None,gpu_scope='Sampled container compute-process memory on selected NVIDIA UUIDs with matching host kernel; not allocator high-water mark. Unknown without complete attribution.')
         report['levels'],report['level_requirements']=evaluate_levels(plan,report.get('audit',{}),report.get('environment'),report['runs'],report['experiments'],report['status'])
         save()
     return report

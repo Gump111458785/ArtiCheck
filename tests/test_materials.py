@@ -52,6 +52,46 @@ class MaterialImportTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.upload('paper',self.pdf+b'changed')
         with self.assertRaises(ValueError):self.upload('archive',self.zip+b'changed')
         self.assertEqual(self.store.get(self.bundle['id'])['files'],{})
+    def test_source_revision_preserves_before_after_hashes_and_requires_new_review(self):
+        parent=self.ready();before=next(x['sha256'] for x in parent['imported_snapshot']['files'] if x['path']=='experiment.py')
+        (self.repo/'experiment.py').write_text((self.repo/'experiment.py').read_text()+'\n# explicitly declared adapter patch\n')
+        after=fingerprint(self.repo/'experiment.py')['sha256']
+        self.zip=make_zip([('package/'+p.name,p.read_bytes()) for p in self.repo.iterdir()])
+        for item in self.plan['repository']['files']:
+            if item['path']=='experiment.py':item['sha256']=after
+        self.plan['repository']['method_review']['verified']=True
+        self.bundle=self.store.create({'project_id':'test-paper','paper_sha256':hashlib.sha256(self.pdf).hexdigest(),'archive_sha256':hashlib.sha256(self.zip).hexdigest(),'parent_bundle_id':parent['id']})
+        child=self.ready()
+        self.assertEqual(child['material_changes'],[{'path':'experiment.py','before_sha256':before,'after_sha256':after,'kind':'modified'}])
+        self.assertFalse(child['review']['repository']['method_review']['verified'])
+        self.assertEqual(self.store.get(parent['id'])['files'],parent['files'])
+    def test_method_review_needs_actual_paper_quote_and_source_mapping(self):
+        self.plan['paper']['sha256']=fingerprint(self.root/'paper.txt')['sha256']
+        self.plan['repository']['method_review'].update(verified=True,reviewer='test')
+        self.path.write_text(json.dumps(self.plan))
+        # Fixture paper text matches its explicit citation before the real PDF bridge.
+        self.assertEqual(next(c for c in audit_plan(self.path)['checks'] if c['code']=='method_correspondence')['status'],'pass')
+        self.plan['repository']['method_review']['citations'][0]['quote']='An invented method statement'
+        self.path.write_text(json.dumps(self.plan));audit=audit_plan(self.path)
+        self.assertEqual(next(c for c in audit['checks'] if c['code']=='method_source:0')['status'],'fail')
+    def test_fabricated_page_text_cannot_ground_an_invented_paper_method(self):
+        self.plan['paper']['sha256']=fingerprint(self.root/'paper.txt')['sha256']
+        self.plan['paper']['pages'][0]['text']='An invented method statement'
+        self.plan['repository']['method_review']['citations'][0]['quote']='An invented method statement'
+        self.path.write_text(json.dumps(self.plan));audit=audit_plan(self.path)
+        self.assertEqual(next(c for c in audit['checks'] if c['code']=='paper_text_origin')['status'],'fail')
+        self.assertEqual(next(c for c in audit['checks'] if c['code']=='method_source:0')['status'],'fail')
+    def test_named_scope_review_creates_revision_without_changing_original_materials(self):
+        receipt=self.ready();original_path=self.root/receipt['plan_path'];original=original_path.read_bytes()
+        review=copy.deepcopy(receipt['review']);review['paper']['inventory_review'].update(complete=True,notes='Reviewed all pages')
+        revised=self.store.review(receipt['id'],{'reviewer':'actual-test-reviewer','review':review,'parent_plan_sha256':receipt['active_plan_sha256']})
+        self.assertNotEqual(revised['plan_path'],receipt['plan_path']);self.assertEqual(original_path.read_bytes(),original)
+        self.assertEqual(revised['files'],receipt['files']);self.assertEqual(revised['imported_snapshot'],receipt['imported_snapshot'])
+        self.assertEqual(revised['review']['paper']['inventory_review']['reviewer'],'actual-test-reviewer')
+        self.assertEqual(revised['reviews'][0]['parent_plan_sha256'],receipt['active_plan_sha256'])
+        with self.assertRaises(ValueError):self.store.review(receipt['id'],{'reviewer':'x','review':review,'parent_plan_sha256':receipt['active_plan_sha256']})
+        review['repository']['files']=[]
+        with self.assertRaises(ValueError):self.store.review(receipt['id'],{'reviewer':'x','review':review,'parent_plan_sha256':revised['active_plan_sha256']})
     def test_uploaded_plan_reference_is_not_silently_replaced_by_uploaded_code(self):
         self.plan['repository']['files'][0]['sha256']='0'*64
         receipt=self.ready();result=audit_plan(self.root/receipt['plan_path'],workspace=self.root,imported=receipt['imported_snapshot'])

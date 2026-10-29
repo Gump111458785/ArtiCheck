@@ -79,7 +79,7 @@ class ReproductionService:
             self.tokens={k:v for k,v in self.tokens.items() if time.monotonic()-v['created'] < 900 or v.get('job_id')}
             if len(self.tokens)>=1000:raise ValueError('Audit token limit reached')
             token=uuid.uuid4().hex
-            self.tokens[token]={'path':path,'sha':result['plan_sha256'],'imported':imported,'result':result,'created':time.monotonic(),'project_id':body.get('project_id'),'paper_bound':bool(expected_paper),'code_bound':code_bound}
+            self.tokens[token]={'path':path,'sha':result['plan_sha256'],'imported':imported,'result':result,'created':time.monotonic(),'project_id':body.get('project_id'),'paper_bound':bool(expected_paper),'code_bound':code_bound,'material_bundle_id':bundle['id'] if bundle else None}
         return {**result,'audit_token':token,'expires_in_seconds':900}
 
     def start(self, body):
@@ -92,6 +92,10 @@ class ReproductionService:
             if time.monotonic()-token['created']>900:raise ValueError('Material audit expired; audit again')
             if hashlib.sha256(token['path'].read_bytes()).hexdigest()!=token['sha']:
                 raise ValueError('Plan changed since material audit; audit again')
+            if token.get('material_bundle_id'):
+                bundle=self.materials.get(token['material_bundle_id'])
+                if (self.workspace/bundle['plan_path']).resolve()!=token['path'] or bundle.get('active_plan_sha256')!=token['sha']:
+                    raise ValueError('Material scope review changed; audit the current plan revision')
             if token['project_id'] and not token['paper_bound']:
                 raise ValueError('Import the project PDF and bind its actual content digest before execution')
             if not token['code_bound']:raise ValueError('Import and bind the current project ZIP before execution')

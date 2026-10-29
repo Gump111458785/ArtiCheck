@@ -14,6 +14,7 @@ import unicodedata
 import uuid
 import zipfile
 import zlib
+from datetime import datetime,timezone
 from pathlib import Path, PurePosixPath
 
 from ..schema import dump
@@ -42,7 +43,32 @@ class MaterialStore:
         with self.lock:return self._get(bundle_id)
     def _get(self,bundle_id):
         root=self.directory(bundle_id);meta=load_json(root/'materials.json',max_bytes=8_000_000)
+        if meta.get('plan_path'):
+            meta.setdefault('active_plan_sha256',meta.get('binding',{}).get('bound_plan_sha256'))
+            plan=load_json(relative_path(self.workspace,meta['plan_path']))
+            meta['review']={'paper':{key:plan['paper'].get(key,{} if key.endswith('review') or key=='excluded_references' else []) for key in ('experiments','conclusions','inventory_review','excluded_references')},
+                            'repository':{'method_review':plan['repository'].get('method_review',{})}}
         return {**meta,'workspace_path':root.relative_to(self.workspace).as_posix()}
+    def review(self,bundle_id,body):
+        with self.lock:
+            root=self.directory(bundle_id);meta=load_json(root/'materials.json',max_bytes=8_000_000)
+            if meta['status']!='bound':raise ValueError('Bind materials before reviewing their scope')
+            prior=relative_path(self.workspace,meta['plan_path']);prior_sha=fingerprint(prior)['sha256']
+            if body.get('parent_plan_sha256')!=prior_sha:raise ValueError('Plan review is stale; reload the current material receipt')
+            reviewer=body.get('reviewer');review=body.get('review')
+            if not isinstance(reviewer,str) or not 1<=len(reviewer.strip())<=200 or not isinstance(review,dict):raise ValueError('Named reviewer and scope review object are required')
+            if set(review)!={'paper','repository'} or not isinstance(review['paper'],dict) or not isinstance(review['repository'],dict):raise ValueError('Review can only change paper scope and method review')
+            if set(review['paper'])-{'experiments','conclusions','inventory_review','excluded_references'} or set(review['repository'])-{'method_review'}:raise ValueError('Review cannot replace source files, execution commands, data or metrics')
+            plan=load_json(prior)
+            plan['paper'].update(review['paper']);plan['repository'].update(review['repository'])
+            for target in [plan['paper'].get('inventory_review'),plan['repository'].get('method_review')]:
+                if isinstance(target,dict):target.update(reviewer=reviewer.strip(),reviewed_at=datetime.now(timezone.utc).isoformat())
+            validate_plan(plan)
+            path=root/('reviewed-plan-'+uuid.uuid4().hex+'.json');dump(path,plan)
+            meta.setdefault('reviews',[]).append({'reviewer':reviewer.strip(),'created_at':datetime.now(timezone.utc).isoformat(),
+                    'parent_plan_path':meta['plan_path'],'parent_plan_sha256':prior_sha,'plan_sha256':fingerprint(path)['sha256']})
+            meta['plan_path']=path.relative_to(self.workspace).as_posix();meta['active_plan_sha256']=fingerprint(path)['sha256']
+            dump(root/'materials.json',meta);return self.get(bundle_id)
     def create(self,body):
         project=body.get('project_id')
         if not isinstance(project,str) or not 1<=len(project)<=200:raise ValueError('project_id is required')
@@ -51,14 +77,22 @@ class MaterialStore:
             digest=body.get(key)
             if not isinstance(digest,str) or not re.fullmatch('[0-9a-f]{64}',digest):raise ValueError(key+' must be SHA256')
             expected[kind]=digest
-        bundle_id=uuid.uuid4().hex;root=self.root/bundle_id;root.mkdir(parents=True,mode=0o700);self.root.chmod(0o700)
-        dump(root/'materials.json',{'id':bundle_id,'project_id':project,'expected':expected,'files':{},'status':'collecting'})
+        bundle_id=uuid.uuid4().hex;root=self.root/bundle_id
+        meta={'id':bundle_id,'project_id':project,'expected':expected,'files':{},'status':'collecting'}
+        if body.get('parent_bundle_id'):
+            parent=self.get(body['parent_bundle_id'])
+            if parent['status']!='bound' or parent['project_id']!=project or parent['expected']['paper']!=expected['paper']:
+                raise ValueError('Material revision parent must be a bound version of the same project and paper')
+            meta.update(parent_bundle_id=parent['id'],parent_materials=parent['files'])
+        root.mkdir(parents=True,mode=0o700);self.root.chmod(0o700)
+        dump(root/'materials.json',meta)
         return self.get(bundle_id)
     def upload(self,bundle_id,kind,stream,length):
         with self.lock:return self._upload(bundle_id,kind,stream,length)
     def _upload(self,bundle_id,kind,stream,length):
         if kind not in LIMITS or not 1<=length<=LIMITS[kind]:raise ValueError('Unsupported upload or file exceeds limit')
         root=self.directory(bundle_id);meta=load_json(root/'materials.json',max_bytes=8_000_000)
+        if shutil.disk_usage(root).free<length+32*1024**2:raise ValueError('Insufficient free disk for uploaded material')
         if kind in meta['files'] or meta['status']=='bound':raise ValueError('Uploads are immutable; create a new material bundle')
         part=root/('.upload-'+uuid.uuid4().hex);target=root/NAMES[kind]
         try:
@@ -172,9 +206,21 @@ class MaterialStore:
         plan['repository']['path']=code_root.relative_to(root).as_posix()
         plan['paper'].update(path='paper.pdf',sha256=actual_paper,pages_path='paper-pages.json',pages_sha256=fingerprint(root/'paper-pages.json')['sha256'])
         plan['paper'].pop('pages',None)
+        if meta.get('parent_bundle_id'):
+            parent=self.get(meta['parent_bundle_id']);before={item['path']:item for item in parent['imported_snapshot']['files']};after={item['path']:item for item in reference}
+            changes=[]
+            for name in sorted(set(before)|set(after)):
+                prior=before.get(name,{}).get('sha256');current=after.get(name,{}).get('sha256')
+                if prior!=current:changes.append({'path':name,'before_sha256':prior,'after_sha256':current,'kind':'added' if prior is None else 'removed' if current is None else 'modified'})
+            meta['material_changes']=changes
+            if changes:
+                # A previous review must not silently authorize patched code/data.
+                plan['repository'].setdefault('method_review',{})['verified']=False
+                meta['review_reset_reason']='Imported material bytes changed; source-grounded method review required for the new version'
         dump(root/'bound-plan.json',plan)
         meta.update(status='bound',code_root=selected,imported_snapshot={'kind':'zip','archive_sha256':meta['files']['archive']['sha256'],'files':reference},
                     binding={'original':original,'source_plan_sha256':meta['files']['plan']['sha256'],'bound_plan_sha256':fingerprint(root/'bound-plan.json')['sha256']},
                     plan_path=(root/'bound-plan.json').relative_to(self.workspace).as_posix())
+        meta['active_plan_sha256']=meta['binding']['bound_plan_sha256']
         dump(root/'materials.json',meta)
         return self.get(bundle_id)

@@ -84,7 +84,16 @@
       "verified": true,
       "reviewer": "synthetic-fixture-reviewer",
       "source": "Synthetic paper p1 and experiment.py",
-      "notes": "Known linear fit, constant control, and no-intercept ablation"
+      "notes": "Known linear fit, constant control, and no-intercept ablation",
+      "citations": [
+        {
+          "page": 1,
+          "quote": "Linear regression improves prediction error over the declared controls.",
+          "paths": [
+            "experiment.py"
+          ]
+        }
+      ]
     }
   },
   "datasets": [

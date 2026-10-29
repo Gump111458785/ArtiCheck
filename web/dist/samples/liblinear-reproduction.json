@@ -1,7 +1,7 @@
 {
   "format": "articheck-reproduction-report-v1",
-  "run_id": "69f84ababf4d41d19332d05db72e7757",
-  "created_at": "2026-10-29T10:26:22.438261+00:00",
+  "run_id": "2118331fe67645c4a99580673900d753",
+  "created_at": "2026-10-29T13:31:03.732438+00:00",
   "status": "completed",
   "mode": "docker",
   "experiments": [
@@ -105,7 +105,24 @@
       "limitations": [
         "Statistical support is conditional on this frozen protocol and declared population.",
         "Reference alignment without baseline/ablation evidence does not establish main conclusions."
-      ]
+      ],
+      "fairness": {
+        "status": "verified",
+        "reasons": [],
+        "protocol": {
+          "source": "Section 3.1 C=1; ArtiCheck additional fixed controls, without tuning",
+          "selection_protocol": "none",
+          "allowed_variant_differences": {
+            "logistic-control": [
+              "solver"
+            ],
+            "regularization-control": [
+              "C"
+            ]
+          }
+        },
+        "scope": "Equality checks are relative to preregistered factors, splits and budgets; optimality of a baseline is not inferred"
+      }
     }
   ],
   "runs": [
@@ -115,6 +132,37 @@
       "role": "method",
       "seed": 11,
       "config_sha256": "25ab90a663b043d03c85b02cc1029cabbd58de95ee1dcebc87762c3642ad7f7e",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 11,
+        "variant": {
+          "id": "l2-svm",
+          "role": "method",
+          "settings": {
+            "solver": 1,
+            "C": 1
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -124,20 +172,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.604024980999995,
+          "elapsed_seconds": 4.210013668000002,
           "resources": {
-            "elapsed_seconds": 2.9715820599999887,
-            "child_peak_rss_bytes": 382791680,
-            "child_user_cpu_seconds": 2.52351,
-            "child_system_cpu_seconds": 0.44673599999999997,
-            "cgroup_peak_memory_bytes": 500838400,
+            "elapsed_seconds": 3.525192961000002,
+            "child_peak_rss_bytes": 383070208,
+            "child_user_cpu_seconds": 2.991173,
+            "child_system_cpu_seconds": 0.531675,
+            "cgroup_peak_memory_bytes": 500703232,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 140119482,
+            "sampled_peak_container_memory_bytes": 98702458,
+            "sampled_peak_container_cpu_percent": 100.67,
+            "container_ids": [
+              "5d5e05f7e638"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.209067981000004
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -183,7 +250,7 @@
               "bytes": 257
             }
           },
-          "output_occupancy_bytes": 140119493
+          "output_occupancy_bytes": 140119482
         },
         {
           "status": "completed",
@@ -192,20 +259,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.039637227,
+          "elapsed_seconds": 2.150260594999992,
           "resources": {
-            "elapsed_seconds": 1.5217974250000026,
-            "child_peak_rss_bytes": 131764224,
-            "child_user_cpu_seconds": 1.387164,
-            "child_system_cpu_seconds": 0.134019,
-            "cgroup_peak_memory_bytes": 174018560,
+            "elapsed_seconds": 1.805228471999996,
+            "child_peak_rss_bytes": 131706880,
+            "child_user_cpu_seconds": 1.656844,
+            "child_system_cpu_seconds": 0.145803,
+            "cgroup_peak_memory_bytes": 174059520,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 163319314,
+            "sampled_peak_container_memory_bytes": 150994944,
+            "sampled_peak_container_cpu_percent": 100.32,
+            "container_ids": [
+              "f9499f2fb727"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.1487235490000103
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -241,7 +327,7 @@
               "bytes": 240
             }
           },
-          "output_occupancy_bytes": 163318638
+          "output_occupancy_bytes": 163319314
         },
         {
           "status": "completed",
@@ -250,20 +336,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 96.425% (3857/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.8778433400000125,
+          "elapsed_seconds": 1.0447664259999954,
           "resources": {
-            "elapsed_seconds": 0.5846092339999984,
-            "child_peak_rss_bytes": 76394496,
-            "child_user_cpu_seconds": 0.5088,
-            "child_system_cpu_seconds": 0.075143,
-            "cgroup_peak_memory_bytes": 78303232,
+            "elapsed_seconds": 0.7216661829999964,
+            "child_peak_rss_bytes": 76218368,
+            "child_user_cpu_seconds": 0.6525759999999999,
+            "child_system_cpu_seconds": 0.06583499999999999,
+            "cgroup_peak_memory_bytes": 78307328,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 163533836,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.0430353699999984
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -304,7 +407,7 @@
               "bytes": 201692
             }
           },
-          "output_occupancy_bytes": 163532433
+          "output_occupancy_bytes": 163533836
         },
         {
           "status": "completed",
@@ -313,20 +416,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.40064345400000434,
+          "elapsed_seconds": 0.4675664060000031,
           "resources": {
-            "elapsed_seconds": 0.10828100300000187,
-            "child_peak_rss_bytes": 20086784,
-            "child_user_cpu_seconds": 0.09886099999999999,
-            "child_system_cpu_seconds": 0.008987,
-            "cgroup_peak_memory_bytes": 21815296,
+            "elapsed_seconds": 0.14457317900000533,
+            "child_peak_rss_bytes": 20066304,
+            "child_user_cpu_seconds": 0.128234,
+            "child_system_cpu_seconds": 0.014025,
+            "cgroup_peak_memory_bytes": 22151168,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 163537106,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.4666190049999983
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -347,7 +467,7 @@
               "bytes": 214
             }
           },
-          "output_occupancy_bytes": 163535022
+          "output_occupancy_bytes": 163537106
         }
       ],
       "metric": 0.96425,
@@ -373,6 +493,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "f6d83b45951536fdac11f66c873cebfa77e479bf52ddfe7de45e9aa61ee92937",
+          "git_blob_sha": "7d2bcbaab538d3634fbbacb8f03d557071b88edd",
+          "bytes": 111887337
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "c3a7a3048cf63c92b9b82f7cd66fae7636407003d3399f0612acd0edf35112fb",
+            "git_blob_sha": "d5f99e5deba056fcf1ea7c4591632191b7fbd18f",
+            "bytes": 23195868
+          }
+        },
+        "used_config_sha256": "25ab90a663b043d03c85b02cc1029cabbd58de95ee1dcebc87762c3642ad7f7e",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.96425,
@@ -393,6 +533,37 @@
       "role": "method",
       "seed": 22,
       "config_sha256": "d0ddad172efb799ec1146c4b1dd1cbd7f446045582df044b79a222567f68cf05",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 22,
+        "variant": {
+          "id": "l2-svm",
+          "role": "method",
+          "settings": {
+            "solver": 1,
+            "C": 1
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -402,20 +573,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.596166522000004,
+          "elapsed_seconds": 4.257916118000011,
           "resources": {
-            "elapsed_seconds": 2.954720366999993,
-            "child_peak_rss_bytes": 383680512,
-            "child_user_cpu_seconds": 2.51673,
-            "child_system_cpu_seconds": 0.435953,
-            "cgroup_peak_memory_bytes": 501465088,
+            "elapsed_seconds": 3.539862647999996,
+            "child_peak_rss_bytes": 383586304,
+            "child_user_cpu_seconds": 3.00371,
+            "child_system_cpu_seconds": 0.531594,
+            "cgroup_peak_memory_bytes": 501444608,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119481,
+            "sampled_peak_container_memory_bytes": 387658547,
+            "sampled_peak_container_cpu_percent": 100.32,
+            "container_ids": [
+              "6d3a6c73e824"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.2567989100000005
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -470,20 +660,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.0295078460000013,
+          "elapsed_seconds": 2.190911575000001,
           "resources": {
-            "elapsed_seconds": 1.5019577289999972,
-            "child_peak_rss_bytes": 131993600,
-            "child_user_cpu_seconds": 1.359294,
-            "child_system_cpu_seconds": 0.142029,
-            "cgroup_peak_memory_bytes": 174833664,
+            "elapsed_seconds": 1.8391348379999926,
+            "child_peak_rss_bytes": 131944448,
+            "child_user_cpu_seconds": 1.6864569999999999,
+            "child_system_cpu_seconds": 0.149866,
+            "cgroup_peak_memory_bytes": 174841856,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 163793416,
+            "sampled_peak_container_memory_bytes": 112197632,
+            "sampled_peak_container_cpu_percent": 100.76,
+            "container_ids": [
+              "320376fc2324"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.1898848159999886
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -519,7 +728,7 @@
               "bytes": 240
             }
           },
-          "output_occupancy_bytes": 163792705
+          "output_occupancy_bytes": 163793416
         },
         {
           "status": "completed",
@@ -528,20 +737,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 96.7% (3868/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.8547294250000022,
+          "elapsed_seconds": 1.0464509840000034,
           "resources": {
-            "elapsed_seconds": 0.5587759609999949,
-            "child_peak_rss_bytes": 75591680,
-            "child_user_cpu_seconds": 0.48784099999999997,
-            "child_system_cpu_seconds": 0.06878999999999999,
-            "cgroup_peak_memory_bytes": 78053376,
+            "elapsed_seconds": 0.72425037699999,
+            "child_peak_rss_bytes": 75550720,
+            "child_user_cpu_seconds": 0.650493,
+            "child_system_cpu_seconds": 0.0718,
+            "cgroup_peak_memory_bytes": 78069760,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 164008050,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.0451164889999944
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -582,7 +808,7 @@
               "bytes": 201767
             }
           },
-          "output_occupancy_bytes": 164006657
+          "output_occupancy_bytes": 164008050
         },
         {
           "status": "completed",
@@ -591,20 +817,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.3808940729999932,
+          "elapsed_seconds": 0.46504386099999806,
           "resources": {
-            "elapsed_seconds": 0.1084745120000008,
-            "child_peak_rss_bytes": 19787776,
-            "child_user_cpu_seconds": 0.094063,
-            "child_system_cpu_seconds": 0.014008999999999999,
-            "cgroup_peak_memory_bytes": 21794816,
+            "elapsed_seconds": 0.14158830400000966,
+            "child_peak_rss_bytes": 19972096,
+            "child_user_cpu_seconds": 0.129861,
+            "child_system_cpu_seconds": 0.009913,
+            "cgroup_peak_memory_bytes": 22183936,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 164011291,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.46414136500000325
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -625,7 +868,7 @@
               "bytes": 212
             }
           },
-          "output_occupancy_bytes": 164009266
+          "output_occupancy_bytes": 164011291
         }
       ],
       "metric": 0.967,
@@ -651,6 +894,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "6c315baf5b9664572bb1e5e42bfffa08440b0ca120cd91f8c08a8704e7f4f4f7",
+          "git_blob_sha": "905d5bab6987ad868c0b241b5d8417cdcf46c909",
+          "bytes": 112144968
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "ed132e1ca960b9ffcc21d1ae663582f23d3a590d0cbfafc547d8c52148678557",
+            "git_blob_sha": "afd796f1dcb863bfd5e0a5243c78ed3e00e1aa3b",
+            "bytes": 23669959
+          }
+        },
+        "used_config_sha256": "d0ddad172efb799ec1146c4b1dd1cbd7f446045582df044b79a222567f68cf05",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.967,
@@ -671,6 +934,37 @@
       "role": "method",
       "seed": 33,
       "config_sha256": "b472f59f371cf0c1a2bf87cf56d0dcd7a6724d0abee40ebd4821a678d98418f6",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 33,
+        "variant": {
+          "id": "l2-svm",
+          "role": "method",
+          "settings": {
+            "solver": 1,
+            "C": 1
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -680,20 +974,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.633295003000001,
+          "elapsed_seconds": 4.221554208000001,
           "resources": {
-            "elapsed_seconds": 2.9621130929999993,
-            "child_peak_rss_bytes": 382722048,
-            "child_user_cpu_seconds": 2.526392,
-            "child_system_cpu_seconds": 0.432067,
-            "cgroup_peak_memory_bytes": 500191232,
+            "elapsed_seconds": 3.5422448520000103,
+            "child_peak_rss_bytes": 382390272,
+            "child_user_cpu_seconds": 3.003687,
+            "child_system_cpu_seconds": 0.534944,
+            "cgroup_peak_memory_bytes": 500072448,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119483,
+            "sampled_peak_container_memory_bytes": 389755699,
+            "sampled_peak_container_cpu_percent": 100.64,
+            "container_ids": [
+              "24da2b30692d"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.219595639000005
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -748,20 +1061,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.028025349999993,
+          "elapsed_seconds": 2.1704724159999955,
           "resources": {
-            "elapsed_seconds": 1.5064601119999992,
-            "child_peak_rss_bytes": 131379200,
-            "child_user_cpu_seconds": 1.371607,
-            "child_system_cpu_seconds": 0.134079,
-            "cgroup_peak_memory_bytes": 174116864,
+            "elapsed_seconds": 1.8298715730000055,
+            "child_peak_rss_bytes": 131358720,
+            "child_user_cpu_seconds": 1.689445,
+            "child_system_cpu_seconds": 0.137957,
+            "cgroup_peak_memory_bytes": 174288896,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 163582576,
+            "sampled_peak_container_memory_bytes": 113455923,
+            "sampled_peak_container_cpu_percent": 100.78,
+            "container_ids": [
+              "9376852f6050"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.1685905189999914
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -797,7 +1129,7 @@
               "bytes": 240
             }
           },
-          "output_occupancy_bytes": 163581876
+          "output_occupancy_bytes": 163582576
         },
         {
           "status": "completed",
@@ -806,20 +1138,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 97.125% (3885/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.8686764449999913,
+          "elapsed_seconds": 1.0485463029999949,
           "resources": {
-            "elapsed_seconds": 0.5730508480000083,
+            "elapsed_seconds": 0.7252023650000012,
             "child_peak_rss_bytes": 76423168,
-            "child_user_cpu_seconds": 0.50823,
-            "child_system_cpu_seconds": 0.063869,
-            "cgroup_peak_memory_bytes": 78807040,
+            "child_user_cpu_seconds": 0.637593,
+            "child_system_cpu_seconds": 0.083867,
+            "cgroup_peak_memory_bytes": 78917632,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 163797260,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.047449432999997
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -860,7 +1209,7 @@
               "bytes": 201823
             }
           },
-          "output_occupancy_bytes": 163795859
+          "output_occupancy_bytes": 163797260
         },
         {
           "status": "completed",
@@ -869,20 +1218,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.39597743599999546,
+          "elapsed_seconds": 0.46715789699999277,
           "resources": {
-            "elapsed_seconds": 0.11265932399999201,
-            "child_peak_rss_bytes": 19935232,
-            "child_user_cpu_seconds": 0.099724,
-            "child_system_cpu_seconds": 0.011966,
-            "cgroup_peak_memory_bytes": 22138880,
+            "elapsed_seconds": 0.14074758799999643,
+            "child_peak_rss_bytes": 19951616,
+            "child_user_cpu_seconds": 0.120085,
+            "child_system_cpu_seconds": 0.017863,
+            "cgroup_peak_memory_bytes": 21856256,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 163800508,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.4662445989999924
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -903,7 +1269,7 @@
               "bytes": 214
             }
           },
-          "output_occupancy_bytes": 163798438
+          "output_occupancy_bytes": 163800508
         }
       ],
       "metric": 0.97125,
@@ -929,6 +1295,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "0e3d4f84cf977d834d85a8d4fe8852aad1efaa4a267cf56be0c1d34dd393ca28",
+          "git_blob_sha": "a7d5c5299d6c2689948e78229e77b8f8bc47a645",
+          "bytes": 111708091
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "7dfa6ac452d8de6e8376d7744def3d698bcd33da834378983b2d73566274234d",
+            "git_blob_sha": "f683340846f93a76796f9ab265ef0d3eab2ede87",
+            "bytes": 23459126
+          }
+        },
+        "used_config_sha256": "b472f59f371cf0c1a2bf87cf56d0dcd7a6724d0abee40ebd4821a678d98418f6",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.97125,
@@ -949,6 +1335,37 @@
       "role": "method",
       "seed": 44,
       "config_sha256": "20b281d50a9ca7e9e6fb7594560e431b55ed57ed5db58115ef14b7950329e1f5",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 44,
+        "variant": {
+          "id": "l2-svm",
+          "role": "method",
+          "settings": {
+            "solver": 1,
+            "C": 1
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -958,20 +1375,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.687775270000003,
+          "elapsed_seconds": 4.261575936,
           "resources": {
-            "elapsed_seconds": 2.9999696099999937,
-            "child_peak_rss_bytes": 382926848,
-            "child_user_cpu_seconds": 2.557411,
-            "child_system_cpu_seconds": 0.440726,
-            "cgroup_peak_memory_bytes": 500658176,
+            "elapsed_seconds": 3.563568570000001,
+            "child_peak_rss_bytes": 382808064,
+            "child_user_cpu_seconds": 3.011552,
+            "child_system_cpu_seconds": 0.549735,
+            "cgroup_peak_memory_bytes": 500580352,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119482,
+            "sampled_peak_container_memory_bytes": 357459558,
+            "sampled_peak_container_cpu_percent": 100.27,
+            "container_ids": [
+              "899f9bb3be48"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.260561850000002
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1017,7 +1453,7 @@
               "bytes": 257
             }
           },
-          "output_occupancy_bytes": 140119483
+          "output_occupancy_bytes": 140119482
         },
         {
           "status": "completed",
@@ -1026,20 +1462,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.061348246999998,
+          "elapsed_seconds": 2.1793640719999985,
           "resources": {
-            "elapsed_seconds": 1.5233321889999871,
-            "child_peak_rss_bytes": 131719168,
-            "child_user_cpu_seconds": 1.400727,
-            "child_system_cpu_seconds": 0.122,
-            "cgroup_peak_memory_bytes": 174407680,
+            "elapsed_seconds": 1.8368466510000019,
+            "child_peak_rss_bytes": 131661824,
+            "child_user_cpu_seconds": 1.681337,
+            "child_system_cpu_seconds": 0.152926,
+            "cgroup_peak_memory_bytes": 174579712,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 163567202,
+            "sampled_peak_container_memory_bytes": 113455923,
+            "sampled_peak_container_cpu_percent": 99.96,
+            "container_ids": [
+              "ed0194882fc1"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.1780815150000024
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1075,7 +1530,7 @@
               "bytes": 240
             }
           },
-          "output_occupancy_bytes": 163566507
+          "output_occupancy_bytes": 163567202
         },
         {
           "status": "completed",
@@ -1084,20 +1539,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 96.525% (3861/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.8513153329999881,
+          "elapsed_seconds": 1.0524373039999944,
           "resources": {
-            "elapsed_seconds": 0.5608763600000088,
-            "child_peak_rss_bytes": 76496896,
-            "child_user_cpu_seconds": 0.49301799999999996,
-            "child_system_cpu_seconds": 0.06687,
-            "cgroup_peak_memory_bytes": 78401536,
+            "elapsed_seconds": 0.7274113149999977,
+            "child_peak_rss_bytes": 76218368,
+            "child_user_cpu_seconds": 0.645794,
+            "child_system_cpu_seconds": 0.077664,
+            "cgroup_peak_memory_bytes": 78397440,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 163781774,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.0513138139999967
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1138,7 +1610,7 @@
               "bytes": 201740
             }
           },
-          "output_occupancy_bytes": 163780387
+          "output_occupancy_bytes": 163781774
         },
         {
           "status": "completed",
@@ -1147,20 +1619,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.39469974899999727,
+          "elapsed_seconds": 0.46233704499999817,
           "resources": {
-            "elapsed_seconds": 0.10910427499999287,
-            "child_peak_rss_bytes": 20013056,
-            "child_user_cpu_seconds": 0.099588,
-            "child_system_cpu_seconds": 0.009053,
-            "cgroup_peak_memory_bytes": 21868544,
+            "elapsed_seconds": 0.1439976540000032,
+            "child_peak_rss_bytes": 20074496,
+            "child_user_cpu_seconds": 0.125394,
+            "child_system_cpu_seconds": 0.015797,
+            "cgroup_peak_memory_bytes": 21905408,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 163785022,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.46144642000000147
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1181,7 +1670,7 @@
               "bytes": 214
             }
           },
-          "output_occupancy_bytes": 163782977
+          "output_occupancy_bytes": 163785022
         }
       ],
       "metric": 0.96525,
@@ -1207,6 +1696,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "98e89d13a8c63b313f4de875c234d10b2401ffd2ba97f557c1a2e24379fa91ee",
+          "git_blob_sha": "165c9c9a42465791e48043f91a516e9716dd9d5f",
+          "bytes": 111880193
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "5a2bd8ae58925cc343c22e6371ec834bcdc6083724872d4e217b3a0b3abc46d4",
+            "git_blob_sha": "6d0cb555cd8ea03e7d2d67bb602549fa752db807",
+            "bytes": 23443760
+          }
+        },
+        "used_config_sha256": "20b281d50a9ca7e9e6fb7594560e431b55ed57ed5db58115ef14b7950329e1f5",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.96525,
@@ -1227,6 +1736,37 @@
       "role": "method",
       "seed": 55,
       "config_sha256": "840a8200a9fa216feb803be4974d37303588f50d2d5d5eadae19ac29356fac94",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 55,
+        "variant": {
+          "id": "l2-svm",
+          "role": "method",
+          "settings": {
+            "solver": 1,
+            "C": 1
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -1236,20 +1776,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.662210691000013,
+          "elapsed_seconds": 4.226764828,
           "resources": {
-            "elapsed_seconds": 2.9572361160000042,
-            "child_peak_rss_bytes": 384012288,
-            "child_user_cpu_seconds": 2.535278,
-            "child_system_cpu_seconds": 0.42088,
-            "cgroup_peak_memory_bytes": 502190080,
+            "elapsed_seconds": 3.525545679000004,
+            "child_peak_rss_bytes": 383836160,
+            "child_user_cpu_seconds": 2.9982439999999997,
+            "child_system_cpu_seconds": 0.523693,
+            "cgroup_peak_memory_bytes": 501919744,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119492,
+            "sampled_peak_container_memory_bytes": 235090739,
+            "sampled_peak_container_cpu_percent": 100.29,
+            "container_ids": [
+              "5be201f3f09e"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.225834118999998
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1295,7 +1854,7 @@
               "bytes": 257
             }
           },
-          "output_occupancy_bytes": 140119482
+          "output_occupancy_bytes": 140119492
         },
         {
           "status": "completed",
@@ -1304,20 +1863,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.063431031999997,
+          "elapsed_seconds": 2.2090645629999983,
           "resources": {
-            "elapsed_seconds": 1.5195167219999917,
-            "child_peak_rss_bytes": 132284416,
-            "child_user_cpu_seconds": 1.380422,
-            "child_system_cpu_seconds": 0.137951,
-            "cgroup_peak_memory_bytes": 174784512,
+            "elapsed_seconds": 1.8767912929999966,
+            "child_peak_rss_bytes": 132235264,
+            "child_user_cpu_seconds": 1.731992,
+            "child_system_cpu_seconds": 0.14082899999999998,
+            "cgroup_peak_memory_bytes": 174780416,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 163579405,
+            "sampled_peak_container_memory_bytes": 112617062,
+            "sampled_peak_container_cpu_percent": 101.0,
+            "container_ids": [
+              "ad50214b2bb6"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.2081493020000096
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1353,7 +1931,7 @@
               "bytes": 240
             }
           },
-          "output_occupancy_bytes": 163578680
+          "output_occupancy_bytes": 163579405
         },
         {
           "status": "completed",
@@ -1362,20 +1940,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 97.025% (3881/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.9893574800000096,
+          "elapsed_seconds": 1.050394358999995,
           "resources": {
-            "elapsed_seconds": 0.5546999820000025,
-            "child_peak_rss_bytes": 75546624,
-            "child_user_cpu_seconds": 0.491095,
-            "child_system_cpu_seconds": 0.061807999999999995,
-            "cgroup_peak_memory_bytes": 77512704,
+            "elapsed_seconds": 0.7175049519999988,
+            "child_peak_rss_bytes": 75259904,
+            "child_user_cpu_seconds": 0.6441,
+            "child_system_cpu_seconds": 0.072141,
+            "cgroup_peak_memory_bytes": 77426688,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 163794019,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.0484021580000018
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1416,7 +2011,7 @@
               "bytes": 201763
             }
           },
-          "output_occupancy_bytes": 163792598
+          "output_occupancy_bytes": 163794019
         },
         {
           "status": "completed",
@@ -1425,20 +2020,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.8427004910000022,
+          "elapsed_seconds": 0.4637893350000013,
           "resources": {
-            "elapsed_seconds": 0.11254539299999067,
-            "child_peak_rss_bytes": 19587072,
-            "child_user_cpu_seconds": 0.097644,
-            "child_system_cpu_seconds": 0.013949,
-            "cgroup_peak_memory_bytes": 21823488,
+            "elapsed_seconds": 0.14065832800000067,
+            "child_peak_rss_bytes": 20049920,
+            "child_user_cpu_seconds": 0.129429,
+            "child_system_cpu_seconds": 0.010033,
+            "cgroup_peak_memory_bytes": 21905408,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 163797265,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.46285720299999866
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1459,7 +2071,7 @@
               "bytes": 214
             }
           },
-          "output_occupancy_bytes": 163795190
+          "output_occupancy_bytes": 163797265
         }
       ],
       "metric": 0.97025,
@@ -1485,6 +2097,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "8834e01545f11f0913c5f787cc36f4eceb672486defa2666c126fac1952f55c4",
+          "git_blob_sha": "a554dc85fd574cc8d44129b9ba30ccfc6ffbb535",
+          "bytes": 112346834
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "3fd71a907a08d62b223bca9bffd7373e8a22b36f591c3c0161d73fcef8bf4703",
+            "git_blob_sha": "d4e886b8f22c580052225224635239e88a334fd2",
+            "bytes": 23455932
+          }
+        },
+        "used_config_sha256": "840a8200a9fa216feb803be4974d37303588f50d2d5d5eadae19ac29356fac94",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.97025,
@@ -1505,6 +2137,37 @@
       "role": "baseline",
       "seed": 11,
       "config_sha256": "6353543b1d5a735b1fb88e38b29213d0db4d1e1b3c9a7baa7d151ca0fc43c027",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 11,
+        "variant": {
+          "id": "logistic-control",
+          "role": "baseline",
+          "settings": {
+            "solver": 0,
+            "C": 1
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -1514,20 +2177,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.726487574000004,
+          "elapsed_seconds": 4.214754266,
           "resources": {
-            "elapsed_seconds": 2.9803586109999998,
-            "child_peak_rss_bytes": 383037440,
-            "child_user_cpu_seconds": 2.563598,
-            "child_system_cpu_seconds": 0.41593399999999997,
+            "elapsed_seconds": 3.537787797000007,
+            "child_peak_rss_bytes": 383094784,
+            "child_user_cpu_seconds": 2.971753,
+            "child_system_cpu_seconds": 0.5629529999999999,
             "cgroup_peak_memory_bytes": 500690944,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119504,
+            "sampled_peak_container_memory_bytes": 388182835,
+            "sampled_peak_container_cpu_percent": 100.82,
+            "container_ids": [
+              "0324c584d9b0"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.213804060000001
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1573,7 +2255,7 @@
               "bytes": 257
             }
           },
-          "output_occupancy_bytes": 140119506
+          "output_occupancy_bytes": 140119504
         },
         {
           "status": "completed",
@@ -1582,20 +2264,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 3.1240732300000076,
+          "elapsed_seconds": 2.7515652910000057,
           "resources": {
-            "elapsed_seconds": 1.9446074530000033,
-            "child_peak_rss_bytes": 207835136,
-            "child_user_cpu_seconds": 1.73609,
-            "child_system_cpu_seconds": 0.207889,
-            "cgroup_peak_memory_bytes": 227217408,
+            "elapsed_seconds": 2.4219281969999997,
+            "child_peak_rss_bytes": 207843328,
+            "child_user_cpu_seconds": 2.188899,
+            "child_system_cpu_seconds": 0.22694199999999998,
+            "cgroup_peak_memory_bytes": 227164160,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 170373273,
+            "sampled_peak_container_memory_bytes": 104836628,
+            "sampled_peak_container_cpu_percent": 100.05,
+            "container_ids": [
+              "875f5dbdcaee"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.750566934999995
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1631,7 +2332,7 @@
               "bytes": 240
             }
           },
-          "output_occupancy_bytes": 170372571
+          "output_occupancy_bytes": 170373273
         },
         {
           "status": "completed",
@@ -1640,20 +2341,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 93.125% (3725/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.8845238699999953,
+          "elapsed_seconds": 1.1043336429999897,
           "resources": {
-            "elapsed_seconds": 0.5877282570000091,
-            "child_peak_rss_bytes": 76029952,
-            "child_user_cpu_seconds": 0.513434,
-            "child_system_cpu_seconds": 0.07299499999999999,
-            "cgroup_peak_memory_bytes": 78323712,
+            "elapsed_seconds": 0.7695836900000046,
+            "child_peak_rss_bytes": 76144640,
+            "child_user_cpu_seconds": 0.690975,
+            "child_system_cpu_seconds": 0.072438,
+            "cgroup_peak_memory_bytes": 78196736,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 170587838,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.102744854000008
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1694,7 +2412,7 @@
               "bytes": 201718
             }
           },
-          "output_occupancy_bytes": 170586437
+          "output_occupancy_bytes": 170587838
         },
         {
           "status": "completed",
@@ -1703,20 +2421,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.6580387460000026,
+          "elapsed_seconds": 0.4585298580000057,
           "resources": {
-            "elapsed_seconds": 0.1072243090000029,
-            "child_peak_rss_bytes": 20131840,
-            "child_user_cpu_seconds": 0.098802,
-            "child_system_cpu_seconds": 0.007984,
-            "cgroup_peak_memory_bytes": 21999616,
+            "elapsed_seconds": 0.1432770380000079,
+            "child_peak_rss_bytes": 19984384,
+            "child_user_cpu_seconds": 0.135682,
+            "child_system_cpu_seconds": 0.005941999999999999,
+            "cgroup_peak_memory_bytes": 22188032,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 170591097,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.45756126700000266
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1737,7 +2472,7 @@
               "bytes": 214
             }
           },
-          "output_occupancy_bytes": 170589027
+          "output_occupancy_bytes": 170591097
         }
       ],
       "metric": 0.93125,
@@ -1763,6 +2498,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "f6d83b45951536fdac11f66c873cebfa77e479bf52ddfe7de45e9aa61ee92937",
+          "git_blob_sha": "7d2bcbaab538d3634fbbacb8f03d557071b88edd",
+          "bytes": 111887337
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "7fbd712daf312d9426da2dd9666d83cdb14da38bd9405274b6c67cac3fb057fc",
+            "git_blob_sha": "55d24a30717a14b6c44688c7a5d1189ac21adb00",
+            "bytes": 30249776
+          }
+        },
+        "used_config_sha256": "6353543b1d5a735b1fb88e38b29213d0db4d1e1b3c9a7baa7d151ca0fc43c027",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.93125,
@@ -1783,6 +2538,37 @@
       "role": "baseline",
       "seed": 22,
       "config_sha256": "ee00303430d237f077f446179e44e53742e2cd7f3cdc440dad72f69f2890e709",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 22,
+        "variant": {
+          "id": "logistic-control",
+          "role": "baseline",
+          "settings": {
+            "solver": 0,
+            "C": 1
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -1792,20 +2578,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.836194132000003,
+          "elapsed_seconds": 4.2786383090000015,
           "resources": {
-            "elapsed_seconds": 2.9740042539999934,
-            "child_peak_rss_bytes": 383406080,
-            "child_user_cpu_seconds": 2.509033,
-            "child_system_cpu_seconds": 0.464006,
-            "cgroup_peak_memory_bytes": 501456896,
+            "elapsed_seconds": 3.5756227170000017,
+            "child_peak_rss_bytes": 383569920,
+            "child_user_cpu_seconds": 2.99394,
+            "child_system_cpu_seconds": 0.577409,
+            "cgroup_peak_memory_bytes": 501661696,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119494,
+            "sampled_peak_container_memory_bytes": 337956044,
+            "sampled_peak_container_cpu_percent": 100.86,
+            "container_ids": [
+              "9f33a9081ce9"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.277680188000005
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1851,7 +2656,7 @@
               "bytes": 257
             }
           },
-          "output_occupancy_bytes": 140119495
+          "output_occupancy_bytes": 140119494
         },
         {
           "status": "completed",
@@ -1860,20 +2665,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.7649933429999862,
+          "elapsed_seconds": 2.818137584000013,
           "resources": {
-            "elapsed_seconds": 2.1206408010000075,
-            "child_peak_rss_bytes": 208179200,
-            "child_user_cpu_seconds": 1.9031159999999998,
-            "child_system_cpu_seconds": 0.21689699999999998,
-            "cgroup_peak_memory_bytes": 227360768,
+            "elapsed_seconds": 2.4808460980000007,
+            "child_peak_rss_bytes": 208216064,
+            "child_user_cpu_seconds": 2.212772,
+            "child_system_cpu_seconds": 0.262422,
+            "cgroup_peak_memory_bytes": 227450880,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 170318457,
+            "sampled_peak_container_memory_bytes": 111883059,
+            "sampled_peak_container_cpu_percent": 99.75,
+            "container_ids": [
+              "b8457cf218bc"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.8170951760000094
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1909,7 +2733,7 @@
               "bytes": 240
             }
           },
-          "output_occupancy_bytes": 170317779
+          "output_occupancy_bytes": 170318457
         },
         {
           "status": "completed",
@@ -1918,20 +2742,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 93.425% (3737/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.9644601589999979,
+          "elapsed_seconds": 1.0932282480000026,
           "resources": {
-            "elapsed_seconds": 0.6094286160000024,
-            "child_peak_rss_bytes": 75636736,
-            "child_user_cpu_seconds": 0.527942,
-            "child_system_cpu_seconds": 0.08009899999999999,
-            "cgroup_peak_memory_bytes": 77803520,
+            "elapsed_seconds": 0.7641834779999925,
+            "child_peak_rss_bytes": 75624448,
+            "child_user_cpu_seconds": 0.670925,
+            "child_system_cpu_seconds": 0.088559,
+            "cgroup_peak_memory_bytes": 77676544,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 170533132,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.0915243019999963
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -1972,7 +2813,7 @@
               "bytes": 201790
             }
           },
-          "output_occupancy_bytes": 170531789
+          "output_occupancy_bytes": 170533132
         },
         {
           "status": "completed",
@@ -1981,20 +2822,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.49503597099999297,
+          "elapsed_seconds": 0.46578879300000153,
           "resources": {
-            "elapsed_seconds": 0.11598992300000077,
-            "child_peak_rss_bytes": 20078592,
-            "child_user_cpu_seconds": 0.102018,
-            "child_system_cpu_seconds": 0.013002,
-            "cgroup_peak_memory_bytes": 22077440,
+            "elapsed_seconds": 0.14637822500000652,
+            "child_peak_rss_bytes": 19648512,
+            "child_user_cpu_seconds": 0.130577,
+            "child_system_cpu_seconds": 0.013057,
+            "cgroup_peak_memory_bytes": 21901312,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 170536382,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.46480108599999426
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2015,7 +2873,7 @@
               "bytes": 214
             }
           },
-          "output_occupancy_bytes": 170534381
+          "output_occupancy_bytes": 170536382
         }
       ],
       "metric": 0.93425,
@@ -2041,6 +2899,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "6c315baf5b9664572bb1e5e42bfffa08440b0ca120cd91f8c08a8704e7f4f4f7",
+          "git_blob_sha": "905d5bab6987ad868c0b241b5d8417cdcf46c909",
+          "bytes": 112144968
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "34239d22ac4fe48759e3d8bf234f1040e771311655483c378d4e1becb8a5bd04",
+            "git_blob_sha": "0e017a0f4ef5f2589ea0ba5162f39395c9acda56",
+            "bytes": 30194984
+          }
+        },
+        "used_config_sha256": "ee00303430d237f077f446179e44e53742e2cd7f3cdc440dad72f69f2890e709",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.93425,
@@ -2061,6 +2939,37 @@
       "role": "baseline",
       "seed": 33,
       "config_sha256": "4dd0c566c5719a01e30e4bfea12f8f09ce1ba3eb5bd5e8bcdcbbc34df62b41ad",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 33,
+        "variant": {
+          "id": "logistic-control",
+          "role": "baseline",
+          "settings": {
+            "solver": 0,
+            "C": 1
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -2070,20 +2979,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.668105023999999,
+          "elapsed_seconds": 4.252711946000005,
           "resources": {
-            "elapsed_seconds": 2.985672732000012,
-            "child_peak_rss_bytes": 382955520,
-            "child_user_cpu_seconds": 2.5230930000000003,
-            "child_system_cpu_seconds": 0.46101699999999995,
-            "cgroup_peak_memory_bytes": 500301824,
+            "elapsed_seconds": 3.548896057999997,
+            "child_peak_rss_bytes": 382779392,
+            "child_user_cpu_seconds": 2.977369,
+            "child_system_cpu_seconds": 0.568307,
+            "cgroup_peak_memory_bytes": 500105216,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119494,
+            "sampled_peak_container_memory_bytes": 379584512,
+            "sampled_peak_container_cpu_percent": 100.36,
+            "container_ids": [
+              "1fb512172a55"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.251724230000008
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2129,7 +3057,7 @@
               "bytes": 257
             }
           },
-          "output_occupancy_bytes": 140119515
+          "output_occupancy_bytes": 140119494
         },
         {
           "status": "completed",
@@ -2138,20 +3066,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 3.0398511199999803,
+          "elapsed_seconds": 2.846326097000002,
           "resources": {
-            "elapsed_seconds": 2.107784369000001,
-            "child_peak_rss_bytes": 207765504,
-            "child_user_cpu_seconds": 1.8898389999999998,
-            "child_system_cpu_seconds": 0.216944,
-            "cgroup_peak_memory_bytes": 227024896,
+            "elapsed_seconds": 2.501464158999994,
+            "child_peak_rss_bytes": 207810560,
+            "child_user_cpu_seconds": 2.2508369999999998,
+            "child_system_cpu_seconds": 0.247417,
+            "cgroup_peak_memory_bytes": 226996224,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 170352490,
+            "sampled_peak_container_memory_bytes": 113036492,
+            "sampled_peak_container_cpu_percent": 100.39,
+            "container_ids": [
+              "8fc5de59feaf"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.8450625170000023
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2187,7 +3134,7 @@
               "bytes": 240
             }
           },
-          "output_occupancy_bytes": 170351832
+          "output_occupancy_bytes": 170352490
         },
         {
           "status": "completed",
@@ -2196,20 +3143,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 93.625% (3745/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.8982768809999868,
+          "elapsed_seconds": 1.1034836000000041,
           "resources": {
-            "elapsed_seconds": 0.5976835449999953,
-            "child_peak_rss_bytes": 76505088,
-            "child_user_cpu_seconds": 0.523139,
-            "child_system_cpu_seconds": 0.072138,
-            "cgroup_peak_memory_bytes": 78823424,
+            "elapsed_seconds": 0.7771112810000034,
+            "child_peak_rss_bytes": 76238848,
+            "child_user_cpu_seconds": 0.681624,
+            "child_system_cpu_seconds": 0.091692,
+            "cgroup_peak_memory_bytes": 78536704,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 170567234,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.1022851399999922
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2250,7 +3214,7 @@
               "bytes": 201849
             }
           },
-          "output_occupancy_bytes": 170565878
+          "output_occupancy_bytes": 170567234
         },
         {
           "status": "completed",
@@ -2259,20 +3223,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.737050518999979,
+          "elapsed_seconds": 0.47222257500001774,
           "resources": {
-            "elapsed_seconds": 0.12185396300000662,
-            "child_peak_rss_bytes": 19738624,
-            "child_user_cpu_seconds": 0.104262,
-            "child_system_cpu_seconds": 0.014894,
-            "cgroup_peak_memory_bytes": 21995520,
+            "elapsed_seconds": 0.14516344800000525,
+            "child_peak_rss_bytes": 19558400,
+            "child_user_cpu_seconds": 0.127339,
+            "child_system_cpu_seconds": 0.016912,
+            "cgroup_peak_memory_bytes": 21880832,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 170570484,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.471286847000016
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2293,7 +3274,7 @@
               "bytes": 214
             }
           },
-          "output_occupancy_bytes": 170568459
+          "output_occupancy_bytes": 170570484
         }
       ],
       "metric": 0.93625,
@@ -2319,6 +3300,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "0e3d4f84cf977d834d85a8d4fe8852aad1efaa4a267cf56be0c1d34dd393ca28",
+          "git_blob_sha": "a7d5c5299d6c2689948e78229e77b8f8bc47a645",
+          "bytes": 111708091
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "a6d79bc41d70f72ae2d511fd593a6aa99bbeca757947322935c0e2318a94ac65",
+            "git_blob_sha": "a4df23fea5c9406d8e15509550a07f035a1ae428",
+            "bytes": 30229009
+          }
+        },
+        "used_config_sha256": "4dd0c566c5719a01e30e4bfea12f8f09ce1ba3eb5bd5e8bcdcbbc34df62b41ad",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.93625,
@@ -2339,6 +3340,37 @@
       "role": "baseline",
       "seed": 44,
       "config_sha256": "a1488e9f7d35b75d1f912be89072bf0b59898f6c6f7377a8201b5bf0577d454b",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 44,
+        "variant": {
+          "id": "logistic-control",
+          "role": "baseline",
+          "settings": {
+            "solver": 0,
+            "C": 1
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -2348,20 +3380,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.755100185999993,
+          "elapsed_seconds": 4.2705638830000225,
           "resources": {
-            "elapsed_seconds": 3.0103786239999977,
-            "child_peak_rss_bytes": 383041536,
-            "child_user_cpu_seconds": 2.583471,
-            "child_system_cpu_seconds": 0.423913,
-            "cgroup_peak_memory_bytes": 500666368,
+            "elapsed_seconds": 3.5623070830000074,
+            "child_peak_rss_bytes": 382828544,
+            "child_user_cpu_seconds": 3.013696,
+            "child_system_cpu_seconds": 0.540766,
+            "cgroup_peak_memory_bytes": 500649984,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119495,
+            "sampled_peak_container_memory_bytes": 325058560,
+            "sampled_peak_container_cpu_percent": 100.4,
+            "container_ids": [
+              "d2beeb3a7194"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.269541331999989
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2416,20 +3467,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.5685541560000047,
+          "elapsed_seconds": 2.6860978440000167,
           "resources": {
-            "elapsed_seconds": 1.9529955319999885,
-            "child_peak_rss_bytes": 208080896,
-            "child_user_cpu_seconds": 1.757097,
-            "child_system_cpu_seconds": 0.194883,
-            "cgroup_peak_memory_bytes": 227168256,
+            "elapsed_seconds": 2.3477348909999876,
+            "child_peak_rss_bytes": 207949824,
+            "child_user_cpu_seconds": 2.094295,
+            "child_system_cpu_seconds": 0.241616,
+            "cgroup_peak_memory_bytes": 227139584,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 170376177,
+            "sampled_peak_container_memory_bytes": 112721920,
+            "sampled_peak_container_cpu_percent": 100.58,
+            "container_ids": [
+              "1853e43406c3"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.684663612999998
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2465,7 +3535,7 @@
               "bytes": 240
             }
           },
-          "output_occupancy_bytes": 170375477
+          "output_occupancy_bytes": 170376177
         },
         {
           "status": "completed",
@@ -2474,20 +3544,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 93.4% (3736/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 1.1107620359999828,
+          "elapsed_seconds": 1.1134244249999767,
           "resources": {
-            "elapsed_seconds": 0.6506982220000168,
-            "child_peak_rss_bytes": 76226560,
-            "child_user_cpu_seconds": 0.576118,
-            "child_system_cpu_seconds": 0.071702,
-            "cgroup_peak_memory_bytes": 78176256,
+            "elapsed_seconds": 0.7752037509999923,
+            "child_peak_rss_bytes": 76234752,
+            "child_user_cpu_seconds": 0.698426,
+            "child_system_cpu_seconds": 0.075123,
+            "cgroup_peak_memory_bytes": 78364672,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 170590781,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.1120641530000057
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2528,7 +3615,7 @@
               "bytes": 201757
             }
           },
-          "output_occupancy_bytes": 170589383
+          "output_occupancy_bytes": 170590781
         },
         {
           "status": "completed",
@@ -2537,20 +3624,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.4285762279999972,
+          "elapsed_seconds": 0.4747246299999972,
           "resources": {
-            "elapsed_seconds": 0.11589578000001666,
-            "child_peak_rss_bytes": 20017152,
-            "child_user_cpu_seconds": 0.097373,
-            "child_system_cpu_seconds": 0.018068999999999998,
-            "cgroup_peak_memory_bytes": 22155264,
+            "elapsed_seconds": 0.14832030600001644,
+            "child_peak_rss_bytes": 19800064,
+            "child_user_cpu_seconds": 0.130725,
+            "child_system_cpu_seconds": 0.015844999999999998,
+            "cgroup_peak_memory_bytes": 21856256,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 170594038,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.47382158199999935
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2571,7 +3675,7 @@
               "bytes": 212
             }
           },
-          "output_occupancy_bytes": 170591971
+          "output_occupancy_bytes": 170594038
         }
       ],
       "metric": 0.934,
@@ -2597,6 +3701,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "98e89d13a8c63b313f4de875c234d10b2401ffd2ba97f557c1a2e24379fa91ee",
+          "git_blob_sha": "165c9c9a42465791e48043f91a516e9716dd9d5f",
+          "bytes": 111880193
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "e7da703009557010ef8c275b89941546dffb899beba47525da74064a057bfee2",
+            "git_blob_sha": "ab066e479ec936fccbb76b5e7baf3f586e4c0a07",
+            "bytes": 30252703
+          }
+        },
+        "used_config_sha256": "a1488e9f7d35b75d1f912be89072bf0b59898f6c6f7377a8201b5bf0577d454b",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.934,
@@ -2617,6 +3741,37 @@
       "role": "baseline",
       "seed": 55,
       "config_sha256": "31d4f68bd9ff394e66efbb19fa41b5620b9f79372023d04f80eddc89ffdeb753",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 55,
+        "variant": {
+          "id": "logistic-control",
+          "role": "baseline",
+          "settings": {
+            "solver": 0,
+            "C": 1
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -2626,20 +3781,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 5.576614919999997,
+          "elapsed_seconds": 4.285434594000009,
           "resources": {
-            "elapsed_seconds": 2.993046515000003,
-            "child_peak_rss_bytes": 383737856,
-            "child_user_cpu_seconds": 2.550014,
-            "child_system_cpu_seconds": 0.442002,
-            "cgroup_peak_memory_bytes": 502063104,
+            "elapsed_seconds": 3.584831065000003,
+            "child_peak_rss_bytes": 383934464,
+            "child_user_cpu_seconds": 3.030124,
+            "child_system_cpu_seconds": 0.550659,
+            "cgroup_peak_memory_bytes": 502059008,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119494,
+            "sampled_peak_container_memory_bytes": 279550361,
+            "sampled_peak_container_cpu_percent": 100.26,
+            "container_ids": [
+              "1229ea5f4730"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.284413114999978
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2694,20 +3868,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.7233486419999906,
+          "elapsed_seconds": 2.6748619980000115,
           "resources": {
-            "elapsed_seconds": 1.926286736999998,
-            "child_peak_rss_bytes": 208515072,
-            "child_user_cpu_seconds": 1.716711,
-            "child_system_cpu_seconds": 0.20896099999999998,
-            "cgroup_peak_memory_bytes": 227717120,
+            "elapsed_seconds": 2.326860599999975,
+            "child_peak_rss_bytes": 208384000,
+            "child_user_cpu_seconds": 2.095936,
+            "child_system_cpu_seconds": 0.22369499999999998,
+            "cgroup_peak_memory_bytes": 227606528,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 170482346,
+            "sampled_peak_container_memory_bytes": 113036492,
+            "sampled_peak_container_cpu_percent": 99.26,
+            "container_ids": [
+              "96755db07e41"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.6730977809999956
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2743,7 +3936,7 @@
               "bytes": 240
             }
           },
-          "output_occupancy_bytes": 170481646
+          "output_occupancy_bytes": 170482346
         },
         {
           "status": "completed",
@@ -2752,20 +3945,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 93.575% (3743/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.8781746110000199,
+          "elapsed_seconds": 1.1272273929999983,
           "resources": {
-            "elapsed_seconds": 0.5972946189999959,
-            "child_peak_rss_bytes": 75317248,
-            "child_user_cpu_seconds": 0.540397,
-            "child_system_cpu_seconds": 0.054079999999999996,
-            "cgroup_peak_memory_bytes": 77611008,
+            "elapsed_seconds": 0.7908928629999821,
+            "child_peak_rss_bytes": 75075584,
+            "child_user_cpu_seconds": 0.716954,
+            "child_system_cpu_seconds": 0.070598,
+            "cgroup_peak_memory_bytes": 77430784,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 170697041,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.1256071360000135
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2806,7 +4016,7 @@
               "bytes": 201803
             }
           },
-          "output_occupancy_bytes": 170695655
+          "output_occupancy_bytes": 170697041
         },
         {
           "status": "completed",
@@ -2815,20 +4025,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.43555337699999086,
+          "elapsed_seconds": 0.47139920000000757,
           "resources": {
-            "elapsed_seconds": 0.11212199099998088,
-            "child_peak_rss_bytes": 20062208,
-            "child_user_cpu_seconds": 0.102534,
-            "child_system_cpu_seconds": 0.009047,
-            "cgroup_peak_memory_bytes": 22159360,
+            "elapsed_seconds": 0.14445615399998246,
+            "child_peak_rss_bytes": 19849216,
+            "child_user_cpu_seconds": 0.120737,
+            "child_system_cpu_seconds": 0.022949999999999998,
+            "cgroup_peak_memory_bytes": 22155264,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 170700303,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.4704790510000123
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2849,7 +4076,7 @@
               "bytes": 214
             }
           },
-          "output_occupancy_bytes": 170698248
+          "output_occupancy_bytes": 170700303
         }
       ],
       "metric": 0.93575,
@@ -2875,6 +4102,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "8834e01545f11f0913c5f787cc36f4eceb672486defa2666c126fac1952f55c4",
+          "git_blob_sha": "a554dc85fd574cc8d44129b9ba30ccfc6ffbb535",
+          "bytes": 112346834
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "23abb04d46d6df23db0962555e3c5f6c9878d36a0314ef74158e238b75e1269d",
+            "git_blob_sha": "1730096017153395ceacb55536aab962d43e57f1",
+            "bytes": 30358864
+          }
+        },
+        "used_config_sha256": "31d4f68bd9ff394e66efbb19fa41b5620b9f79372023d04f80eddc89ffdeb753",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.93575,
@@ -2895,6 +4142,37 @@
       "role": "ablation",
       "seed": 11,
       "config_sha256": "dfffcbb8164c5577ddd7a4cb372df29ad122eb150d898839af3363963002a2e7",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 11,
+        "variant": {
+          "id": "regularization-control",
+          "role": "ablation",
+          "settings": {
+            "solver": 1,
+            "C": 0.001
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -2904,20 +4182,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.666013055999997,
+          "elapsed_seconds": 4.258560133000003,
           "resources": {
-            "elapsed_seconds": 3.018266525999991,
-            "child_peak_rss_bytes": 383057920,
-            "child_user_cpu_seconds": 2.5670349999999997,
-            "child_system_cpu_seconds": 0.44982999999999995,
-            "cgroup_peak_memory_bytes": 500957184,
+            "elapsed_seconds": 3.5571210349999944,
+            "child_peak_rss_bytes": 382959616,
+            "child_user_cpu_seconds": 2.996025,
+            "child_system_cpu_seconds": 0.5554479999999999,
+            "cgroup_peak_memory_bytes": 500600832,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119515,
+            "sampled_peak_container_memory_bytes": 380528230,
+            "sampled_peak_container_cpu_percent": 101.08,
+            "container_ids": [
+              "0e5023c91b1c"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.257565814999992
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -2963,7 +4260,7 @@
               "bytes": 257
             }
           },
-          "output_occupancy_bytes": 140119525
+          "output_occupancy_bytes": 140119515
         },
         {
           "status": "completed",
@@ -2972,20 +4269,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.0246927069999856,
+          "elapsed_seconds": 2.1125478049999913,
           "resources": {
-            "elapsed_seconds": 1.3967378389999965,
-            "child_peak_rss_bytes": 131788800,
-            "child_user_cpu_seconds": 1.2258149999999999,
-            "child_system_cpu_seconds": 0.169964,
+            "elapsed_seconds": 1.763190777999995,
+            "child_peak_rss_bytes": 131616768,
+            "child_user_cpu_seconds": 1.600998,
+            "child_system_cpu_seconds": 0.16080999999999998,
             "cgroup_peak_memory_bytes": 183480320,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 172306149,
+            "sampled_peak_container_memory_bytes": 113770496,
+            "sampled_peak_container_cpu_percent": 100.74,
+            "container_ids": [
+              "ee7b12276301"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.1115684540000075
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3021,7 +4337,7 @@
               "bytes": 244
             }
           },
-          "output_occupancy_bytes": 172305469
+          "output_occupancy_bytes": 172306149
         },
         {
           "status": "completed",
@@ -3030,20 +4346,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 80.5% (3220/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.9191427970000063,
+          "elapsed_seconds": 1.129018962999993,
           "resources": {
-            "elapsed_seconds": 0.6132141799999999,
-            "child_peak_rss_bytes": 75964416,
-            "child_user_cpu_seconds": 0.543773,
-            "child_system_cpu_seconds": 0.067795,
-            "cgroup_peak_memory_bytes": 78270464,
+            "elapsed_seconds": 0.8087989920000211,
+            "child_peak_rss_bytes": 76296192,
+            "child_user_cpu_seconds": 0.720511,
+            "child_system_cpu_seconds": 0.084733,
+            "cgroup_peak_memory_bytes": 78319616,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 172521430,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.1271834120000221
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3084,7 +4417,7 @@
               "bytes": 202077
             }
           },
-          "output_occupancy_bytes": 172520051
+          "output_occupancy_bytes": 172521430
         },
         {
           "status": "completed",
@@ -3093,20 +4426,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.40025372900001344,
+          "elapsed_seconds": 0.4875083000000018,
           "resources": {
-            "elapsed_seconds": 0.11580126000001201,
-            "child_peak_rss_bytes": 20119552,
-            "child_user_cpu_seconds": 0.102327,
-            "child_system_cpu_seconds": 0.013040999999999999,
-            "cgroup_peak_memory_bytes": 21934080,
+            "elapsed_seconds": 0.15044731799997635,
+            "child_peak_rss_bytes": 19644416,
+            "child_user_cpu_seconds": 0.13009099999999998,
+            "child_system_cpu_seconds": 0.016881999999999998,
+            "cgroup_peak_memory_bytes": 22245376,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 172524698,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.48657719000001975
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3127,7 +4477,7 @@
               "bytes": 212
             }
           },
-          "output_occupancy_bytes": 172522640
+          "output_occupancy_bytes": 172524698
         }
       ],
       "metric": 0.805,
@@ -3153,6 +4503,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "f6d83b45951536fdac11f66c873cebfa77e479bf52ddfe7de45e9aa61ee92937",
+          "git_blob_sha": "7d2bcbaab538d3634fbbacb8f03d557071b88edd",
+          "bytes": 111887337
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "dd0a3ec1ff87b2835372e7a5220de5d7ac524641c542f62517a8169b7b5509fc",
+            "git_blob_sha": "3a36962cabc8728a16ba481b82e3da1593f7b68d",
+            "bytes": 32182621
+          }
+        },
+        "used_config_sha256": "dfffcbb8164c5577ddd7a4cb372df29ad122eb150d898839af3363963002a2e7",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.805,
@@ -3173,6 +4543,37 @@
       "role": "ablation",
       "seed": 22,
       "config_sha256": "ceb19f5be877c0853056e52947c70fb2c6a9226c19d5194366a3d588026b3555",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 22,
+        "variant": {
+          "id": "regularization-control",
+          "role": "ablation",
+          "settings": {
+            "solver": 1,
+            "C": 0.001
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -3182,20 +4583,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.759756692000025,
+          "elapsed_seconds": 4.288228792000012,
           "resources": {
-            "elapsed_seconds": 3.0781069720000005,
-            "child_peak_rss_bytes": 383549440,
-            "child_user_cpu_seconds": 2.627935,
-            "child_system_cpu_seconds": 0.448988,
-            "cgroup_peak_memory_bytes": 501477376,
+            "elapsed_seconds": 3.588540142999989,
+            "child_peak_rss_bytes": 383414272,
+            "child_user_cpu_seconds": 3.06331,
+            "child_system_cpu_seconds": 0.521882,
+            "cgroup_peak_memory_bytes": 501493760,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119503,
+            "sampled_peak_container_memory_bytes": 276090060,
+            "sampled_peak_container_cpu_percent": 100.39,
+            "container_ids": [
+              "5f76d4ca7431"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.286949652000004
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3241,7 +4661,7 @@
               "bytes": 257
             }
           },
-          "output_occupancy_bytes": 140119505
+          "output_occupancy_bytes": 140119503
         },
         {
           "status": "completed",
@@ -3250,20 +4670,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.032677629999995,
+          "elapsed_seconds": 2.107664489000001,
           "resources": {
-            "elapsed_seconds": 1.382569707000016,
-            "child_peak_rss_bytes": 131993600,
-            "child_user_cpu_seconds": 1.255059,
-            "child_system_cpu_seconds": 0.127014,
-            "cgroup_peak_memory_bytes": 183488512,
+            "elapsed_seconds": 1.7612929139999949,
+            "child_peak_rss_bytes": 131858432,
+            "child_user_cpu_seconds": 1.593869,
+            "child_system_cpu_seconds": 0.16266999999999998,
+            "cgroup_peak_memory_bytes": 183410688,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 172229463,
+            "sampled_peak_container_memory_bytes": 113665638,
+            "sampled_peak_container_cpu_percent": 99.53,
+            "container_ids": [
+              "2708635fdbf5"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.106146652999996
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3299,7 +4738,7 @@
               "bytes": 244
             }
           },
-          "output_occupancy_bytes": 172228755
+          "output_occupancy_bytes": 172229463
         },
         {
           "status": "completed",
@@ -3308,20 +4747,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 81.325% (3253/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.9091902350000112,
+          "elapsed_seconds": 1.1078345079999963,
           "resources": {
-            "elapsed_seconds": 0.6137629700000105,
-            "child_peak_rss_bytes": 75837440,
-            "child_user_cpu_seconds": 0.5484129999999999,
-            "child_system_cpu_seconds": 0.064633,
-            "cgroup_peak_memory_bytes": 77860864,
+            "elapsed_seconds": 0.784892890000009,
+            "child_peak_rss_bytes": 75788288,
+            "child_user_cpu_seconds": 0.704066,
+            "child_system_cpu_seconds": 0.07908,
+            "cgroup_peak_memory_bytes": 77766656,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 172444738,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.1057590919999996
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3362,7 +4818,7 @@
               "bytes": 202086
             }
           },
-          "output_occupancy_bytes": 172443333
+          "output_occupancy_bytes": 172444738
         },
         {
           "status": "completed",
@@ -3371,20 +4827,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.41564343699999995,
+          "elapsed_seconds": 0.4828829970000186,
           "resources": {
-            "elapsed_seconds": 0.11145611699998881,
-            "child_peak_rss_bytes": 20131840,
-            "child_user_cpu_seconds": 0.097969,
-            "child_system_cpu_seconds": 0.012995,
-            "cgroup_peak_memory_bytes": 21893120,
+            "elapsed_seconds": 0.15392980999999395,
+            "child_peak_rss_bytes": 19935232,
+            "child_user_cpu_seconds": 0.133818,
+            "child_system_cpu_seconds": 0.015858999999999998,
+            "cgroup_peak_memory_bytes": 21946368,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 172447998,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.480156581000017
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3405,7 +4878,7 @@
               "bytes": 214
             }
           },
-          "output_occupancy_bytes": 172445924
+          "output_occupancy_bytes": 172447998
         }
       ],
       "metric": 0.81325,
@@ -3431,6 +4904,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "6c315baf5b9664572bb1e5e42bfffa08440b0ca120cd91f8c08a8704e7f4f4f7",
+          "git_blob_sha": "905d5bab6987ad868c0b241b5d8417cdcf46c909",
+          "bytes": 112144968
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "0a238f59b66dd5be4233038712ca568537071a68e9dba15aa5adfdc40e644e11",
+            "git_blob_sha": "1c2a84061e9987c3f3594a9fe9507e0b51e0e8cf",
+            "bytes": 32105958
+          }
+        },
+        "used_config_sha256": "ceb19f5be877c0853056e52947c70fb2c6a9226c19d5194366a3d588026b3555",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.81325,
@@ -3451,6 +4944,37 @@
       "role": "ablation",
       "seed": 33,
       "config_sha256": "c58ea3fab3ee3c5bf16243e25d5db724a6b3995b6ebac50deb8567c59a10b641",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 33,
+        "variant": {
+          "id": "regularization-control",
+          "role": "ablation",
+          "settings": {
+            "solver": 1,
+            "C": 0.001
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -3460,20 +4984,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.6561477539999885,
+          "elapsed_seconds": 4.258402583999981,
           "resources": {
-            "elapsed_seconds": 3.0015597500000126,
-            "child_peak_rss_bytes": 382857216,
-            "child_user_cpu_seconds": 2.545176,
-            "child_system_cpu_seconds": 0.454852,
-            "cgroup_peak_memory_bytes": 499912704,
+            "elapsed_seconds": 3.562241876999991,
+            "child_peak_rss_bytes": 382705664,
+            "child_user_cpu_seconds": 3.03612,
+            "child_system_cpu_seconds": 0.522848,
+            "cgroup_peak_memory_bytes": 500248576,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119503,
+            "sampled_peak_container_memory_bytes": 325897420,
+            "sampled_peak_container_cpu_percent": 100.73,
+            "container_ids": [
+              "20735c9dea1d"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.257183896000015
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3519,7 +5062,7 @@
               "bytes": 257
             }
           },
-          "output_occupancy_bytes": 140119505
+          "output_occupancy_bytes": 140119503
         },
         {
           "status": "completed",
@@ -3528,20 +5071,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.0565575119999835,
+          "elapsed_seconds": 2.1103991090000136,
           "resources": {
-            "elapsed_seconds": 1.382211453999986,
-            "child_peak_rss_bytes": 131411968,
-            "child_user_cpu_seconds": 1.24337,
-            "child_system_cpu_seconds": 0.137924,
-            "cgroup_peak_memory_bytes": 183226368,
+            "elapsed_seconds": 1.7608542620000094,
+            "child_peak_rss_bytes": 131465216,
+            "child_user_cpu_seconds": 1.597727,
+            "child_system_cpu_seconds": 0.15981199999999998,
+            "cgroup_peak_memory_bytes": 183066624,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 172293534,
+            "sampled_peak_container_memory_bytes": 113875353,
+            "sampled_peak_container_cpu_percent": 99.8,
+            "container_ids": [
+              "33d08de47f33"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.1087140129999966
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3577,7 +5139,7 @@
               "bytes": 244
             }
           },
-          "output_occupancy_bytes": 172292826
+          "output_occupancy_bytes": 172293534
         },
         {
           "status": "completed",
@@ -3586,20 +5148,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 81.575% (3263/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.8980276919999994,
+          "elapsed_seconds": 1.181745833000008,
           "resources": {
-            "elapsed_seconds": 0.6083791119999944,
-            "child_peak_rss_bytes": 76722176,
-            "child_user_cpu_seconds": 0.538848,
-            "child_system_cpu_seconds": 0.067024,
-            "cgroup_peak_memory_bytes": 78831616,
+            "elapsed_seconds": 0.8464230950000058,
+            "child_peak_rss_bytes": 76414976,
+            "child_user_cpu_seconds": 0.745624,
+            "child_system_cpu_seconds": 0.095151,
+            "cgroup_peak_memory_bytes": 78573568,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 172508755,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.1802267049999955
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3640,7 +5219,7 @@
               "bytes": 202087
             }
           },
-          "output_occupancy_bytes": 172507337
+          "output_occupancy_bytes": 172508755
         },
         {
           "status": "completed",
@@ -3649,20 +5228,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.8627651019999973,
+          "elapsed_seconds": 0.4764647650000029,
           "resources": {
-            "elapsed_seconds": 0.11048816499999248,
-            "child_peak_rss_bytes": 20000768,
-            "child_user_cpu_seconds": 0.097025,
-            "child_system_cpu_seconds": 0.013002999999999999,
-            "cgroup_peak_memory_bytes": 22159360,
+            "elapsed_seconds": 0.15093178300000432,
+            "child_peak_rss_bytes": 20054016,
+            "child_user_cpu_seconds": 0.12824,
+            "child_system_cpu_seconds": 0.016769,
+            "cgroup_peak_memory_bytes": 21737472,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 172512003,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.47555178900000783
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3683,7 +5279,7 @@
               "bytes": 214
             }
           },
-          "output_occupancy_bytes": 172509930
+          "output_occupancy_bytes": 172512003
         }
       ],
       "metric": 0.81575,
@@ -3709,6 +5305,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "0e3d4f84cf977d834d85a8d4fe8852aad1efaa4a267cf56be0c1d34dd393ca28",
+          "git_blob_sha": "a7d5c5299d6c2689948e78229e77b8f8bc47a645",
+          "bytes": 111708091
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "6001a6ff0d7a3855d11c22f4891025ba878b252ea7c2bd6d34334e6646c6ae3c",
+            "git_blob_sha": "62f75422ca6daf9e4298e467193d4132487e0943",
+            "bytes": 32170029
+          }
+        },
+        "used_config_sha256": "c58ea3fab3ee3c5bf16243e25d5db724a6b3995b6ebac50deb8567c59a10b641",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.81575,
@@ -3729,6 +5345,37 @@
       "role": "ablation",
       "seed": 44,
       "config_sha256": "321e32431ae2e49c539872942c8c7092268cbf8ca57cd6bd8a7dcf09a8709bd0",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 44,
+        "variant": {
+          "id": "regularization-control",
+          "role": "ablation",
+          "settings": {
+            "solver": 1,
+            "C": 0.001
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -3738,20 +5385,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 5.0987172579999935,
+          "elapsed_seconds": 4.284946993999995,
           "resources": {
-            "elapsed_seconds": 3.0103964390000044,
-            "child_peak_rss_bytes": 383111168,
-            "child_user_cpu_seconds": 2.554056,
-            "child_system_cpu_seconds": 0.454831,
-            "cgroup_peak_memory_bytes": 500760576,
+            "elapsed_seconds": 3.5949272420000113,
+            "child_peak_rss_bytes": 382664704,
+            "child_user_cpu_seconds": 3.048656,
+            "child_system_cpu_seconds": 0.54376,
+            "cgroup_peak_memory_bytes": 500682752,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119504,
+            "sampled_peak_container_memory_bytes": 283220377,
+            "sampled_peak_container_cpu_percent": 101.2,
+            "container_ids": [
+              "e6a0373aec60"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.283986068000019
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3797,7 +5463,7 @@
               "bytes": 257
             }
           },
-          "output_occupancy_bytes": 140119505
+          "output_occupancy_bytes": 140119504
         },
         {
           "status": "completed",
@@ -3806,20 +5472,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.2562440570000035,
+          "elapsed_seconds": 2.595307491,
           "resources": {
-            "elapsed_seconds": 1.3814074560000051,
-            "child_peak_rss_bytes": 131788800,
-            "child_user_cpu_seconds": 1.222826,
-            "child_system_cpu_seconds": 0.157973,
-            "cgroup_peak_memory_bytes": 183287808,
+            "elapsed_seconds": 1.7619656239999983,
+            "child_peak_rss_bytes": 131723264,
+            "child_user_cpu_seconds": 1.58985,
+            "child_system_cpu_seconds": 0.16882999999999998,
+            "cgroup_peak_memory_bytes": 183324672,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 172294004,
+            "sampled_peak_container_memory_bytes": 112512204,
+            "sampled_peak_container_cpu_percent": 100.68,
+            "container_ids": [
+              "1278c12ad446"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.594199630999981
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3855,7 +5540,7 @@
               "bytes": 244
             }
           },
-          "output_occupancy_bytes": 172293298
+          "output_occupancy_bytes": 172294004
         },
         {
           "status": "completed",
@@ -3864,20 +5549,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 81.425% (3257/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 0.9362207929999897,
+          "elapsed_seconds": 1.1398876539999776,
           "resources": {
-            "elapsed_seconds": 0.6129783270000075,
-            "child_peak_rss_bytes": 76103680,
-            "child_user_cpu_seconds": 0.5425249999999999,
-            "child_system_cpu_seconds": 0.069884,
-            "cgroup_peak_memory_bytes": 78401536,
+            "elapsed_seconds": 0.8049315060000026,
+            "child_peak_rss_bytes": 76242944,
+            "child_user_cpu_seconds": 0.7210829999999999,
+            "child_system_cpu_seconds": 0.081468,
+            "cgroup_peak_memory_bytes": 78499840,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 172509169,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.1385721370000113
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3918,7 +5620,7 @@
               "bytes": 202030
             }
           },
-          "output_occupancy_bytes": 172507762
+          "output_occupancy_bytes": 172509169
         },
         {
           "status": "completed",
@@ -3927,20 +5629,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.4732885970000211,
+          "elapsed_seconds": 0.462828079000019,
           "resources": {
-            "elapsed_seconds": 0.11354706999998143,
-            "child_peak_rss_bytes": 20054016,
-            "child_user_cpu_seconds": 0.104201,
-            "child_system_cpu_seconds": 0.008931,
-            "cgroup_peak_memory_bytes": 21839872,
+            "elapsed_seconds": 0.14460665900000436,
+            "child_peak_rss_bytes": 19894272,
+            "child_user_cpu_seconds": 0.131648,
+            "child_system_cpu_seconds": 0.011878,
+            "cgroup_peak_memory_bytes": 21901312,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 172512429,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.4619285679999905
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -3961,7 +5680,7 @@
               "bytes": 214
             }
           },
-          "output_occupancy_bytes": 172510353
+          "output_occupancy_bytes": 172512429
         }
       ],
       "metric": 0.81425,
@@ -3987,6 +5706,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "98e89d13a8c63b313f4de875c234d10b2401ffd2ba97f557c1a2e24379fa91ee",
+          "git_blob_sha": "165c9c9a42465791e48043f91a516e9716dd9d5f",
+          "bytes": 111880193
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "96e39eaca7ca44d98584f1c3eed8ee35494d50ddba7de4d338d009dab9801fe3",
+            "git_blob_sha": "2357ea4c5d94f205bf99f00d186fa58ec8824246",
+            "bytes": 32170499
+          }
+        },
+        "used_config_sha256": "321e32431ae2e49c539872942c8c7092268cbf8ca57cd6bd8a7dcf09a8709bd0",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.81425,
@@ -4007,6 +5746,37 @@
       "role": "ablation",
       "seed": 55,
       "config_sha256": "786d263c5122428a4ac6e95ba6e94ef1b0d961ff508601b204fbda30a9bdf4a0",
+      "configuration": {
+        "hyperparameters": {
+          "epsilon": 0.1,
+          "C": 1,
+          "solver": 1
+        },
+        "initialization": "LIBLINEAR solver defaults at fixed revision",
+        "augmentation": "none; publisher-provided unit-normalized features",
+        "selection": "C fixed at 1 for Section 3.1; no test-set selection",
+        "stopping": "epsilon 0.1; other solver defaults at pinned revision",
+        "seed": 55,
+        "variant": {
+          "id": "regularization-control",
+          "role": "ablation",
+          "settings": {
+            "solver": 1,
+            "C": 0.001
+          }
+        }
+      },
+      "execution_limits": {
+        "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
+        "cpus": 2,
+        "memory_bytes": 2147483648,
+        "stage_timeouts": {
+          "prepare": 180,
+          "train": 180,
+          "evaluate": 180,
+          "summarize": 180
+        }
+      },
       "status": "completed",
       "stages": [
         {
@@ -4016,20 +5786,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 4.771604347000022,
+          "elapsed_seconds": 4.307257087000011,
           "resources": {
-            "elapsed_seconds": 2.996454608000022,
-            "child_peak_rss_bytes": 383754240,
-            "child_user_cpu_seconds": 2.563011,
-            "child_system_cpu_seconds": 0.432002,
-            "cgroup_peak_memory_bytes": 501952512,
+            "elapsed_seconds": 3.585151835000005,
+            "child_peak_rss_bytes": 383676416,
+            "child_user_cpu_seconds": 3.026462,
+            "child_system_cpu_seconds": 0.555717,
+            "cgroup_peak_memory_bytes": 501854208,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 2,
+            "sampled_peak_output_bytes": 140119504,
+            "sampled_peak_container_memory_bytes": 332503449,
+            "sampled_peak_container_cpu_percent": 100.21,
+            "container_ids": [
+              "2e5fdce7ad55"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 4.306264312000025
+          },
           "isolation": "docker_no_network",
           "id": "prepare",
+          "kind": "prepare",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -4084,20 +5873,39 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 2.362247867999997,
+          "elapsed_seconds": 2.1114613130000066,
           "resources": {
-            "elapsed_seconds": 1.4057289170000047,
-            "child_peak_rss_bytes": 132112384,
-            "child_user_cpu_seconds": 1.277126,
-            "child_system_cpu_seconds": 0.127921,
-            "cgroup_peak_memory_bytes": 184000512,
+            "elapsed_seconds": 1.7604064440000116,
+            "child_peak_rss_bytes": 132194304,
+            "child_user_cpu_seconds": 1.586539,
+            "child_system_cpu_seconds": 0.16979,
+            "cgroup_peak_memory_bytes": 183824384,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 5,
+            "container_samples": 1,
+            "sampled_peak_output_bytes": 172395527,
+            "sampled_peak_container_memory_bytes": 114399641,
+            "sampled_peak_container_cpu_percent": 100.08,
+            "container_ids": [
+              "ff94752fad6a"
+            ],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 2.1105146640000214
+          },
           "isolation": "docker_no_network",
           "id": "train",
+          "kind": "train",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -4133,7 +5941,7 @@
               "bytes": 244
             }
           },
-          "output_occupancy_bytes": 172394828
+          "output_occupancy_bytes": 172395527
         },
         {
           "status": "completed",
@@ -4142,20 +5950,37 @@
           "output_overflow": false,
           "stdout": "Accuracy = 81.3% (3252/4000)\n",
           "stderr": "",
-          "elapsed_seconds": 1.1159005079999815,
+          "elapsed_seconds": 1.1324492829999997,
           "resources": {
-            "elapsed_seconds": 0.608346733000019,
-            "child_peak_rss_bytes": 75517952,
-            "child_user_cpu_seconds": 0.5357649999999999,
-            "child_system_cpu_seconds": 0.07189999999999999,
-            "cgroup_peak_memory_bytes": 77430784,
+            "elapsed_seconds": 0.7923596360000147,
+            "child_peak_rss_bytes": 75390976,
+            "child_user_cpu_seconds": 0.7119909999999999,
+            "child_system_cpu_seconds": 0.075698,
+            "cgroup_peak_memory_bytes": 77434880,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 172610802,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 1.131303953000014
+          },
           "isolation": "docker_no_network",
           "id": "evaluate",
+          "kind": "evaluate",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -4196,7 +6021,7 @@
               "bytes": 202094
             }
           },
-          "output_occupancy_bytes": 172609414
+          "output_occupancy_bytes": 172610802
         },
         {
           "status": "completed",
@@ -4205,20 +6030,37 @@
           "output_overflow": false,
           "stdout": "",
           "stderr": "",
-          "elapsed_seconds": 0.5153060229999937,
+          "elapsed_seconds": 0.48231019900001115,
           "resources": {
-            "elapsed_seconds": 0.11395563400000697,
-            "child_peak_rss_bytes": 19963904,
-            "child_user_cpu_seconds": 0.09752999999999999,
-            "child_system_cpu_seconds": 0.015923,
-            "cgroup_peak_memory_bytes": 21897216,
+            "elapsed_seconds": 0.14867166100000873,
+            "child_peak_rss_bytes": 19705856,
+            "child_user_cpu_seconds": 0.130653,
+            "child_system_cpu_seconds": 0.01608,
+            "cgroup_peak_memory_bytes": 21913600,
             "gpu_peak_memory_bytes": null,
             "gpu_measurement": "not_instrumented",
             "returncode": 0
           },
           "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+          "external_resources": {
+            "source": "ArtiCheck client-side sampler, outside artifact container",
+            "samples": 4,
+            "container_samples": 0,
+            "sampled_peak_output_bytes": 172614056,
+            "sampled_peak_container_memory_bytes": null,
+            "sampled_peak_container_cpu_percent": null,
+            "container_ids": [],
+            "disk_limit_exceeded": false,
+            "errors": [],
+            "limitations": [
+              "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+              "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+            ],
+            "elapsed_seconds": 0.48137142400000243
+          },
           "isolation": "docker_no_network",
           "id": "summarize",
+          "kind": "summarize",
           "argv": [
             "python3",
             "/artifact/articheck_adapter.py",
@@ -4239,7 +6081,7 @@
               "bytes": 212
             }
           },
-          "output_occupancy_bytes": 172612022
+          "output_occupancy_bytes": 172614056
         }
       ],
       "metric": 0.813,
@@ -4265,6 +6107,26 @@
         },
         "pairwise_overlap": 0
       },
+      "training_inputs": {
+        "train.svm": {
+          "sha256": "8834e01545f11f0913c5f787cc36f4eceb672486defa2666c126fac1952f55c4",
+          "git_blob_sha": "a554dc85fd574cc8d44129b9ba30ccfc6ffbb535",
+          "bytes": 112346834
+        }
+      },
+      "training_evidence": {
+        "status": "verified",
+        "stage_id": "train",
+        "model_fingerprints": {
+          "model.txt": {
+            "sha256": "fc488e50303ef823d914e8036c5d62ebb56c7507501580f1dd8b68dc469e5055",
+            "git_blob_sha": "1c0b1f09dcd53f754a979ba7e3882e6900d0345f",
+            "bytes": 32272032
+          }
+        },
+        "used_config_sha256": "786d263c5122428a4ac6e95ba6e94ef1b0d961ff508601b204fbda30a9bdf4a0",
+        "scope": "Declared training command produced models and matching configuration; source/method correspondence is reviewed separately"
+      },
       "independent_metric": {
         "implementation": "accuracy",
         "value": 0.813,
@@ -4282,18 +6144,72 @@
   ],
   "environment": {
     "status": "built",
-    "image": "sha256:0f1ffc518d49e7410a05b6f19bf072cfc37691be272443ed37076ab478d52bfe",
+    "image": "sha256:1d5892a972b963ff4df34cb734b2c6d26b4a3fe5eb562f133ef9d798ac97c13d",
     "dockerfile_sha256": "749285a6a689d6be6191810b6b083a9b5911e489a4280ed666cfb7b937738757",
     "network": "none",
     "cache": false,
+    "elapsed_seconds": 6.874396281999999,
     "log": "environment-build.json",
-    "verification": "passed"
+    "verification": "passed",
+    "compatibility": {
+      "status": "verified",
+      "probe_sha256": "3ea29b4362ee786ec81f472803c6c6281b372340956010582849212a06c4f7ed",
+      "observed": {
+        "python": "3.11.18",
+        "architecture": "x86_64",
+        "os": "Linux",
+        "packages": {},
+        "cuda": {
+          "status": "not_requested",
+          "available": null,
+          "runtime": null,
+          "kernel_test": null
+        }
+      },
+      "checks": [
+        {
+          "key": "python",
+          "expected": "3.11",
+          "actual": "3.11.18",
+          "status": "pass"
+        }
+      ],
+      "execution": {
+        "status": "completed",
+        "returncode": 0,
+        "timed_out": false,
+        "output_overflow": false,
+        "stdout": "{\"python\": \"3.11.18\", \"architecture\": \"x86_64\", \"os\": \"Linux\", \"packages\": {}, \"cuda\": {\"status\": \"not_requested\", \"available\": null, \"runtime\": null, \"kernel_test\": null}}\n",
+        "stderr": "",
+        "elapsed_seconds": 0.4484237089999965,
+        "resources": null,
+        "measurement_scope": "child getrusage and isolated cgroup when available; GPU unmeasured",
+        "external_resources": {
+          "source": "ArtiCheck client-side sampler, outside artifact container",
+          "samples": 4,
+          "container_samples": 0,
+          "sampled_peak_output_bytes": 1884,
+          "sampled_peak_container_memory_bytes": null,
+          "sampled_peak_container_cpu_percent": null,
+          "container_ids": [],
+          "disk_limit_exceeded": false,
+          "errors": [],
+          "limitations": [
+            "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+            "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+          ],
+          "elapsed_seconds": 0.4475565689999996
+        },
+        "isolation": "docker_no_network"
+      }
+    }
   },
   "errors": [],
   "audit": {
     "format": "articheck-reproduction-audit-v1",
-    "created_at": "2026-10-29T10:26:22.515416+00:00",
-    "plan_sha256": "f8a37c722ca0058d8cc13c51e955a8572cce7c93690f72c76a164b8d58eb9554",
+    "created_at": "2026-10-29T13:31:03.824565+00:00",
+    "plan_sha256": "8698b8653df0064950b65ced9b27a4b976f4e9fd8a9726c21cbac608c93fd2cd",
+    "imported_material": {},
     "checks": [
       {
         "dimension": "scope",
@@ -4309,7 +6225,8 @@
           },
           "expected": {
             "sha256": "86b3b03c8ff30d9a633884daa00159add25d04d99b64d4010f4894a087127d0a"
-          }
+          },
+          "reference_source": "declared_manifest"
         }
       },
       {
@@ -4326,7 +6243,8 @@
           },
           "expected": {
             "sha256": "af0948689eb53512afb4a39a740b7e14a2fe62fdf7bf90f3bd4680ea8a622821"
-          }
+          },
+          "reference_source": "declared_manifest"
         }
       },
       {
@@ -4374,6 +6292,26 @@
       },
       {
         "dimension": "scope",
+        "code": "conclusion_source:C1",
+        "status": "review_required",
+        "detail": "Main conclusion requires a grounded paper-page citation",
+        "evidence": {
+          "page": null,
+          "quote": ""
+        }
+      },
+      {
+        "dimension": "scope",
+        "code": "conclusion_source:C2",
+        "status": "review_required",
+        "detail": "Main conclusion requires a grounded paper-page citation",
+        "evidence": {
+          "page": null,
+          "quote": ""
+        }
+      },
+      {
+        "dimension": "scope",
         "code": "coverage:practical-news20",
         "status": "pass",
         "detail": "Core experiment must have an execution plan",
@@ -4417,7 +6355,8 @@
           },
           "expected": {
             "sha256": "014bb6ac2dbfadeb20100a439fde52c5a1942ed8a5a722af092b3503f15aae36"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4434,7 +6373,8 @@
           },
           "expected": {
             "sha256": "684e76f565a31ab057790c612bdacc2ee542f8a90b69f922377a92334771488c"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4451,7 +6391,8 @@
           },
           "expected": {
             "sha256": "749285a6a689d6be6191810b6b083a9b5911e489a4280ed666cfb7b937738757"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4468,7 +6409,8 @@
           },
           "expected": {
             "sha256": "750c2ebbeae2df35e66550eb768d07ae8913dc1fd7d28bf3c682546a842139a3"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4485,7 +6427,8 @@
           },
           "expected": {
             "sha256": "938b873441cc45e8cead6dc4c5b43293326a7663f910ab3c8f8383e3935f78c5"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4502,7 +6445,8 @@
           },
           "expected": {
             "sha256": "b31d956c89d11bd03f379936fde1140e91cf879362cea7b60362d726b9679bb1"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4519,7 +6463,8 @@
           },
           "expected": {
             "sha256": "3b9039f7fa87347964a80843d02c13c8c9d8a11e391f28ee0c33454bfa8189be"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4536,7 +6481,8 @@
           },
           "expected": {
             "sha256": "54406605c3af2c989de72199f73318102c1afe0c1508199d06814b7b041cf980"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4553,7 +6499,8 @@
           },
           "expected": {
             "sha256": "57a2637c207675bf69e99a58c2729c491535e101d3aafe2fddc697cc57a94542"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4570,7 +6517,8 @@
           },
           "expected": {
             "sha256": "f781f643938137736f1c2a5b026c0aa1f99f8c2e7822f2786c9fe4e9d740c493"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4587,7 +6535,8 @@
           },
           "expected": {
             "sha256": "d9594a126f423e0112ff1093ccf4d3a63c01adfeca0ed029dae3b081e31a1ea1"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4604,7 +6553,8 @@
           },
           "expected": {
             "sha256": "1600dee968017f0106726fd0d7575ba1f1b22ac358e8c29047543fa04e69e275"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4621,7 +6571,8 @@
           },
           "expected": {
             "sha256": "07071fddc23a704d09da79e7b3ac9807ce932f55260e91a82cd6964d1863d1b9"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4638,7 +6589,8 @@
           },
           "expected": {
             "sha256": "09b386c6aa01c81db8b44db164f7bbb66f6326e992a65a53d8cd8a2e4735259e"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4655,7 +6607,8 @@
           },
           "expected": {
             "sha256": "7d5c36d417ba745b35dd033e1d2993d36c81b0f55c65f4cb22792b0c12f8d92c"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4672,7 +6625,8 @@
           },
           "expected": {
             "sha256": "5defa0a4c4c5bdaf3f55ae3828310252e8565c13ee37ce279e0b86d82e7f4ce9"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4689,7 +6643,8 @@
           },
           "expected": {
             "sha256": "92002bd308c4b658bffcb472d69575f5f48175978e4391e84df31afc9e2dd9f8"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4706,7 +6661,8 @@
           },
           "expected": {
             "sha256": "cfde6a281e22d733739fb843d1d2ed5fb5913b6db8fae3c3d1cf35228c889792"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4723,7 +6679,8 @@
           },
           "expected": {
             "sha256": "2f5450c2a26d3e73e12c468041e7eb3d3afc821c37b269138d94e8b72af3e526"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4740,7 +6697,8 @@
           },
           "expected": {
             "sha256": "ffcbfd227895b1471dbf93d4b9dc07f344b0b60deee78e100fa6ec554cccf81e"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4757,7 +6715,8 @@
           },
           "expected": {
             "sha256": "810893251625cb742d476f350a4ff0f783b7047a92dba2627aea169f4b3c3e73"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4774,7 +6733,8 @@
           },
           "expected": {
             "sha256": "c7d2ddc36758b95fdfc00c8116e69bcc18ed458b20037f9a49db1ac535ac9cfd"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4791,7 +6751,8 @@
           },
           "expected": {
             "sha256": "c08fa41b19d6c3ea1a2e181523c3ec44ec218ff82eaab793a9e25d219da11499"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4808,7 +6769,8 @@
           },
           "expected": {
             "sha256": "8cfb1a4ac19efd45ef950579956eaff90d37e5148887f5dd774c417d8ec1f526"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4825,7 +6787,8 @@
           },
           "expected": {
             "sha256": "fe5b55ee97274b592147eb5dfb0d87a5cecbc02a8703655bad0447f06e9f7bcb"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4842,7 +6805,8 @@
           },
           "expected": {
             "sha256": "08d13b15164702d037d06ae0cae10afac513c07a377566f0d55af2e41f6d975f"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4859,7 +6823,8 @@
           },
           "expected": {
             "sha256": "b14555e84b4c62d6a30a8c7dc0dddd07e18f0f3dd55dd711b2d662ca3db9c6b5"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4876,7 +6841,8 @@
           },
           "expected": {
             "sha256": "a1b93d2f9f3cbfd91d22d096bc0c532d2cb282d6933aa323320d852baad72a2a"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4893,7 +6859,8 @@
           },
           "expected": {
             "sha256": "2659afadb07f109afb57a7fc1ebc13b12581284fadab05b986a25c7d00690b69"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4910,7 +6877,8 @@
           },
           "expected": {
             "sha256": "cd3880508fd6c36f6ffb0e6c0b2600a5fab4f10530519cf139cea926e8716d0c"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4927,7 +6895,8 @@
           },
           "expected": {
             "sha256": "d5b2f3bf30131879b1e8b386fdac1a8dd7ec1ce27c877ea10651dfc9d89db91d"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4944,7 +6913,8 @@
           },
           "expected": {
             "sha256": "a04b80fe9f7e26263fdb5177081164d007bc75583774a8fe7a8916f0af6c4813"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4961,7 +6931,8 @@
           },
           "expected": {
             "sha256": "becbfc7ceba6e654d3c1531d0466ef343d5f4ef886830a8c10b127c6842079f6"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4978,7 +6949,8 @@
           },
           "expected": {
             "sha256": "3ff3f561cc2fb8942d6f5ef5bd5f480d2923f763e5a97983fa41187f54adb524"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -4995,7 +6967,8 @@
           },
           "expected": {
             "sha256": "74272936bfe5c3a35c64025b95c7a7adbeb518798747e10e7a267190b8b12994"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -5012,7 +6985,8 @@
           },
           "expected": {
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -5029,7 +7003,8 @@
           },
           "expected": {
             "sha256": "6abcf14970ef6b20bb037c9edba8d0e5b146767dc3d547d9f803bcc538330236"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -5046,7 +7021,8 @@
           },
           "expected": {
             "sha256": "299154f11b48f238626eb81f9bfab6dcf77395386392d7656e120135bef550f1"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -5063,7 +7039,8 @@
           },
           "expected": {
             "sha256": "836e1258808cdf057cec5e87e909dbef2c8c1068d6283095b205c24e4eae2cc4"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -5080,7 +7057,8 @@
           },
           "expected": {
             "sha256": "84156f3c188a7b6fa0a7dde15276a2b2257d7194fc945c250ee257d75163778d"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -5097,7 +7075,8 @@
           },
           "expected": {
             "sha256": "66ac321dd8082056d1bc096b5880f69cb0d8ae3dd98843fc9c9c19681fdc30fc"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -5114,7 +7093,8 @@
           },
           "expected": {
             "sha256": "60fb80c83834fb5ba9dba872062d31063654a88aa3afdf0081890c94df9c4c65"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -5131,7 +7111,8 @@
           },
           "expected": {
             "sha256": "b91a9ad67a447489aae77f518296aae039e58d13437b86f0f8719d19e2e007c8"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -5148,7 +7129,8 @@
           },
           "expected": {
             "sha256": "12333c2049cb0688905825a67b3334756a947b6b14653dc86eaea741294c0b3c"
-          }
+          },
+          "reference_source": "plan_reference"
         }
       },
       {
@@ -5165,7 +7147,18 @@
           },
           "expected": {
             "sha256": "f802577a47c90f13fecf9c37b7e37614650d104c01ea3d2ab3bc95926814ed55"
-          }
+          },
+          "reference_source": "plan_reference"
+        }
+      },
+      {
+        "dimension": "code",
+        "code": "undeclared_source_files",
+        "status": "pass",
+        "detail": "Actual source inventory compared with imported and explicitly declared inputs",
+        "evidence": {
+          "extra_files": [],
+          "extra_count": 0
         }
       },
       {
@@ -5258,7 +7251,8 @@
           },
           "expected": {
             "sha256": "2659afadb07f109afb57a7fc1ebc13b12581284fadab05b986a25c7d00690b69"
-          }
+          },
+          "reference_source": "declared_manifest"
         }
       },
       {
@@ -5275,7 +7269,8 @@
           },
           "expected": {
             "sha256": "b91a9ad67a447489aae77f518296aae039e58d13437b86f0f8719d19e2e007c8"
-          }
+          },
+          "reference_source": "declared_manifest"
         }
       },
       {
@@ -5284,6 +7279,17 @@
         "status": "unknown",
         "detail": "No split provenance supplied",
         "evidence": {}
+      },
+      {
+        "dimension": "environment",
+        "code": "immutable_base",
+        "status": "pass",
+        "detail": "Every external FROM image needs an immutable digest for repeatable reconstruction",
+        "evidence": {
+          "from_images": [
+            "python@sha256:84fa927127b46670e768371d1ad1be271d57ba93a6fbb3479045c7c6c452432f"
+          ]
+        }
       },
       {
         "dimension": "environment",
@@ -5299,8 +7305,16 @@
           },
           "expected": {
             "sha256": "7d5c36d417ba745b35dd033e1d2993d36c81b0f55c65f4cb22792b0c12f8d92c"
-          }
+          },
+          "reference_source": "declared_manifest"
         }
+      },
+      {
+        "dimension": "environment",
+        "code": "lock_snapshot:environment-lock.json",
+        "status": "pass",
+        "detail": "Custom source-build lock must bind its immutable base and describe bundled dependencies; unsupported lock formats remain unresolved",
+        "evidence": {}
       },
       {
         "dimension": "environment",
@@ -5316,7 +7330,8 @@
           },
           "expected": {
             "sha256": "749285a6a689d6be6191810b6b083a9b5911e489a4280ed666cfb7b937738757"
-          }
+          },
+          "reference_source": "declared_manifest"
         }
       },
       {
@@ -5340,7 +7355,8 @@
           },
           "expected": {
             "sha256": "66ac321dd8082056d1bc096b5880f69cb0d8ae3dd98843fc9c9c19681fdc30fc"
-          }
+          },
+          "reference_source": "declared_manifest"
         }
       },
       {
@@ -5553,10 +7569,10 @@
         "pass": 7,
         "fail": 2,
         "unknown": 0,
-        "review_required": 1
+        "review_required": 3
       },
       "code": {
-        "pass": 51,
+        "pass": 52,
         "fail": 0,
         "unknown": 0,
         "review_required": 1
@@ -5568,7 +7584,7 @@
         "review_required": 0
       },
       "environment": {
-        "pass": 2,
+        "pass": 4,
         "fail": 0,
         "unknown": 1,
         "review_required": 0
@@ -5608,6 +7624,68 @@
       }
     ],
     "blocking_failures": 2,
+    "coverage": {
+      "inventory_review": {
+        "complete": false,
+        "notes": "Three visible experiment groups registered; independent reviewer confirmation still required"
+      },
+      "method_review": {
+        "source": "Paper Sections 2–3.3; source linear.cpp/train.c/predict.c",
+        "verified": false
+      },
+      "conclusions": [
+        {
+          "id": "C1",
+          "text": "Public training/prediction workflow for linear classification"
+        },
+        {
+          "id": "C2",
+          "text": "Efficiency comparisons with other solvers on news20 and rcv1"
+        }
+      ],
+      "excluded_references": {},
+      "experiments": [
+        {
+          "id": "practical-news20",
+          "labels": [],
+          "page": 2,
+          "quote": "3.1 Practical Usage",
+          "core": true,
+          "conclusion_ids": [
+            "C1"
+          ],
+          "execution_ids": [
+            "news20-section-3-1"
+          ]
+        },
+        {
+          "id": "comparison-news20",
+          "labels": [
+            "figure-1"
+          ],
+          "page": 4,
+          "quote": "(a) news20",
+          "core": true,
+          "conclusion_ids": [
+            "C2"
+          ],
+          "execution_ids": []
+        },
+        {
+          "id": "comparison-rcv1",
+          "labels": [
+            "figure-1"
+          ],
+          "page": 4,
+          "quote": "(b) rcv1",
+          "core": true,
+          "conclusion_ids": [
+            "C2"
+          ],
+          "execution_ids": []
+        }
+      ]
+    },
     "limitations": [
       "Scope/method review are explicit reviewer declarations.",
       "No artifact code executed by audit.",
@@ -5912,6 +7990,10 @@
           "sha256": "7d5c36d417ba745b35dd033e1d2993d36c81b0f55c65f4cb22792b0c12f8d92c"
         }
       ],
+      "expected": {
+        "python": "3.11",
+        "packages": {}
+      },
       "verify": [
         [
           "python3",
@@ -5985,9 +8067,29 @@
             }
           }
         ],
+        "training_evidence": {
+          "stage_id": "train",
+          "used_config_path": "used-config.json",
+          "model_outputs": [
+            "model.txt"
+          ]
+        },
+        "fairness": {
+          "source": "Section 3.1 C=1; ArtiCheck additional fixed controls, without tuning",
+          "selection_protocol": "none",
+          "allowed_variant_differences": {
+            "logistic-control": [
+              "solver"
+            ],
+            "regularization-control": [
+              "C"
+            ]
+          }
+        },
         "stages": [
           {
             "id": "prepare",
+            "kind": "prepare",
             "argv": [
               "python3",
               "{repo}/articheck_adapter.py",
@@ -6010,6 +8112,7 @@
           },
           {
             "id": "train",
+            "kind": "train",
             "argv": [
               "python3",
               "{repo}/articheck_adapter.py",
@@ -6032,6 +8135,7 @@
           },
           {
             "id": "evaluate",
+            "kind": "evaluate",
             "argv": [
               "python3",
               "{repo}/articheck_adapter.py",
@@ -6055,6 +8159,7 @@
           },
           {
             "id": "summarize",
+            "kind": "summarize",
             "argv": [
               "python3",
               "{repo}/articheck_adapter.py",
@@ -6114,25 +8219,87 @@
       }
     ]
   },
-  "plan_sha256": "f8a37c722ca0058d8cc13c51e955a8572cce7c93690f72c76a164b8d58eb9554",
-  "elapsed_seconds": 144.42270101600002,
-  "finished_at": "2026-10-29T10:28:46.855036+00:00",
+  "plan_sha256": "8698b8653df0064950b65ced9b27a4b976f4e9fd8a9726c21cbac608c93fd2cd",
+  "elapsed_seconds": 146.731507013,
+  "executor": {
+    "mode": "docker",
+    "daemon": {
+      "status": "observed",
+      "source": "Docker daemon info, not browser or client host",
+      "os": "linux",
+      "architecture": "x86_64",
+      "kernel": "7.0.0-1017-azure",
+      "logical_cpus": 2,
+      "memory_bytes": 8317935616,
+      "identity_sha256": "cfe377aff84c001069050030cbb4c4ef01f8818e835a5a1c765b7f20c756899e"
+    },
+    "resource_limits": {
+      "max_seconds": 1800,
+      "memory_bytes": 2147483648,
+      "cpus": 2,
+      "gpu_devices": [],
+      "price_per_hour_usd": null
+    },
+    "requirements": []
+  },
+  "finished_at": "2026-10-29T13:33:30.456572+00:00",
   "cost": {
     "price_per_hour_usd": null,
     "compute_estimate_usd": null,
-    "scope": "wall-clock compute estimate at declared rate; not an invoice or total project cost"
+    "scope": "wall-clock compute estimate at declared rate; not an invoice or total project cost",
+    "phase_seconds": {
+      "environment_build": 6.874396281999999,
+      "environment_checks": 1.6415200830000032,
+      "artifact_stages": 123.1275484540001,
+      "audit_snapshot_monitor_orchestration": 15.080706725999875
+    },
+    "phase_compute_estimate_usd": {
+      "environment_build": null,
+      "environment_checks": null,
+      "artifact_stages": null,
+      "audit_snapshot_monitor_orchestration": null
+    },
+    "excluded": [
+      "Downloads and base-image pull before this job",
+      "human review",
+      "storage and network billing"
+    ],
+    "pricing_source": "user-declared rate; not independently verified"
   },
   "measurement": {
     "sampled_stage_count": 60,
     "stage_count": 60,
-    "max_child_rss_bytes": 384012288,
-    "output_occupancy_bytes": 2562504329,
+    "max_child_rss_bytes": 383934464,
+    "output_occupancy_bytes": 2562639891,
     "gpu_peak_memory_bytes": null,
     "limitations": [
       "Output occupancy is not peak disk usage.",
       "getrusage is child-process instrumentation; GPU is not measured.",
       "Container cgroup fields are instrumentation reports, not a hostile-code attestation."
-    ]
+    ],
+    "external": {
+      "source": "Client sampler outside artifact container",
+      "sampled_container_stages": 30,
+      "sampled_peak_container_memory_bytes": 389755699,
+      "sampled_peak_run_output_bytes": 172614056,
+      "scope": "Maximum sampled per-stage/per-run occupancy; not sum of concurrent runs or peak total project disk; raw samples coverage in each stage"
+    },
+    "project_output_sampling": {
+      "source": "ArtiCheck client-side sampler, outside artifact container",
+      "samples": 544,
+      "container_samples": 0,
+      "sampled_peak_output_bytes": 2562639891,
+      "sampled_peak_container_memory_bytes": null,
+      "sampled_peak_container_cpu_percent": null,
+      "container_ids": [],
+      "disk_limit_exceeded": false,
+      "errors": [],
+      "limitations": [
+        "Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.",
+        "Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured."
+      ],
+      "elapsed_seconds": 146.723738629
+    }
   },
   "levels": {
     "run": true,
@@ -6141,14 +8308,24 @@
     "conclusion": false
   },
   "level_requirements": {
-    "training": "Requires declared training-stage and model provenance validation",
-    "conclusion": "Requires complete paper inventory, controls and supported comparisons",
-    "unresolved_scope_checks": 3
+    "training": [
+      "Declared protocol deviations prevent claiming original-paper training reproduction",
+      "Unresolved method/configuration correspondence: method_correspondence"
+    ],
+    "conclusion": [
+      "Training reproduction gate is not satisfied",
+      "Unresolved code check: method_correspondence",
+      "Unresolved scope check: conclusion_source:C1",
+      "Unresolved scope check: conclusion_source:C2",
+      "Unresolved scope check: coverage:comparison-news20",
+      "Unresolved scope check: coverage:comparison-rcv1",
+      "Unresolved scope check: inventory_review"
+    ]
   },
   "provenance": {
-    "workflow_url": "https://github.com/Gump111458785/ArtiCheck/actions/runs/40857463535",
-    "commit_sha": "cc19475f17d5d7d7e6db5dbd8a23ed15abd42070",
-    "original_report_sha256": "da42fcd9d52a6885a63be5d6db7726a7db9a7926b8cbbe1bf4144579bb4f3d1b",
+    "workflow_url": "https://github.com/Gump111458785/ArtiCheck/actions/runs/40882532696",
+    "commit_sha": "89d7b2b77fff41e2642c5f9339db0d02f467950a",
+    "original_report_sha256": "5686be43580c80ad5f70a9beab537b8252da6ee7ac2af214e5743cb3905043c7",
     "scope": "LIBLINEAR Section 3.1 reconstruction; new seeded splits and added controls; Figure 1 and rcv1 unverified"
   }
 }

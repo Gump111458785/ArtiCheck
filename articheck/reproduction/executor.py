@@ -27,6 +27,7 @@ class StageExecutor:
         self.memory = int(finite(memory_bytes, minimum=64*1024**2))
         self.cpus = finite(cpus, minimum=.1)
         self.disk_limit=disk_limit_bytes
+        self.gpu_uuids=[];self.same_kernel=False
         self.gpu_devices = gpu_devices or []
         if any(type(i) is not int or i < 0 for i in self.gpu_devices):
             raise ValueError('GPU devices must be integer indices')
@@ -63,7 +64,7 @@ class StageExecutor:
         timeout_hit = overflow = cancelled = False
         with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
             process = await asyncio.create_subprocess_exec(*command, cwd=work, env=env, stdout=out, stderr=err, start_new_session=True)
-            monitor=ExternalMonitor(work,self.docker if self.mode=='docker' else None,name,self.disk_limit)
+            monitor=ExternalMonitor(work,self.docker if self.mode=='docker' else None,name,self.disk_limit,self.gpu_uuids,self.same_kernel)
             monitor_task=asyncio.create_task(monitor.run())
             try:
                 while process.returncode is None:

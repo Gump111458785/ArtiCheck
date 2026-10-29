@@ -1,17 +1,51 @@
 """Evidence-derived milestones and scientific gates; no success from a score alone."""
 from __future__ import annotations
 import json
-from .protocol import fingerprint, load_json, relative_path
-from .verification import verify_splits
+from .protocol import fingerprint, load_json, relative_path, same_json
+from .verification import verify_splits, recompute_metric
 
 
-def verify_training(work, experiment, stage, configuration, prior_models=None):
+def verify_selection(repo,work,experiment,stage,configuration,models,elapsed):
+    policy=experiment.get('fairness',{})
+    if policy.get('selection_protocol')!='validation_only':return None
+    budget=policy.get('tuning_budget',{});space=policy.get('search_space',{});spec=policy.get('validation_metric',{})
+    record_path=experiment.get('training_evidence',{}).get('selection_record_path')
+    if not record_path or record_path not in stage['outputs']:raise ValueError('Validation selection needs a declared training search-record output')
+    if not budget.get('max_trials') or not budget.get('max_seconds') or not space:raise ValueError('Validation selection requires a frozen search space and trial/time budget')
+    if elapsed>budget['max_seconds'] or stage.get('timeout_seconds',300)>budget['max_seconds']:raise ValueError('Actual search stage or timeout exceeds frozen tuning budget')
+    split=experiment.get('split_ids',{}).get('validation',{})
+    if not split or spec.get('ids_path')!=split.get('path'):raise ValueError('Selection must use the independently verified validation split')
+    record=load_json(relative_path(work,record_path))
+    if not isinstance(record,dict) or record.get('protocol')!='validation_only' or type(record.get('seed')) is not int or record.get('seed')!=configuration['seed']:raise ValueError('Search record protocol/seed does not match frozen run')
+    trials=record.get('trials',[])
+    if not isinstance(trials,list) or not 1<=len(trials)<=budget['max_trials'] or any(not isinstance(t,dict) for t in trials):raise ValueError('Invalid trial count or search trace')
+    ids=set();proof=[]
+    for trial in trials:
+        tid=trial.get('id');settings=trial.get('settings')
+        if not isinstance(tid,str) or not tid or tid in ids:raise ValueError('Trial IDs must be unique text')
+        ids.add(tid)
+        if not isinstance(settings,dict) or set(settings)!=set(space) or any(not any(same_json(settings[k],candidate) for candidate in space[k]) for k in space):raise ValueError('Trial settings are outside the preregistered search space')
+        predictions=trial.get('records_path');model=trial.get('model_path')
+        if predictions not in stage['outputs'] or model not in stage['outputs']:raise ValueError('Trial predictions and model must be declared training outputs')
+        metric=recompute_metric(repo,work,{**spec,'records_path':predictions})
+        proof.append({'id':tid,'settings':settings,'metric':metric,'model':fingerprint(relative_path(work,model))})
+    selected=next((t for t in proof if t['id']==record.get('selected_trial_id')),None)
+    if selected is None:raise ValueError('Selected trial is absent from verified search trace')
+    values=[t['metric']['value'] for t in proof];best=(min if spec.get('direction')=='lower' else max)(values)
+    if selected['metric']['value']!=best:raise ValueError('Selected trial does not optimize the frozen validation metric')
+    if len(models)!=1 or next(iter(models.values()))!=selected['model']:raise ValueError('Final model differs from the selected validation-trial model')
+    return {'status':'verified','budget':budget,'actual_trials':len(proof),'actual_stage_seconds':elapsed,'selected_trial_id':selected['id'],
+            'validation_ids_sha256':fingerprint(relative_path(work,split['path']))['sha256'],'trials':proof,
+            'scope':'Recorded trials independently scored on frozen validation labels; source review must establish that the record covers the actual search and that test data was not used'}
+
+
+def verify_training(work, experiment, stage, configuration, prior_models=None, *, repo=None, elapsed=0):
     spec=experiment.get('training_evidence')
     if not spec or spec.get('stage_id')!=stage['id']:return None
     if stage.get('kind')!='train':raise ValueError('Training evidence must reference a typed training stage')
     if spec['used_config_path'] not in stage['outputs'] or spec['used_config_path']=='config.json':raise ValueError('Used-configuration record must be a distinct declared training output')
     used_path=relative_path(work,spec['used_config_path'])
-    if load_json(used_path)!=configuration:raise ValueError('Program-reported used configuration differs from frozen run configuration')
+    if not same_json(load_json(used_path),configuration):raise ValueError('Program-reported used configuration differs from frozen run configuration')
     models={}
     if not spec.get('model_outputs'):raise ValueError('Training proof needs model outputs')
     for name in spec['model_outputs']:
@@ -19,7 +53,8 @@ def verify_training(work, experiment, stage, configuration, prior_models=None):
         models[name]=fingerprint(relative_path(work,name))
         if prior_models and prior_models.get(name)==models[name]:raise ValueError('Model output did not change; retraining was not established')
         if models[name]['bytes']==0:raise ValueError('Training model output is empty')
-    return {'status':'verified','stage_id':stage['id'],'model_fingerprints':models,
+    selection=verify_selection(repo,work,experiment,stage,configuration,models,elapsed)
+    return {'status':'verified','stage_id':stage['id'],'model_fingerprints':models,'selection':selection,
             'used_config_sha256':fingerprint(used_path)['sha256'],
             'scope':'Declared training command produced models and matching configuration; source/method correspondence is reviewed separately'}
 
@@ -29,7 +64,7 @@ def verify_fairness(experiment, rows):
     reasons=[]
     if not policy.get('source') or policy.get('selection_protocol') not in ('none','validation_only'):
         reasons.append('Declare a source-grounded model-selection protocol; test-set tuning is not accepted')
-    if policy.get('selection_protocol')=='validation_only' and (not policy.get('tuning_budget') or not policy.get('validation_ids')):
+    if policy.get('selection_protocol')=='validation_only' and (not policy.get('tuning_budget') or not policy.get('validation_metric')):
         reasons.append('Validation selection needs a frozen validation split and matching tuning budgets')
     mapping={(row['variant'],row['seed']):row for row in rows}
     for comparison in experiment.get('comparisons',[]):
@@ -41,9 +76,9 @@ def verify_fairness(experiment, rows):
             a=left.get('configuration',{});b=right.get('configuration',{})
             if not a or not b:reasons.append('Actual configuration snapshots are missing');continue
             for key in (set(a)|set(b))-{'variant','seed'}:
-                if a.get(key)!=b.get(key):reasons.append('Uncontrolled configuration difference: '+key)
+                if not same_json(a.get(key),b.get(key)):reasons.append('Uncontrolled configuration difference: '+key)
             av=a.get('variant',{}).get('settings',{});bv=b.get('variant',{}).get('settings',{})
-            differing={k for k in set(av)|set(bv) if av.get(k)!=bv.get(k)}
+            differing={k for k in set(av)|set(bv) if not same_json(av.get(k),bv.get(k))}
             if not differing.issubset(allowed):reasons.append('Variant settings differ beyond preregistered factors')
             la=left.get('split_verification');lb=right.get('split_verification')
             if not la or not lb:reasons.append('Actual generated split verification is missing');continue
@@ -52,6 +87,8 @@ def verify_fairness(experiment, rows):
                     reasons.append('Control uses different sample IDs: '+name)
             if policy.get('selection_protocol')=='validation_only' and 'validation' not in la['splits']:
                 reasons.append('Validation split not independently verified')
+            if policy.get('selection_protocol')=='validation_only' and any((row.get('training_evidence',{}).get('selection') or {}).get('status')!='verified' for row in (left,right)):
+                reasons.append('Search traces, selected models and actual tuning budgets were not verified')
             input_a=left.get('training_inputs');input_b=right.get('training_inputs')
             if not input_a or not input_b:reasons.append('Actual training input fingerprints are missing')
             else:
@@ -81,6 +118,7 @@ def evaluate_levels(plan, audit, environment, rows, results, status):
     for check in audit.get('checks',[]):
         if check['dimension'] in ('code','settings') and check['status']!='pass':training_reasons.append('Unresolved method/configuration correspondence: '+check['code'])
         if check['dimension']=='environment' and check['code']!='clean_build' and check['status']!='pass':training_reasons.append('Unresolved environment/lock correspondence: '+check['code'])
+        if check['dimension']=='scope' and (check['code'] in ('paper_identity','paper_text_origin') or check['code'].startswith('file:')) and check['status']!='pass':training_reasons.append('Paper identity/text is not verified: '+check['code'])
     training=not training_reasons
     # Main conclusions depend on actual coverage and source-grounded reviews as well as outcomes.
     for check in audit.get('checks',[]):

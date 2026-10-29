@@ -96,7 +96,11 @@ def fetch_public(destination,url,sha256,max_bytes,*,timeout_seconds=120):
 def acquire_plan_data(plan_path,output):
     plan,repo,plan_sha=load_plan(plan_path,with_digest=True)
     receipt={'format':'articheck-data-acquisition-v1','plan_sha256':plan_sha,'created_at':datetime.now(timezone.utc).isoformat(),'files':[],'status':'completed'}
+    started=time.monotonic();seconds=plan['resources'].get('acquisition_max_seconds',300)
     try:
+        jobs=[item for dataset in plan['datasets'] for item in dataset.get('acquisition',[])]
+        if len(jobs)>100 or sum(item['max_bytes'] for item in jobs)>plan['resources'].get('acquisition_max_bytes',512*1024**2):
+            raise ValueError('Total declared acquisition exceeds file count or byte budget')
         for dataset in plan['datasets']:
             source=dataset.get('source',{})
             jobs=dataset.get('acquisition',[])
@@ -106,7 +110,9 @@ def acquire_plan_data(plan_path,output):
             for item in jobs:
                 if references.get(item['path'])!=item['sha256']:raise ValueError('Acquisition must match a frozen dataset file reference')
                 destination=relative_path(repo,item['path'],exists=False)
-                proof=fetch_public(destination,item['url'],item['sha256'],item['max_bytes'])
+                remaining=seconds-(time.monotonic()-started)
+                if remaining<=0:raise TimeoutError('Total dataset acquisition time budget exhausted')
+                proof=fetch_public(destination,item['url'],item['sha256'],item['max_bytes'],timeout_seconds=remaining)
                 receipt['files'].append({'dataset':dataset['id'],'path':item['path'],**proof})
     except Exception as error:
         receipt.update(status='failed',error=type(error).__name__+': '+str(error));dump(output,receipt);raise

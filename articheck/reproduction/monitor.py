@@ -4,6 +4,7 @@ import json
 import os
 import re
 import time
+from .gpu_monitor import sample_gpu
 
 
 def quantity(value):
@@ -41,13 +42,16 @@ async def docker_sample(docker,name):
 
 
 class ExternalMonitor:
-    def __init__(self,work,docker=None,name=None,disk_limit=None):
+    def __init__(self,work,docker=None,name=None,disk_limit=None,gpu_uuids=(),same_kernel=False):
         self.work=work;self.docker=docker;self.name=name;self.disk_limit=disk_limit;self.started=time.monotonic();self.finished=False;self.stop=asyncio.Event()
         self.report={'source':'ArtiCheck client-side sampler, outside artifact container','samples':0,'container_samples':0,
             'sampled_peak_output_bytes':None,'sampled_peak_container_memory_bytes':None,'sampled_peak_container_cpu_percent':None,
             'container_ids':[],'disk_limit_exceeded':False,'errors':[],
             'limitations':['Sampled peaks can miss short spikes; Docker memory excludes cache according to daemon semantics.',
-                           'Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU remains unmeasured.']}
+                           'Output occupancy is file size, not disk I/O or filesystem-wide peak; GPU sampling has separate attribution and coverage.']}
+        self.gpu_uuids=list(gpu_uuids);self.same_kernel=same_kernel
+        self.report.update(gpu_samples=0,gpu_process_samples=0,sampled_peak_gpu_device_bytes=None,sampled_peak_gpu_process_bytes=None,sampled_peak_gpu_process_total_bytes=None,
+                gpu_scope='Device memory includes other tasks. Container process memory requires matching kernel identity and Docker PIDs. Sampled peaks can miss short allocations; unsupported NVIDIA/MIG/WDDM data remains unknown.')
     def sample_disk(self):
         try:
             size=occupancy(self.work);self.report['samples']+=1
@@ -66,6 +70,19 @@ class ExternalMonitor:
                     if value['container_id'] not in self.report['container_ids']:self.report['container_ids'].append(value['container_id'])
                     for source,target in [('memory_bytes','sampled_peak_container_memory_bytes'),('cpu_percent','sampled_peak_container_cpu_percent')]:
                         self.report[target]=max(value[source],self.report[target] or 0)
+                if self.gpu_uuids:
+                    gpu=await sample_gpu(self.docker,self.name,self.gpu_uuids,self.same_kernel)
+                    if gpu:
+                        self.report['gpu_samples']+=1
+                        for field,target in [('device_memory_bytes','sampled_peak_gpu_device_bytes'),('container_process_memory_bytes','sampled_peak_gpu_process_bytes')]:
+                            if gpu[field] is not None:
+                                peaks=self.report[target] or {}
+                                for uuid,size in gpu[field].items():peaks[uuid]=max(size,peaks.get(uuid,0))
+                                self.report[target]=peaks
+                        if gpu['container_process_memory_bytes'] is not None:
+                            self.report['gpu_process_samples']+=1
+                            total=sum(gpu['container_process_memory_bytes'].values())
+                            self.report['sampled_peak_gpu_process_total_bytes']=max(total,self.report['sampled_peak_gpu_process_total_bytes'] or 0)
             self.sample_disk()
             try:await asyncio.wait_for(self.stop.wait(),.25)
             except asyncio.TimeoutError:pass
