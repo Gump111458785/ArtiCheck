@@ -26,7 +26,8 @@ class AcceptanceEvidenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r['experiments'][0]['fairness']['status'],'verified')
         self.assertTrue(all(row['training_evidence']['status']=='verified' and row['independent_metric'] for row in r['runs']))
         self.assertFalse(r['levels']['training']) # Local mode never invents a rebuilt environment.
-        levels,reasons=evaluate_levels(plan,r['audit'],{'status':'built','verification':'passed'},r['runs'],r['experiments'],r['status'])
+        proof_audit={**r['audit'],'checks':[c for c in r['audit']['checks'] if c['dimension']!='environment']}
+        levels,reasons=evaluate_levels(plan,proof_audit,{'status':'built','verification':'passed','compatibility':{'status':'verified'}},r['runs'],r['experiments'],r['status'])
         self.assertTrue(levels['training'],reasons);self.assertTrue(levels['conclusion'],reasons)
         # The actual positive environment proof is exercised in the Docker CI integration.
     async def test_wrong_used_configuration_fails_before_evaluation(self):
@@ -66,8 +67,10 @@ class AcceptanceEvidenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any('model.json' in stage.get('output_error','') for row in r['runs'] for stage in row['stages']))
     async def test_uncovered_core_experiment_and_protocol_deviations_keep_main_gate_closed(self):
         plan,r,root=await self.scenario(complete=False)
-        levels,reasons=evaluate_levels(plan,r['audit'],{'status':'built','verification':'passed'},r['runs'],r['experiments'],r['status'])
+        proof_audit={**r['audit'],'checks':[c for c in r['audit']['checks'] if c['dimension']!='environment']}
+        levels,reasons=evaluate_levels(plan,proof_audit,{'status':'built','verification':'passed','compatibility':{'status':'verified'}},r['runs'],r['experiments'],r['status'])
         self.assertFalse(levels['conclusion']);self.assertTrue(any('scope' in reason for reason in reasons['conclusion']))
         plan['experiments'][0]['deviations']=['Different author split']
-        levels,reasons=evaluate_levels(plan,r['audit'],{'status':'built','verification':'passed'},r['runs'],r['experiments'],r['status'])
+        proof_audit={**r['audit'],'checks':[c for c in r['audit']['checks'] if c['dimension']!='environment']}
+        levels,reasons=evaluate_levels(plan,proof_audit,{'status':'built','verification':'passed','compatibility':{'status':'verified'}},r['runs'],r['experiments'],r['status'])
         self.assertFalse(levels['training']);self.assertTrue(any('deviations' in reason for reason in reasons['training']))

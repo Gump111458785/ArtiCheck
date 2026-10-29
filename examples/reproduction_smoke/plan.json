@@ -129,7 +129,11 @@
         "-c",
         "import sys; assert sys.version_info[:2] == (3,11)"
       ]
-    ]
+    ],
+    "expected": {
+      "python": "3.11",
+      "packages": {}
+    }
   },
   "resources": {
     "max_seconds": 240,

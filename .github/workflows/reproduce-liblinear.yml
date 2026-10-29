@@ -30,3 +30,4 @@ jobs:
             runs/liblinear-output/environment-build.json
             runs/liblinear-output/environment-verification.json
             runs/liblinear-input/plan.json
+            runs/liblinear-input/acquisition-receipt.json

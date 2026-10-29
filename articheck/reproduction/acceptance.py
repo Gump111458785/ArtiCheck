@@ -66,7 +66,7 @@ def verify_fairness(experiment, rows):
 
 def evaluate_levels(plan, audit, environment, rows, results, status):
     run=status=='completed' and bool(rows) and all(row['status']=='completed' for row in rows)
-    rebuilt=bool(environment and environment.get('status')=='built' and environment.get('verification')=='passed')
+    rebuilt=bool(environment and environment.get('status')=='built' and environment.get('verification')=='passed' and environment.get('compatibility',{}).get('status')=='verified')
     training_reasons=[];conclusion_reasons=[]
     if not run:training_reasons.append('Not all planned runs completed')
     if not rebuilt:training_reasons.append('Clean environment reconstruction was not verified')
@@ -80,6 +80,7 @@ def evaluate_levels(plan, audit, environment, rows, results, status):
         if experiment.get('deviations'):training_reasons.append('Declared protocol deviations prevent claiming original-paper training reproduction')
     for check in audit.get('checks',[]):
         if check['dimension'] in ('code','settings') and check['status']!='pass':training_reasons.append('Unresolved method/configuration correspondence: '+check['code'])
+        if check['dimension']=='environment' and check['code']!='clean_build' and check['status']!='pass':training_reasons.append('Unresolved environment/lock correspondence: '+check['code'])
     training=not training_reasons
     # Main conclusions depend on actual coverage and source-grounded reviews as well as outcomes.
     for check in audit.get('checks',[]):

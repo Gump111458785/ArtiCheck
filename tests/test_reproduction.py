@@ -234,11 +234,31 @@ class ReproductionExecutionTests(unittest.IsolatedAsyncioTestCase):
 
 @unittest.skipUnless(os.environ.get('ARTICHECK_TEST_DOCKER') == '1', 'Explicit Docker integration run only')
 class ReproductionDockerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_external_container_resource_measurement_is_separate_from_child_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            executor=StageExecutor('docker',os.environ.get('ARTICHECK_TEST_BASE_IMAGE','python:3.11-slim'))
+            result=await executor.execute(root,root,['python3','-c','import time; x=bytearray(20*1024**2); time.sleep(3)'],timeout=10)
+            self.assertEqual(result['status'],'completed')
+            self.assertGreater(result['external_resources']['container_samples'],0)
+            self.assertGreater(result['external_resources']['sampled_peak_container_memory_bytes'],0)
+            self.assertTrue(result['external_resources']['container_ids'])
+    async def test_actual_environment_mismatch_stops_before_artifact_stages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);path,plan,repo=fixture(root,complete=True)
+            dockerfile=write(repo/'Dockerfile','FROM '+os.environ.get('ARTICHECK_TEST_BASE_IMAGE','python:3.11-slim')+'\n')
+            plan['environment']={'dockerfile':'Dockerfile','dockerfile_sha256':fingerprint(dockerfile)['sha256'],
+                'expected':{'python':'0.0'},'verify':[['python3','-c','print("installed")']]}
+            write(path,plan)
+            result=await reproduce(path,root/'wrong-image')
+            self.assertEqual(result['status'],'failed');self.assertEqual(result['runs'],[])
+            self.assertEqual(result['environment']['compatibility']['status'],'failed')
+            self.assertFalse(result['levels']['environment_rebuilt'])
     async def test_clean_build_image_verification_and_full_matrix_in_containers(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);path,plan,repo=fixture(root,complete=True)
-            dockerfile=write(repo/'Dockerfile','FROM python:3.11-slim\n')
-            plan['environment']={'dockerfile':'Dockerfile','dockerfile_sha256':fingerprint(dockerfile)['sha256'],
+            dockerfile=write(repo/'Dockerfile','FROM '+os.environ.get('ARTICHECK_TEST_BASE_IMAGE','python:3.11-slim')+'\n')
+            plan['environment']={'dockerfile':'Dockerfile','dockerfile_sha256':fingerprint(dockerfile)['sha256'],'expected':{'python':'3.11','packages':{}},
                                  'verify':[['python3','-c','import sys; assert sys.version_info[:2] == (3,11)']]}
             plan['resources']['max_seconds']=240
             for stage in plan['experiments'][0]['stages']:stage['argv'][0]='python3'
@@ -249,6 +269,8 @@ class ReproductionDockerTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(result['levels']['training'],result['level_requirements'])
             self.assertTrue(result['levels']['conclusion'],result['level_requirements'])
             self.assertTrue(result['environment']['image'].startswith('sha256:'))
+            self.assertEqual(result['environment']['compatibility']['status'],'verified')
+            self.assertEqual(result['executor']['daemon']['status'],'observed')
             self.assertEqual(result['environment']['network'],'none')
             self.assertEqual(len(result['runs']),15)
             self.assertEqual(result['experiments'][0]['status'],'supported')

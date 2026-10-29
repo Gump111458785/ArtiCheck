@@ -87,8 +87,8 @@ class MaterialHTTPTests(unittest.TestCase):
 
     @unittest.skipUnless(os.environ.get('ARTICHECK_TEST_DOCKER')=='1','Explicit Docker integration run only')
     def test_import_bind_start_poll_download_positive_matrix(self):
-        dockerfile=write(self.repo/'Dockerfile','FROM python:3.11-slim\n')
-        self.plan['environment']={'dockerfile':'Dockerfile','dockerfile_sha256':fingerprint(dockerfile)['sha256'],
+        dockerfile=write(self.repo/'Dockerfile','FROM '+os.environ.get('ARTICHECK_TEST_BASE_IMAGE','python:3.11-slim')+'\n')
+        self.plan['environment']={'dockerfile':'Dockerfile','dockerfile_sha256':fingerprint(dockerfile)['sha256'],'expected':{'python':'3.11','packages':{}},
             'verify':[['python3','-c','import sys; assert sys.version_info[:2] == (3,11)']]}
         self.plan['resources']['max_seconds']=240
         for stage in self.plan['experiments'][0]['stages']:stage['argv'][0]='python3'

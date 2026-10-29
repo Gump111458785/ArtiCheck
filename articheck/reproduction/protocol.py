@@ -150,6 +150,19 @@ def validate_plan(plan):
         object_value(plan['paper'].get(key, {}), key)
     object_value(plan['repository'].get('method_review', {}), 'method review')
     validate_files(plan['environment'].get('lockfiles', []), 'lockfiles')
+    environment_expected=object_value(plan['environment'].get('expected',{}),'expected image environment')
+    if set(environment_expected)-{'python','packages','architecture','cuda'}:raise ValueError('Unknown expected environment field')
+    if environment_expected.get('architecture') is not None and (not isinstance(environment_expected['architecture'],str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,40}',environment_expected['architecture'])):raise ValueError('Invalid expected architecture')
+    if environment_expected.get('python') is not None and (not isinstance(environment_expected['python'],str) or not re.fullmatch(r'\d+\.\d+(?:\.\d+)?',environment_expected['python'])):raise ValueError('Expected Python version must be numeric major.minor[.patch]')
+    packages=object_value(environment_expected.get('packages',{}),'expected package versions')
+    if len(packages)>500 or any(not re.fullmatch(r'[A-Za-z0-9_.-]{1,100}',name) or not isinstance(version,str) or not 1<=len(version)<=100 for name,version in packages.items()):raise ValueError('Expected packages require exact text versions')
+    cuda=object_value(environment_expected.get('cuda',{}),'expected CUDA requirements')
+    if cuda.get('required') is not None and type(cuda['required']) is not bool:raise ValueError('CUDA requirement must be boolean')
+    if cuda.get('runtime') is not None and (not isinstance(cuda['runtime'],str) or not re.fullmatch(r'\d+\.\d+(?:\.\d+)?',cuda['runtime'])):raise ValueError('CUDA runtime version must be numeric')
+    if cuda.get('required') and not plan['resources'].get('gpu_devices'):raise ValueError('CUDA compatibility verification requires explicitly selected GPU devices')
+    requirements=object_value(plan['resources'].get('requirements',{}),'execution resource requirements')
+    for key in ('cpus','memory_bytes','disk_free_bytes','daemon_cpus','daemon_memory_bytes'):
+        if requirements.get(key) is not None:finite(requirements[key],minimum=0)
     verifies = plan['environment'].get('verify', [])
     if not isinstance(verifies,list) or len(verifies)>100:
         raise ValueError('Environment verification must be a list of argv arrays')
@@ -163,6 +176,11 @@ def validate_plan(plan):
         dataset_ids.add(did)
         object_value(dataset.get('source', {}), 'dataset source')
         validate_files(dataset.get('files', []), 'dataset files')
+        for item in object_rows(dataset.get('acquisition',[]),'dataset acquisition',100):
+            validate_files([item],'acquisition file')
+            if not item.get('sha256'):raise ValueError('Acquisition requires a predeclared SHA256')
+            if not isinstance(item.get('url'),str) or not item['url'].startswith('https://'):raise ValueError('Data acquisition requires public HTTPS')
+            if type(item.get('max_bytes')) is not int or not 1<=item['max_bytes']<=512*1024**2:raise ValueError('Invalid acquisition byte budget')
         for name, item in object_value(dataset.get('splits', {}), 'dataset splits').items():
             object_value(item, 'split '+name)
             validate_files([item], 'split files')
@@ -239,7 +257,7 @@ def validate_plan(plan):
             if comparison.get('method') not in {v['id'] for v in variants} or comparison.get('other') not in {v['id'] for v in variants} or comparison['method'] == comparison['other']:
                 raise ValueError('Comparison must name two different variants')
             finite(comparison.get('minimum_effect', 0), minimum=0)
-    for key, minimum in [('memory_bytes',1),('cpus',.1),('price_per_hour_usd',0)]:
+    for key, minimum in [('memory_bytes',1),('cpus',.1),('disk_limit_bytes',1),('project_disk_limit_bytes',1),('price_per_hour_usd',0)]:
         if plan['resources'].get(key) is not None:finite(plan['resources'][key],minimum=minimum)
     finite(plan['resources'].get('max_seconds', 3600), minimum=1)
     if plan['resources'].get('max_seconds', 3600) > 7*86400:

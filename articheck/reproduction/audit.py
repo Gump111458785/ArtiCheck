@@ -208,12 +208,30 @@ def audit_plan(path, *, workspace=None, imported=None, repo_override=None):
                 file_check('data', item)
 
     environment = plan['environment']
+    expected_packages=environment.get('expected',{}).get('packages',{})
+    normalized_packages={re.sub(r'[-_.]+','-',k).lower():v for k,v in expected_packages.items()}
+    dockerfile_text=''
+    if environment.get('dockerfile'):
+        try:dockerfile_text=relative_path(repo,environment['dockerfile']).read_text()
+        except (OSError,ValueError):pass
+    bases=re.findall(r'^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)',dockerfile_text,re.M|re.I)
+    immutable=bool(bases) and all(re.fullmatch(r'\S+@sha256:[0-9a-f]{64}',x) for x in bases)
+    add('environment','immutable_base','pass' if immutable else 'unknown','Every external FROM image needs an immutable digest for repeatable reconstruction',{'from_images':bases})
     for lock in environment.get('lockfiles', []):
         target, _, matched = file_check('environment', lock)
         if target and matched == 'pass' and target.name.startswith('requirements'):
             lines = [l.strip() for l in target.read_text().splitlines() if l.strip() and not l.lstrip().startswith('#')]
             pinned = all(re.fullmatch(r'[A-Za-z0-9_.-]+(?:\[[A-Za-z0-9_,.-]+\])?==[^\s;]+(?:\s*;.*)?', line) for line in lines)
             add('environment', 'pinned:' + lock['path'], 'pass' if pinned else 'fail', 'Requirements must use exact versions; other lock formats require their build verifier')
+            plain=[re.fullmatch(r'([A-Za-z0-9_.-]+)==([^\s;]+)',line) for line in lines]
+            matches=pinned and all(m and normalized_packages.get(re.sub(r'[-_.]+','-',m[1]).lower())==m[2] for m in plain)
+            add('environment','lock_snapshot:'+lock['path'],'pass' if matches else 'unknown','Every simple locked package must have a matching observed-version expectation; markers/extras require a project verifier')
+        elif target and matched=='pass':
+            try:
+                custom=load_json(target)
+                valid=isinstance(custom,dict) and custom.get('base_image') in bases and bool(custom.get('dependencies')) and immutable
+            except (ValueError,OSError):valid=False
+            add('environment','lock_snapshot:'+lock['path'],'pass' if valid else 'unknown','Custom source-build lock must bind its immutable base and describe bundled dependencies; unsupported lock formats remain unresolved')
     if environment.get('dockerfile'):
         file_check('environment', {'path': environment['dockerfile'], 'sha256': environment.get('dockerfile_sha256')})
     add('environment', 'clean_build', 'unknown', 'Only an actual clean build and in-image verification can establish environment reconstruction')

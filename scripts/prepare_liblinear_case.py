@@ -24,23 +24,8 @@ def write(path, value):
 
 
 def download(destination, url, sha):
-    if not destination.exists():
-        part = destination.with_suffix(destination.suffix+'.part')
-        try:
-            with urllib.request.urlopen(url, timeout=120) as response, part.open('wb') as out:
-                size = 0
-                while chunk := response.read(1024*1024):
-                    size += len(chunk)
-                    if size > 200*1024**2:
-                        raise ValueError('Downloaded file exceeds known case budget')
-                    out.write(chunk)
-            if fingerprint(part)['sha256'] != sha:
-                raise ValueError('Downloaded artifact digest mismatch: '+destination.name)
-            part.replace(destination)
-        finally:
-            if part.exists():part.unlink()
-    if fingerprint(destination)['sha256'] != sha:
-        raise ValueError('Cached artifact digest mismatch: '+destination.name)
+    from articheck.reproduction.acquisition import fetch_public
+    return fetch_public(destination,url,sha,200*1024**2,timeout_seconds=180)
 
 
 def prepare(destination, base_image):
@@ -53,7 +38,8 @@ def prepare(destination, base_image):
     destination = destination.resolve()
     destination.mkdir(parents=True, exist_ok=True)
     archives = destination/'downloads';archives.mkdir(exist_ok=True)
-    for name,(url,sha) in FILES.items():download(archives/name,url,sha)
+    receipts={name:download(archives/name,url,sha) for name,(url,sha) in FILES.items()}
+    write(destination/'acquisition-receipt.json',{'format':'articheck-data-acquisition-v1','files':receipts,'scope':'public source, paper and data before experiment timer'})
     artifact = destination/'artifact'
     if artifact.exists():
         raise ValueError('Artifact output already exists; use a new destination or keep the frozen prior plan')
@@ -102,7 +88,7 @@ def prepare(destination, base_image):
                       'license':'Public LIBSVM Tools distribution; original dataset terms apply','access':'public'},'files':[entry('news20.binary.bz2'),entry('targets.jsonl')],
                       'preprocessing_not_applicable':'No feature transformation of the publisher-normalized input; generated split IDs/lineage are stage outputs'}],
           'environment':{'dockerfile':'Dockerfile','dockerfile_sha256':fingerprint(artifact/'Dockerfile')['sha256'],
-                         'lockfiles':[entry('environment-lock.json')], 'verify':[['python3','-c','import sys; assert sys.version_info[:2] == (3,11)'],['/bin/sh','-c','test -x /opt/liblinear/train && test -x /opt/liblinear/predict']]},
+                         'lockfiles':[entry('environment-lock.json')], 'expected':{'python':'3.11','packages':{}}, 'verify':[['python3','-c','import sys; assert sys.version_info[:2] == (3,11)'],['/bin/sh','-c','test -x /opt/liblinear/train && test -x /opt/liblinear/predict']]},
           'resources':{'max_seconds':1800,'memory_bytes':2*1024**3,'cpus':2,'gpu_devices':[],'price_per_hour_usd':None},
           'experiments':[{'id':'news20-section-3-1','paper_experiment':'practical-news20','seeds':[11,22,33,44,55],
               'config':{**entry('settings.json'),'expected':settings,'source':'Paper p2 Section 3.1; pinned author README defaults; deviations explicitly listed'},

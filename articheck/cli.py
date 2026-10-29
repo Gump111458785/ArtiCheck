@@ -83,9 +83,16 @@ def main():
     reproduction.add_argument("--check-only", action="store_true", help="Read actual materials without running artifact code")
     reproduction.add_argument("--sandbox", choices=["docker", "local"], default="docker")
     reproduction.add_argument("--allow-local-trusted", action="store_true", help="Only for trusted user-owned fixtures")
+    acquisition=sub.add_parser('acquire-data',help='Explicitly acquire checksum-pinned public HTTPS data without executing artifact code')
+    acquisition.add_argument('--plan',type=Path,required=True)
+    acquisition.add_argument('--output',type=Path,required=True)
 
     args = parser.parse_args()
-    if args.command == "reproduce":
+    if args.command == 'acquire-data':
+        from .reproduction.acquisition import acquire_plan_data
+        result=acquire_plan_data(args.plan,args.output)
+        print(json.dumps({'status':result['status'],'files':len(result['files']),'receipt':str(args.output)}))
+    elif args.command == "reproduce":
         if args.check_only:
             from .reproduction.audit import audit_plan
             result = audit_plan(args.plan)

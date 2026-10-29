@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import shutil
 import signal
@@ -12,11 +13,12 @@ import uuid
 from pathlib import Path
 
 from .protocol import finite, relative_path
+from .monitor import ExternalMonitor
 
 
 class StageExecutor:
     """Writable per-run output, readonly artifact, no network or host credentials."""
-    def __init__(self, mode='docker', image=None, *, memory_bytes=2*1024**3, cpus=1, gpu_devices=None, allow_local_trusted=False):
+    def __init__(self, mode='docker', image=None, *, memory_bytes=2*1024**3, cpus=1, gpu_devices=None, disk_limit_bytes=None, allow_local_trusted=False):
         if mode not in ('docker', 'local') or mode == 'local' and not allow_local_trusted:
             raise ValueError('Local execution requires explicit allow_local_trusted for your own fixtures')
         if mode == 'docker' and os.getuid() == 0:
@@ -24,6 +26,7 @@ class StageExecutor:
         self.mode, self.image = mode, image
         self.memory = int(finite(memory_bytes, minimum=64*1024**2))
         self.cpus = finite(cpus, minimum=.1)
+        self.disk_limit=disk_limit_bytes
         self.gpu_devices = gpu_devices or []
         if any(type(i) is not int or i < 0 for i in self.gpu_devices):
             raise ValueError('GPU devices must be integer indices')
@@ -60,6 +63,8 @@ class StageExecutor:
         timeout_hit = overflow = cancelled = False
         with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
             process = await asyncio.create_subprocess_exec(*command, cwd=work, env=env, stdout=out, stderr=err, start_new_session=True)
+            monitor=ExternalMonitor(work,self.docker if self.mode=='docker' else None,name,self.disk_limit)
+            monitor_task=asyncio.create_task(monitor.run())
             try:
                 while process.returncode is None:
                     if cancel is not None and cancel.is_set():
@@ -67,6 +72,8 @@ class StageExecutor:
                         break
                     if time.monotonic()-started > timeout:
                         timeout_hit = True
+                        break
+                    if monitor.report['disk_limit_exceeded']:
                         break
                     if os.fstat(out.fileno()).st_size + os.fstat(err.fileno()).st_size > 2_000_000:
                         overflow = True
@@ -89,6 +96,9 @@ class StageExecutor:
                     except asyncio.TimeoutError:
                         cleanup.kill()
                         await cleanup.wait()
+                monitor.finished=True
+                monitor.stop.set()
+                await monitor_task
             overflow |= os.fstat(out.fileno()).st_size + os.fstat(err.fileno()).st_size > 2_000_000
             out.seek(0); err.seek(0)
             stdout, stderr = out.read(2_000_000).decode(errors='replace'), err.read(2_000_000).decode(errors='replace')
@@ -96,10 +106,14 @@ class StageExecutor:
         if measurement_path.is_file() and not measurement_path.is_symlink() and measurement_path.stat().st_size <= 100000:
             try:
                 measured = json.loads(measurement_path.read_text())
+                numeric=('elapsed_seconds','child_peak_rss_bytes','child_user_cpu_seconds','child_system_cpu_seconds','cgroup_peak_memory_bytes','gpu_peak_memory_bytes')
+                if not isinstance(measured,dict) or any(measured.get(k) is not None and (type(measured[k]) not in (int,float) or not math.isfinite(measured[k]) or measured[k]<0) for k in numeric):
+                    measured=None
             except ValueError:
                 pass
-        return {'status': 'cancelled' if cancelled else 'completed' if process.returncode == 0 and not timeout_hit and not overflow else 'failed',
+        return {'status': 'cancelled' if cancelled else 'completed' if process.returncode == 0 and not timeout_hit and not overflow and not monitor.report['disk_limit_exceeded'] else 'failed',
                 'returncode': process.returncode, 'timed_out': timeout_hit, 'output_overflow': overflow,
                 'stdout': stdout, 'stderr': stderr, 'elapsed_seconds': time.monotonic()-started,
                 'resources': measured, 'measurement_scope': 'child getrusage and isolated cgroup when available; GPU unmeasured',
+                'external_resources':monitor.report,
                 'isolation': 'docker_no_network' if self.mode == 'docker' else 'local_explicitly_trusted'}
