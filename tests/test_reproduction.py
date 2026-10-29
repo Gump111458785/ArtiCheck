@@ -15,6 +15,7 @@ from articheck.reproduction.engine import reproduce
 from articheck.reproduction.executor import StageExecutor
 from articheck.reproduction.protocol import FORMAT, fingerprint, relative_path, validate_plan
 from articheck.reproduction.statistics import evaluate_experiment
+from articheck.reproduction.verification import recompute_metric, verify_splits
 
 
 def write(path, value):
@@ -145,6 +146,40 @@ class ReproductionStatisticsTests(unittest.TestCase):
     def test_reference_match_without_controls_does_not_prove_main_conclusion(self):
         exp=self.experiment();exp['comparisons']=[];exp['metric'].update(reference=.902,absolute_tolerance=.01)
         result=evaluate_experiment(exp,self.rows());self.assertEqual(result['status'],'inconclusive');self.assertTrue(result['reference_alignment_only'])
+
+
+class IndependentVerificationTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name)
+        self.repo=self.root/'repo';self.repo.mkdir();self.work=self.root/'work';self.work.mkdir()
+        self.targets=[{'id':'a','target':0},{'id':'b','target':1},{'id':'c','target':1}]
+        self.predictions=[{'id':'a','prediction':0},{'id':'b','prediction':0},{'id':'c','prediction':1}]
+        self.save_records(self.repo/'truth.jsonl',self.targets);self.save_records(self.work/'predictions.jsonl',self.predictions)
+        (self.work/'test.ids').write_text('a\nb\nc\n')
+        self.spec={'implementation':'accuracy','targets_path':'truth.jsonl','targets_sha256':fingerprint(self.repo/'truth.jsonl')['sha256'], 'records_path':'predictions.jsonl','ids_path':'test.ids'}
+    def tearDown(self):self.tmp.cleanup()
+    def save_records(self,path,rows):path.write_text(''.join(json.dumps(x)+'\n' for x in rows))
+    def test_metrics_are_recomputed_from_frozen_truth(self):
+        self.assertAlmostEqual(recompute_metric(self.repo,self.work,self.spec)['value'],2/3)
+        self.spec['implementation']='macro_f1';self.assertAlmostEqual(recompute_metric(self.repo,self.work,self.spec)['value'],2/3)
+        self.spec['implementation']='mse';self.assertAlmostEqual(recompute_metric(self.repo,self.work,self.spec)['value'],1/3)
+    def test_forged_labels_missing_ids_and_duplicates_fail(self):
+        for rows in ([{**self.predictions[0],'target':99},*self.predictions[1:]], self.predictions[:-1], [*self.predictions,self.predictions[0]]):
+            self.save_records(self.work/'predictions.jsonl',rows)
+            with self.assertRaises(ValueError):recompute_metric(self.repo,self.work,self.spec)
+    def test_changed_target_bytes_and_unexpected_metric_cannot_pass(self):
+        (self.repo/'truth.jsonl').write_text('{}')
+        with self.assertRaises(ValueError):recompute_metric(self.repo,self.work,self.spec)
+        self.spec['implementation']='made_up_metric'
+        with self.assertRaises(ValueError):recompute_metric(self.repo,self.work,self.spec)
+    def test_generated_split_overlap_and_wrong_counts_are_rejected(self):
+        (self.work/'train.ids').write_text('d\ne\n')
+        spec={'train':{'path':'train.ids','count':2},'test':{'path':'test.ids','count':3}}
+        self.assertEqual(verify_splits(self.work,spec)['pairwise_overlap'],0)
+        (self.work/'train.ids').write_text('a\ne\n')
+        with self.assertRaises(ValueError):verify_splits(self.work,spec)
+        (self.work/'train.ids').write_text('d\n')
+        with self.assertRaises(ValueError):verify_splits(self.work,spec)
 
 
 class ReproductionExecutionTests(unittest.IsolatedAsyncioTestCase):

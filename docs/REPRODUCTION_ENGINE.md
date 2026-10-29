@@ -48,3 +48,11 @@ Docker 构建禁用网络和缓存，记录日志与实际 immutable image ID，
 本地完整测试共 72 项：71 通过，1 项 Docker 集成因本机没有 Docker 跳过。新增真实 CLI 完成上述 15 次自制运行。CI 的 Python 3.11 job 额外启用 `ARTICHECK_TEST_DOCKER=1`，验证 clean build、镜像内 Python 检查和同一矩阵的容器执行；通过与否以对应提交的 CI 为准。
 
 真实案例选择 [LIBLINEAR（JMLR 2008）](https://www.jmlr.org/papers/v9/fan08a.html) 与 [作者仓库](https://github.com/cjlin1/liblinear)。作者源代码固定至 `491c9f1188b97ba70847c70a68be363d186ddf9d`，下载 archive SHA256 为 `ad9c824a631e48fd57fe21ab23e87e9de0413cf0558d0fa9dd89685aec76c185`。news20 原始数据已从作者站下载并记录 SHA256；真实论文完整流程仍在接入，不声称已得到论文成绩。
+
+### 独立重算与真实案例接入
+
+新增 `verification.py`：对生成的划分 ID 检查计数、重复与交集；从冻结的参考标签与精确测试 ID 集合独立重算 accuracy、macro F1、MSE 或 MAE。预测缺行、多行、重复 ID、替换参考标签或与 artifact 自报分数不一致时失败。真实案例的 adapter 只生成预测和原始记录，engine 再独立重算。
+
+准备脚本 `scripts/prepare_liblinear_case.py` 下载并校验固定作者 archive、论文 PDF 和 news20 数据，安全展开源码，提取论文页文本并登记完整可见实验清单，生成目标标签与不可变基础镜像的构建方案；脚本本身不运行作者代码。`examples/liblinear_case/README.md` 提供命令，独立 GitHub Actions `liblinear-cpu-reproduction` 执行 15 次 CPU 运行并归档证据。
+
+提交 `e58201293d65077593d6a094be90c58355df27c7` 的 [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/40856114071) 已通过，包括真实 Docker clean build、镜像内环境验证和自制矩阵的容器执行。这证明执行器的环境与阶段链路，不是 LIBLINEAR 论文成绩。

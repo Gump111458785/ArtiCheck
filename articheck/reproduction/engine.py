@@ -16,6 +16,7 @@ from .audit import audit_plan
 from .executor import StageExecutor
 from .protocol import fingerprint, load_json, load_plan, relative_path
 from .statistics import evaluate_experiment
+from .verification import recompute_metric, verify_splits
 
 
 def utc():
@@ -199,6 +200,13 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                                 value = value[key]
                             from .protocol import finite
                             row['metric'] = finite(value)
+                            if exp.get('split_ids'):
+                                row['split_verification'] = verify_splits(work, exp['split_ids'])
+                            if exp['metric'].get('implementation'):
+                                row['independent_metric'] = recompute_metric(snapshot, work, exp['metric'])
+                                if abs(row['metric']-row['independent_metric']['value']) > 1e-12:
+                                    raise ValueError('Artifact-reported metric disagrees with independent recomputation')
+                                row['metric'] = row['independent_metric']['value']
                             row['metric_file'] = fingerprint(relative_path(work, exp['metric']['path']))
                             row['status'] = 'completed'
                         except (OSError, ValueError, KeyError, TypeError) as error:

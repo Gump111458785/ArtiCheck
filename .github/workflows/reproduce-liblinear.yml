@@ -1,0 +1,32 @@
+name: liblinear-cpu-reproduction
+on:
+  workflow_dispatch:
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e '.[reproduction]'
+      - name: Resolve immutable CPU build environment
+        run: |
+          docker pull python:3.11-bookworm
+          case_base_image="$(docker image inspect --format '{{index .RepoDigests 0}}' python:3.11-bookworm)"
+          python scripts/prepare_liblinear_case.py --output runs/liblinear-input --base-image "$case_base_image"
+      - name: Run frozen public-paper experiment matrix
+        run: python -m articheck reproduce --plan runs/liblinear-input/plan.json --output runs/liblinear-output
+      - name: Preserve execution and audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: liblinear-reproduction-evidence
+          path: |
+            runs/liblinear-output/report.json
+            runs/liblinear-output/audit.json
+            runs/liblinear-output/source-files.json
+            runs/liblinear-output/environment-build.json
+            runs/liblinear-output/environment-verification.json
+            runs/liblinear-input/plan.json
