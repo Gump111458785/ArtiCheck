@@ -67,7 +67,9 @@ runs/demo/
 
 [打开私有交互预览](https://articheck-workbench.soft-bun-8328.chatgpt.site) · [双工作区需求](docs/REQUIREMENTS.md) · [界面与 API 设计](docs/WORKBENCH.md) · [界面设计记录](docs/WORKBENCH_DESIGN.md) · [OpenAPI 契约](web/dist/openapi.json)
 
-![ArtiCheck 工作台：完整实验结果与验收](docs/assets/review-overview.png)
+![ArtiCheck 工作台：执行中心与任务列表](docs/assets/execution-center.jpg)
+
+全局导航按「复现工作 / 评测与数据 / 开发工具」分组。执行中心统一检索记录，打开单次任务后再查看角色、阶段与证据；角色协作页提供六角色子导航及真实事件。[导航与执行中心设计](docs/EXECUTION_CENTER.md)。
 
 工作台区分两个评估对象：**论文复现**记录第三方论文的实验覆盖与执行证据；**系统自评**查看 ArtiCheck 的逐例判定、数据来源与对照实验协议。
 
@@ -200,7 +202,7 @@ ArtiCheck 将规划策略与核查工具分开，便于在相同任务和预算�
 
 ## 项目状态与路线图
 
-**v0.1.0 · 工程预览。** Python 3.10–3.12 核心测试和 Linux Docker 样例已通过 [GitHub CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)，121 项 Python 测试在本地完成 117 项、4 项 Docker 专项在 CI 执行；54 项前端测试通过。GPU 采样与归属分支经过模拟验证，当前没有实卡测量成绩。完整记录见 [验证说明](docs/VALIDATION.md)。
+**v0.1.0 · 工程预览。** Python 3.10–3.12 核心测试和 Linux Docker 样例已通过 [GitHub CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)，121 项 Python 测试在本地完成 117 项、4 项 Docker 专项在 CI 执行；67 项前端测试通过。GPU 采样与归属分支经过模拟验证，当前没有实卡测量成绩。完整记录见 [验证说明](docs/VALIDATION.md)。
 
 - [x] PDF / GitHub / ZIP 材料导入、逐页主张确认与分层评估界面
 - [x] 本地执行规范预检、主张绑定与材料来源记录
