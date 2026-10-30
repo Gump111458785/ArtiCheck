@@ -1,3 +1,4 @@
+import {archiveExecution} from './review-core.mjs';
 export const dimensions = [
  ['scope','复现目标','论文版本、核心结论、对应图表与未覆盖实验'],
  ['code','代码与版本','核心方法、数据处理、训练与评估入口；论文对应 commit'],
@@ -17,7 +18,7 @@ export function ensureAssessment(p){
 }
 export function assessmentSummary(p){const a=ensureAssessment(p),entries=dimensions.map(([id])=>a.criteria[id]);const core=a.experiments.filter(e=>e.core);return {documented:entries.filter(e=>e.status==='documented'&&e.evidence.trim()).length,blocked:entries.filter(e=>e.status==='blocked').length,remaining:entries.filter(e=>e.status==='unreviewed').length,core:core.length,covered:core.filter(e=>(e.claim_ids||[]).some(id=>p.claims.some(c=>c.id===id&&c.selected))).length,experiments:a.experiments.length};}
 export function validateAssessment(a){for(const [id]of dimensions){const c=a.criteria[id];if(!states[c?.status])throw Error('检查状态无效');if(['documented','blocked','na'].includes(c.status)&&!c.evidence.trim())throw Error('记录依据、阻塞或不适用原因后再保存');}for(const e of a.experiments){if(!e.title.trim())throw Error('实验名称不能为空');if(!levels[e.level])throw Error('复现层级无效');}return a;}
-export function invalidateAssessment(p){const a=p.assessment;if(!a)return;for(const c of Object.values(a.criteria)){c.status='unreviewed';}a.independent.from_readme=false;if(a.resource_check)a.resource_check.target_confirmed=false;if(a.reproduction){a.reproduction.audit=null;a.reproduction.stale=true;a.reproduction.bundle_stale=true;}}
+export function invalidateAssessment(p){const a=p.assessment;if(!a)return;for(const c of Object.values(a.criteria)){c.status='unreviewed';}a.independent.from_readme=false;if(a.resource_check)a.resource_check.target_confirmed=false;if(a.reproduction){archiveExecution(a.reproduction,'论文或代码材料已变化');a.reproduction.audit=null;a.reproduction.stale=true;a.reproduction.bundle_stale=true;}}
 export function fixtureEvaluation(samples){
  const injected={clean:null,metric_average:'C1',split_leakage:'C2',baseline_budget:'C3'};
  const rows=samples.flatMap(s=>{if(!(s.sample_id in injected))throw Error('未知教学真值');return s.manifest.claims.map(c=>{const f=s.report.findings.find(f=>f.claim_id===c.id);return {variant:s.sample_id,claim_id:c.id,text:c.text,label:c.id===injected[s.sample_id]?1:0,verdict:f?.verdict||'inconclusive',reason:f?.reason||'缺少结果',run_id:s.report.run_id};});});

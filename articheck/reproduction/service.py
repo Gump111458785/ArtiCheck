@@ -61,7 +61,11 @@ class ReproductionService:
             raise ValueError('paper_sha256 must be a content SHA256')
         if body.get('project_id') is not None and (not isinstance(body['project_id'],str) or not 1 <= len(body['project_id']) <= 200):
             raise ValueError('project_id must be text up to 200 characters')
-        plan,_=load_plan(path,self.workspace)
+        plan,_,digest=load_plan(path,self.workspace,with_digest=True)
+        if digest!=result['plan_sha256']:raise ValueError('Plan changed during audit; audit again')
+        result['execution_preview']={'plan_sha256':digest,'resources':plan['resources'],'environment':plan['environment'],
+                                     'experiments':plan['experiments'],'paper_version':plan['paper'].get('version'),
+                                     'repository_commit':plan['repository'].get('commit')}
         if expected_paper and plan['paper'].get('sha256')!=expected_paper:
             result['checks'].append({'dimension':'scope','code':'project_paper_binding','status':'fail','detail':'Execution-plan paper digest differs from the imported project PDF','evidence':{}})
             result['blocking_failures']+=1
@@ -148,6 +152,34 @@ class ReproductionService:
             return {**row,'progress':{'completed_runs':sum(r['status']=='completed' for r in rows),
                                      'failed_runs':sum(r['status']=='failed' for r in rows),'recorded_runs':len(rows)},
                     'report_ready':report is not None,'report_url':'/api/reproduction/runs/'+run_id+'/report'}
+
+    def reviews(self,run_id):
+        if run_id not in self.jobs:raise ValueError('Reproduction job not found')
+        path=self.storage/run_id/'reviews.jsonl'
+        with self.lock:
+            return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+    def add_review(self,run_id,body):
+        # Human decisions are appended beside, never written into machine evidence.
+        with self.lock:
+            job=self.get(run_id);report=self.report(run_id)
+            if job['status'] not in ('completed','failed','cancelled') or not report:
+                raise ValueError('Review requires a terminal report')
+            digest=report.get('plan_sha256')
+            if not digest or job.get('plan_sha256')!=digest or body.get('plan_sha256')!=digest:raise ValueError('Review plan identity differs from report')
+            targets={'check:'+str(i) for i,_ in enumerate(report.get('audit',{}).get('checks',[]))}
+            targets.update('comparison:'+str(ei)+':'+str(ci) for ei,e in enumerate(report.get('experiments',[])) for ci,_ in enumerate(e.get('comparisons',[])))
+            targets.update('stage:'+str(ri)+':'+str(si) for ri,r in enumerate(report.get('runs',[])) for si,_ in enumerate(r.get('stages',[])))
+            if body.get('target_id') not in targets:raise ValueError('Review target does not exist in report')
+            if body.get('decision') not in ('agree','disagree','needs_evidence'):raise ValueError('Invalid review decision')
+            for field,maximum in [('reviewer',100),('reason',5000)]:
+                if not isinstance(body.get(field),str) or not 1<=len(body[field].strip())<=maximum:raise ValueError('Review requires bounded reviewer and evidence/reason')
+            row={k:body[k].strip() for k in ('reviewer','reason','target_id','decision')}
+            row.update(id=uuid.uuid4().hex,created_at=now(),job_id=run_id,run_id=report.get('run_id'),
+                       plan_sha256=digest,source_manifest_sha256=report.get('source_manifest_sha256'),project_id=job.get('project_id'))
+            path=self.storage/run_id/'reviews.jsonl';path.parent.mkdir(parents=True,exist_ok=True)
+            with path.open('a') as stream:stream.write(json.dumps(row,ensure_ascii=False)+'\n')
+            return row
 
     def cancel(self,run_id):
         with self.lock:

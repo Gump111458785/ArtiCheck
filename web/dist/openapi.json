@@ -1438,7 +1438,7 @@
     "/api/reproduction/audit": {
       "post": {
         "summary": "核验复现实验材料",
-        "description": "读取本地 reproduction-plan-v1 指定的真实文件，核对代码/数据内容指纹、样本划分交集、配置值及论文实验覆盖；不执行 artifact。",
+        "description": "读取本地 reproduction-plan-v1 指定的真实文件，核对代码/数据内容指纹、样本划分交集、配置值及论文实验覆盖；不执行 artifact。 返回 execution_preview，包含与 plan_sha256 对应的 resources、environment 与 experiments；完整实验按该冻结计划执行。",
         "operationId": "post__api_reproduction_audit",
         "responses": {
           "200": {
@@ -4700,6 +4700,271 @@
           "openapi": "3.1.0"
         },
         "x-ui-request": null
+      }
+    },
+    "/api/reproduction/runs/{run_id}/reviews": {
+      "get": {
+        "summary": "读取完整实验的人工复核记录",
+        "operationId": "get__api_reproduction_runs_run_id_reviews",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-ArtiCheck-Client",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "workbench"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Object with items: review records"
+          }
+        }
+      },
+      "post": {
+        "summary": "追加完整实验证据的具名人工复核",
+        "description": "终态报告专用。target_id 为 check:i / comparison:experiment_index:comparison_index / stage:run_index:stage_index。计划指纹必须与任务及报告一致；意见追加到 reviews.jsonl，不修改机器报告。",
+        "operationId": "post__api_reproduction_runs_run_id_reviews",
+        "responses": {
+          "201": {
+            "description": "Append-only review record including job_id, run_id, plan_sha256 and source_manifest_sha256",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "id": "<review-id>",
+                  "job_id": "<job-id>",
+                  "run_id": "<engine-run-id>",
+                  "plan_sha256": "<report-plan-sha256>",
+                  "source_manifest_sha256": "<source-manifest-sha256>",
+                  "target_id": "check:0",
+                  "decision": "needs_evidence",
+                  "reviewer": "reviewer",
+                  "reason": "PDF page and source evidence",
+                  "created_at": "2026-10-30T03:00:00+00:00"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ui-response": {
+          "id": "<review-id>",
+          "job_id": "<job-id>",
+          "run_id": "<engine-run-id>",
+          "plan_sha256": "<report-plan-sha256>",
+          "source_manifest_sha256": "<source-manifest-sha256>",
+          "target_id": "check:0",
+          "decision": "needs_evidence",
+          "reviewer": "reviewer",
+          "reason": "PDF page and source evidence",
+          "created_at": "2026-10-30T03:00:00+00:00"
+        },
+        "x-ui-request": {
+          "plan_sha256": "<report-plan-sha256>",
+          "target_id": "check:0",
+          "decision": "needs_evidence",
+          "reviewer": "reviewer",
+          "reason": "PDF page and source evidence"
+        },
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-ArtiCheck-Client",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "workbench"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "plan_sha256",
+                  "target_id",
+                  "decision",
+                  "reviewer",
+                  "reason"
+                ],
+                "properties": {
+                  "plan_sha256": {
+                    "type": "string"
+                  },
+                  "target_id": {
+                    "type": "string"
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "agree",
+                      "disagree",
+                      "needs_evidence"
+                    ]
+                  },
+                  "reviewer": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 5000
+                  }
+                }
+              },
+              "example": {
+                "plan_sha256": "<report-plan-sha256>",
+                "target_id": "check:0",
+                "decision": "needs_evidence",
+                "reviewer": "reviewer",
+                "reason": "PDF page and source evidence"
+              }
+            }
+          }
+        }
       }
     }
   },

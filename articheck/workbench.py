@@ -434,6 +434,8 @@ def handler_for(app: Workbench, static_root: Path):
                 if len(parts) >= 4 and parts[:3] == ["api", "reproduction", "runs"]:
                     if len(parts) == 4:
                         return self.send_json(app.reproduction.get(parts[3]))
+                    if len(parts) == 5 and parts[4] == "reviews":
+                        return self.send_json({"items":app.reproduction.reviews(parts[3])})
                     if len(parts) == 5 and parts[4] == "report":
                         report = app.reproduction.report(parts[3])
                         if report is None:
@@ -542,6 +544,8 @@ def handler_for(app: Workbench, static_root: Path):
                     return self.send_json(app.reproduction.start(body), 202)
                 if len(parts) == 5 and parts[:3] == ["api", "reproduction", "runs"] and parts[4] == "cancel":
                     return self.send_json(app.reproduction.cancel(parts[3]))
+                if len(parts) == 5 and parts[:3] == ["api", "reproduction", "runs"] and parts[4] == "reviews":
+                    return self.send_json(app.reproduction.add_review(parts[3],body),201)
                 if path == "/api/environment/inspect":
                     report = collect_environment(app.workspace)
                     report["executor"] = {"mode": "docker_probe", "gpu_enabled": False, "memory_limit_bytes": 1073741824, "cpu_limit": 1, "max_seconds": 600}

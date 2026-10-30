@@ -57,6 +57,28 @@ class MaterialHTTPTests(unittest.TestCase):
         receipt=self.request('/api/materials/'+bundle['id']+'/bind',{'code_root':'package'})
         audit=self.request('/api/reproduction/audit',{**expected,'plan_path':receipt['plan_path'],'material_bundle_id':receipt['id']})
         return receipt,audit,expected
+    def test_preview_matches_frozen_plan_and_reviews_append_without_changing_report(self):
+        receipt,audit,expected=self.import_bundle()
+        preview=audit['execution_preview']
+        self.assertEqual(preview['plan_sha256'],audit['plan_sha256'])
+        self.assertEqual(preview['resources'],self.plan['resources'])
+        self.assertEqual(preview['experiments'][0]['stages'],self.plan['experiments'][0]['stages'])
+        job_id='review-test';digest=audit['plan_sha256']
+        self.app.reproduction.jobs[job_id]={'id':job_id,'status':'completed','plan_sha256':digest,'project_id':'http-paper'}
+        report={'run_id':'engine-id','plan_sha256':digest,'source_manifest_sha256':'source','audit':{'checks':[{'status':'fail'}]},'runs':[],'experiments':[],'levels':{'conclusion':False}}
+        self.app.reproduction.cached_reports[job_id]=report
+        original=json.dumps(report,sort_keys=True)
+        body={'plan_sha256':digest,'target_id':'check:0','decision':'disagree','reviewer':'test-reviewer','reason':'PDF page 1; verified source reference'}
+        first=self.request('/api/reproduction/runs/'+job_id+'/reviews',body)
+        self.request('/api/reproduction/runs/'+job_id+'/reviews',{**body,'decision':'needs_evidence'})
+        rows=self.request('/api/reproduction/runs/'+job_id+'/reviews')['items']
+        self.assertEqual(len(rows),2);self.assertEqual(first['source_manifest_sha256'],'source')
+        self.assertEqual(original,json.dumps(report,sort_keys=True))
+        for change in ({'target_id':'check:999'},{'plan_sha256':'wrong'},{'reviewer':' '},{'decision':'pass'}):
+            with self.assertRaises(urllib.error.HTTPError):self.request('/api/reproduction/runs/'+job_id+'/reviews',{**body,**change})
+        self.app.reproduction.jobs[job_id]['status']='running'
+        with self.assertRaises(urllib.error.HTTPError):self.request('/api/reproduction/runs/'+job_id+'/reviews',body)
+
     def test_pdf_zip_plan_receipt_and_project_bound_audit(self):
         receipt,audit,expected=self.import_bundle()
         self.assertEqual(self.request('/api/materials/'+receipt['id'])['status'],'bound')
