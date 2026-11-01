@@ -13,7 +13,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CPU case](https://img.shields.io/badge/LIBLINEAR-15_runs_verified-227755)](https://github.com/Gump111458785/ArtiCheck/actions/runs/40889691677)
 
-[打开交互预览](https://articheck-workbench.soft-bun-8328.chatgpt.site) · [快速开始](#quickstart) · [查看复现案例](#case)
+[打开交互预览](https://articheck-workbench.onatanolf8074.chatgpt.site) · [快速开始](#quickstart) · [查看复现案例](#case)
 
 </div>
 
