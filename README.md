@@ -17,11 +17,11 @@
 
 </div>
 
-![工作台界面导览：执行中心、角色协作与案例详情](docs/assets/workbench-tour.gif)
+![工作台界面导览：开始页、执行中心、角色协作与案例详情](docs/assets/workbench-tour.gif)
 
-*三个现有工作台页面的截图轮播，展示各工作视图；不是一次任务的连续执行录像。交互预览仅限获授权账号，真实执行通过本地工作台完成。*
+*四个现有工作台页面的截图轮播，展示各工作视图；不是一次任务的连续执行录像。交互预览仅限获授权账号，真实执行通过本地工作台完成。*
 
-[核心能力](#capabilities) · [系统架构](#architecture) · [实测结果](#results) · [Planner 后训练](#training) · [路线图](#roadmap) · [文档](#docs)
+[核心能力](#capabilities) · [界面展示](#showcase) · [系统架构](#architecture) · [实测结果](#results) · [Planner 后训练](#training) · [路线图](#roadmap) · [文档](#docs)
 
 ## 三十秒看懂
 
@@ -88,64 +88,57 @@ flowchart LR
 
 ✅ 表示该行描述的工程行为已有结果或测试依据；训练轨迹字段与过滤经过测试，真实模型服务、GPU 采样及训练收益单独验收。
 
-### 从材料到审查的工作台
+<a id="showcase"></a>
 
-论文项目按「论文与代码 → 实验覆盖 → 复现条件 → 服务器核对 → 短时核查主张与配置 → 完整实验 → 评估结果」组织。全局执行中心统一列出任务，打开单次记录后查看对应角色、阶段和证据；复核意见追加保存，不覆盖原始结论。
+## 界面展示
 
-![开始页：新建评估、继续项目与公开案例](docs/assets/home-desktop.jpg)
+从开始页新建论文评估或继续已有项目，再进入执行中心、角色协作和证据审查。页面复用同一套项目、运行与报告数据。
 
-首次进入显示开始页，可新建评估、续接浏览器内的个人项目，或直接打开 LIBLINEAR 公开案例。点击侧栏「开始」或品牌标识可随时返回。[开始页设计与模块对应](docs/HOME_SCREEN.md)。
+[打开开始页](https://articheck-workbench.onatanolf8074.chatgpt.site/#home) · [浏览执行中心](https://articheck-workbench.onatanolf8074.chatgpt.site/#workbench) · [查看角色协作](https://articheck-workbench.onatanolf8074.chatgpt.site/#roles) · [完整界面图集](docs/UI_GALLERY.md)
 
-![执行中心：按来源、状态和执行方式检索任务](docs/assets/execution-center.jpg)
+<table>
+<tr>
+<td width="50%" valign="top">
+<strong>开始页 · 从论文材料进入</strong><br>
+新建评估、继续个人项目，或先查看公开案例。
+<a href="docs/assets/home-desktop.jpg"><img src="docs/assets/home-desktop.jpg" alt="ArtiCheck 开始页：新建论文评估、继续项目与公开案例" width="100%"></a>
+</td>
+<td width="50%" valign="top">
+<strong>执行中心 · 找到一次运行</strong><br>
+按来源、执行方式与状态检索，再打开任务详情。
+<a href="docs/assets/execution-center.jpg"><img src="docs/assets/execution-center.jpg" alt="执行中心：任务来源、执行状态、进度与详情入口" width="100%"></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<strong>角色协作 · 查看实际分工</strong><br>
+六角色的输入输出契约，与本次核查的真实事件对应。
+<a href="docs/assets/role-workspace.jpg"><img src="docs/assets/role-workspace.jpg" alt="角色协作：六角色导航、职责契约与 Planner 实际事件" width="100%"></a>
+</td>
+<td width="50%" valign="top">
+<strong>案例验收 · 对照结果与证据</strong><br>
+展示多次运行指标，分别核对执行完成与结论依据。
+<a href="docs/assets/execution-detail.jpg"><img src="docs/assets/execution-detail.jpg" alt="LIBLINEAR 案例详情：15 次运行、实际指标和分层验收" width="100%"></a>
+</td>
+</tr>
+</table>
 
 <details>
-<summary>查看角色协作与案例验收界面</summary>
+<summary>手机端开始页</summary>
 
-![六角色协作：输入输出契约与实际事件](docs/assets/role-workspace.jpg)
-
-![案例验收：实际指标、执行证据与分层结果](docs/assets/execution-detail.jpg)
+<img src="docs/assets/home-mobile.jpg" alt="手机端开始页：折叠导航、评估入口与单栏案例摘要" width="320">
 
 </details>
 
-PDF 正文与 ZIP 在浏览器准备，完整实验可显式导入本地材料工作区。候选主张需人工确认，任意第三方仓库的执行入口需要适配；[八项复现条件的实现与边界](docs/IMPLEMENTATION_STATUS.md)。
+论文项目贯通「论文与代码 → 实验覆盖 → 复现条件 → 服务器核对 → 短时核查主张与配置 → 完整实验 → 评估结果」。PDF 正文与 ZIP 在浏览器准备，候选主张需人工确认；完整实验显式绑定本地材料和执行入口。[开始页设计](docs/HOME_SCREEN.md) · [界面与模块对应](docs/REVIEW_WORKSPACE.md) · [八项复现条件](docs/IMPLEMENTATION_STATUS.md)。
 
 <a id="architecture"></a>
 
 ## 系统架构
 
-```mermaid
-flowchart TB
-    UI["工作台 / CLI<br>论文材料 · 主张确认 · 资源核对 · 审查"]
-    subgraph EXEC["核查与复现层 · 已验证"]
-        direction LR
-        L["LiteratureReader<br>文献主张"] --> P["Planner<br>选择检查项 / 停止"]
-        C["CodeInspector<br>代码清单"] --> P
-        P --> X["ExperimentRunner<br>预算 / Docker / 缓存"]
-        X --> A["CrossAuditor<br>逐主张判定"]
-        A --> P
-        P --> R["Reporter<br>报告 / 证据 / 轨迹"]
-        FULL["完整实验执行器<br>冻结计划 / 阶段矩阵 / 分层验收"]
-    end
-    subgraph DATA["评测与数据层 · 协议与内置基准已验证 / 多仓库数据在规划"]
-        D["受控缺陷注入 → 仓库分组划分<br>宏 F1 / 误报约束阈值 / 人工反馈"]
-    end
-    subgraph TRAIN["Planner 训练层 · 代码就绪 / GPU 集成待验收"]
-        T["教师轨迹过滤 → LoRA SFT → verl GRPO<br>原生 token / behavior log-prob / policy version"]
-    end
-    UI --> L
-    UI --> C
-    UI --> FULL
-    R --> D
-    R -.-> T
-    D -.-> T
-    T -. "待验收策略" .-> P
-    classDef ready fill:#eaf3ef,stroke:#42745e,color:#173c2c
-    classDef partial fill:#f5f1e6,stroke:#8c7848,color:#54451f
-    classDef pending fill:#f2f2f2,stroke:#777,stroke-dasharray:5 5,color:#444
-    class L,C,P,X,A,R,FULL ready
-    class D partial
-    class T pending
-```
+![ArtiCheck 系统架构：核心核查、评测与数据、Planner 训练](docs/assets/architecture.svg)
+
+[打开 SVG 原图](docs/assets/architecture.svg)。图中训练层为代码就绪、GPU 集成待验收；实验执行入口仍需显式配置与人工确认。
 
 短时核查中，文献读取与代码检查通过 asyncio DAG 并发，Planner 驱动检查与停止循环；固定 Planner 是默认策略。完整实验由独立的冻结计划执行器运行，界面展示它的实际阶段，不生成虚构的六角色活动。[执行中心的数据与模块对应](docs/EXECUTION_CENTER.md)。
 
@@ -208,8 +201,8 @@ python -m articheck run --task examples/task.json --output runs/review
 |---|---|---|
 | 公开 CPU 案例 | LIBLINEAR / news20，15 次运行、60 个阶段；L2-SVM 准确率 96.76%，样本标准差 0.31 个百分点 | [案例 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/40889691677) · [报告](web/dist/samples/liblinear-reproduction.json) |
 | 内置受控缺陷基准 | 单仓库 4 个版本、12 条主张；FixedPlanner + 规则核查：TP=3、FP=0、TN=9、FN=0，宏 F1=1.000，问题召回率 100%，误报率 0% | [原始结果](docs/smoke/metrics.json) · [问题报告](docs/smoke/metric-defect-report.md) |
-| Python 工程测试 | 121 项：本地 117 项通过，4 项 Docker 专项在 CI 执行；CI 覆盖 Python 3.10–3.12 | [验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41014456114) |
-| 前端测试 | 72 项通过，覆盖开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41014456114) |
+| Python 工程测试 | 121 项：本地 117 项通过，4 项 Docker 专项在 CI 执行；CI 覆盖 Python 3.10–3.12 | [验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41303123050) |
+| 前端测试 | 72 项通过，覆盖开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41303123050) |
 
 内置基准阈值为 0.5，正例 3 条、负例 9 条，仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 尚无正式成绩；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
 
