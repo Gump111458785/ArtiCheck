@@ -92,6 +92,10 @@ flowchart LR
 
 论文项目按「论文与代码 → 实验覆盖 → 复现条件 → 服务器核对 → 短时核查主张与配置 → 完整实验 → 评估结果」组织。全局执行中心统一列出任务，打开单次记录后查看对应角色、阶段和证据；复核意见追加保存，不覆盖原始结论。
 
+![开始页：新建评估、继续项目与公开案例](docs/assets/home-desktop.jpg)
+
+首次进入显示开始页，可新建评估、续接浏览器内的个人项目，或直接打开 LIBLINEAR 公开案例。点击侧栏「开始」或品牌标识可随时返回。[开始页设计与模块对应](docs/HOME_SCREEN.md)。
+
 ![执行中心：按来源、状态和执行方式检索任务](docs/assets/execution-center.jpg)
 
 <details>
@@ -205,7 +209,7 @@ python -m articheck run --task examples/task.json --output runs/review
 | 公开 CPU 案例 | LIBLINEAR / news20，15 次运行、60 个阶段；L2-SVM 准确率 96.76%，样本标准差 0.31 个百分点 | [案例 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/40889691677) · [报告](web/dist/samples/liblinear-reproduction.json) |
 | 内置受控缺陷基准 | 单仓库 4 个版本、12 条主张；FixedPlanner + 规则核查：TP=3、FP=0、TN=9、FN=0，宏 F1=1.000，问题召回率 100%，误报率 0% | [原始结果](docs/smoke/metrics.json) · [问题报告](docs/smoke/metric-defect-report.md) |
 | Python 工程测试 | 121 项：本地 117 项通过，4 项 Docker 专项在 CI 执行；CI 覆盖 Python 3.10–3.12 | [验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41014456114) |
-| 前端测试 | 67 项通过，覆盖材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41014456114) |
+| 前端测试 | 72 项通过，覆盖开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41014456114) |
 
 内置基准阈值为 0.5，正例 3 条、负例 9 条，仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 尚无正式成绩；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
 

@@ -11,7 +11,7 @@ python -m pip install -e .
 python -m articheck.workbench --port 8787 --workspace . --storage runs/workbench
 ```
 
-打开 `http://127.0.0.1:8787`。新建任务、执行核查、读取报告和提交人工反馈均通过本地 HTTP API 调用现有 Python 实现。首页从「复现项目」开始；可导入自己的材料，或打开教学样例并在「运行条件」执行。原有任务操作保留在「执行记录」。
+打开 `http://127.0.0.1:8787`。新建任务、执行核查、读取报告和提交人工反馈均通过本地 HTTP API 调用现有 Python 实现。首页从「开始」进入；新建论文评估打开 PDF / 代码导入表单，已有个人项目可续接材料、条件或结果阶段。公开 CPU 案例与内置样例有独立入口，任务操作位于「执行中心」。[开始页与路由说明](HOME_SCREEN.md)。
 
 也可以打开 [私有托管预览](https://articheck-workbench.soft-bun-8328.chatgpt.site)。它支持在浏览器准备 PDF、代码目录与主张，也使用 `scripts/build_workbench.py` 从真实教学 fixture 生成的归档证据回放交互。预览不执行外部仓库、不访问本机文件系统，反馈仅保存在该浏览器。导出的回放报告带 `data_source=archived_sample_replay`，不能作为新的真实执行记录。
 
