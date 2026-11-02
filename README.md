@@ -23,6 +23,16 @@
 
 [核心能力](#capabilities) · [界面展示](#showcase) · [系统架构](#architecture) · [实测结果](#results) · [Planner 后训练](#training) · [路线图](#roadmap) · [文档](#docs)
 
+## 上传材料后的动态演示
+
+[直接播放内置演示](https://articheck-workbench.onatanolf8074.chatgpt.site/?mode=demo&example=demo) · [打开预设结果页](https://articheck-workbench.onatanolf8074.chatgpt.site/?mode=demo&example=demo&view=report) · [演示操作说明](docs/FRONTEND_DEMO.md)
+
+新建论文评估，导入 PDF 与代码 ZIP（或读取 GitHub 目录），勾选「提交后播放演示评测」，提交后即可观看六角色阶段、进度和事件。约 16 秒后进入八项条件报告；支持暂停、继续、直接查看结果、三种场景切换与 JSON 导出。
+
+<table><tr><td width="50%"><strong>动态评测进度</strong><br><img src="docs/assets/demo-progress.jpg" alt="六角色演示进度与事件" width="100%"></td><td width="50%"><strong>演示结果与修正建议</strong><br><img src="docs/assets/demo-results.jpg" alt="演示结果、八项条件与修正建议" width="100%"></td></tr></table>
+
+文件名、PDF 页数与代码目录数量来自实际浏览器导入；评测过程与结论为预设演示，不执行代码。演示结果单独保存并标记 `data_source=frontend_demo`，不计入真实复现报告或系统成绩。
+
 ## 三十秒看懂
 
 | 面临的问题 | ArtiCheck 的处理方式 | 可核对的证据 |
@@ -202,7 +212,7 @@ python -m articheck run --task examples/task.json --output runs/review
 | 公开 CPU 案例 | LIBLINEAR / news20，15 次运行、60 个阶段；L2-SVM 准确率 96.76%，样本标准差 0.31 个百分点 | [案例 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/40889691677) · [报告](web/dist/samples/liblinear-reproduction.json) |
 | 内置受控缺陷基准 | 单仓库 4 个版本、12 条主张；FixedPlanner + 规则核查：TP=3、FP=0、TN=9、FN=0，宏 F1=1.000，问题召回率 100%，误报率 0% | [原始结果](docs/smoke/metrics.json) · [问题报告](docs/smoke/metric-defect-report.md) |
 | Python 工程测试 | 121 项：本地 117 项通过，4 项 Docker 专项在 CI 执行；CI 覆盖 Python 3.10–3.12 | [验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41303123050) |
-| 前端测试 | 72 项通过，覆盖开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41303123050) |
+| 前端测试 | 80 项通过，覆盖演示评测、开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41303123050) |
 
 内置基准阈值为 0.5，正例 3 条、负例 9 条，仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 尚无正式成绩；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
 
