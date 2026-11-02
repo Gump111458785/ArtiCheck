@@ -30,7 +30,7 @@
 
 - **短时核查**：`LiteratureReader` 与 `CodeInspector` 共享 preflight 事件，但仅展开所属角色数据；Planner 读 decision/model，执行器读 tool，审计读 audit，报告器读 complete。
 - **完整实验**：事件来自执行器写入的 `roles.jsonl`（`GET /api/reproduction/runs/{run_id}/roles`）。阶段归属由 [`articheck/reproduction/roles.py`](../articheck/reproduction/roles.py) 定义：审计 `scope` 维度归 LiteratureReader；`code / data / environment / settings` 维度、源码快照与完整性核对归 CodeInspector；`commands / resources / acceptance` 维度、资源核对、每次运行排程与停止原因归 Planner；镜像构建、环境验证与阶段执行归 ExperimentRunner；镜像兼容、阶段核查、运行判定与实验验收归 CrossAuditor；分层验收归 Reporter。Planner 在此路径按冻结计划排程（`policy: frozen_plan`），不做模型决策。
-- 角色状态只由实际事件推出：无事件为“未开始”，任一事件 `fail` 为“执行失败”，任务进行中为“执行中”。早于角色标注的归档（如当前 LIBLINEAR CI 归档）没有 `roles.jsonl`，页面明确显示“没有角色记录”，不补造事件。
+- 角色状态只由实际事件推出：无事件为“未开始”，任一事件 `fail` 为“执行失败”，任务进行中为“执行中”。早于角色标注的归档没有 `roles.jsonl`，页面明确显示“没有角色记录”，不补造事件。当前 LIBLINEAR 案例已更新为含 162 条真实角色事件的新 CI 归档。
 - 角色记录写入失败只记入 `report.roles.errors`，不改变执行状态、指标或分层验收（`tests/test_reproduction_roles.py` 覆盖）。
 
 归档教学报告缺少时间时显示“未记录时间”，不使用页面打开时间代替。
@@ -61,3 +61,15 @@
 67 项前端测试通过，包含真实记录计数、筛选组合、无伪造归档时间、事件归属、角色菜单、迟到响应、报告版本校验、旧缓存进度、嵌入报告单层导航、全部六角色入口、导出 / 回放入口及输出转义。
 
 浏览器实际验证：角色子导航切换并展开 code preflight；搜索 LIBLINEAR 得到 1 条且计数同步；打开完整实验并进入证据复核，保持同一任务身份；返回列表保留搜索；打开 Macro F1 教学归档并读取 Planner 的四条动作记录。
+
+
+## 2026-11-02 · 完整实验六角色验收
+
+[CI 41408434563](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563) 成功，162 条角色事件：15 次 schedule_run、60 次 stage、60 次 stage_checks、15 次 run_verdict，以及材料审计、环境与报告记录。Planner 事件固定 policy=frozen_plan；分层验收 run/environment_rebuilt 为 true，training/conclusion 仍为 false。
+
+前端从原始角色归档读取，不补造事件。角色页和任务详情均支持刷新；活跃任务轮询角色记录，接口失败单独提示并保留旧记录；取消任务保持停止状态。原始角色文件和报告的 SHA256 保存在案例 provenance 中。
+
+
+![完整实验六角色与实际排程事件](assets/full-experiment-roles.jpg)
+
+本轮沿用 Framed sheet（seed 1347639923），不重抽。真实案例角色页在 1440 / 768 / 390 的最后检查为 0 FAIL / 0 WARN，六张最终截图均目视复核；浏览器实际切换 Planner / Reporter，确认 18 条规划事件与第 162 条报告事件。

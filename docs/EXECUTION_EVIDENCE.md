@@ -37,3 +37,8 @@ CUDA 要求必须显式选择 GPU；镜像内检查 PyTorch 实际可用性、�
 可选 NVIDIA profiler 按镜像内观测的 GPU UUID 采样整卡使用量。只有客户端与容器的内核 boot-id 摘要一致，且 `docker top` PID 对应时，才记录容器计算进程的显存采样峰值；整卡占用单独保留，不能冒充当前任务显存。不支持的数据、远端无法关联或未采样均保持未知。当前该分支只有模拟测试，真实 CPU 验收不包含 GPU 成绩。查询口径参考 [NVIDIA nvidia-smi 文档](https://docs.nvidia.com/deploy/nvidia-smi/)。来自其他服务器的完整报告可在「导入证据报告」查看，界面将其标为用户上传，不替代已连接执行器身份。
 
 validation 搜索轨迹在 `training_evidence.selection_record_path` 声明，必须是训练阶段输出。`fairness` 包含相同的 `tuning_budget: {max_trials,max_seconds}`、`search_space` 和 `validation_metric`。轨迹包含 protocol、seed、trials（id、settings、records_path、model_path）和 selected_trial_id。验证标签与 ID 冻结，全部候选独立重算，最终模型必须与所选候选指纹相同，选错候选会在测试评估前中止。
+
+
+## 2026-11-02 · 六角色接入后的公开案例重跑
+
+[CI 41408434563](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)，代码 784ba4bb3197dcccdf84cb052627caaaa52e5ece：15 次运行、60 阶段、162 条角色事件；均值 96.76%，样本标准差 0.31 个百分点。执行器墙钟 111.359116234 秒，全阶段子进程 RSS 最大 384049152 字节（366.3 MiB），容器外采样峰值 227960422 字节（217.4 MiB），覆盖 33/60 阶段。采样不能保证捕获短时峰值；上述时间不含下载与基础镜像拉取，不代表角色标注带来加速。原报告主机快照在网页副本中置空，其余执行内容及原始 SHA256 留存；角色原始字节另存 liblinear-roles.jsonl。training/conclusion 仍为 false。

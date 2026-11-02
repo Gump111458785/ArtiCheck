@@ -144,3 +144,6 @@
 应用用户提供的 `articheck-six-roles.patch`，接入冻结计划执行器角色归属、只读角色接口、完整实验角色页面与 CI 检查。审查后修复轮询与手工刷新未更新角色事件、传输失败被误判无归档、取消任务角色完成态；读取器按报告 run_id 隔离、跳过损坏行并限制保留条数。Planner 事件明确记录 frozen_plan。生成器保留旧 reviews / audit 扩展，增加生成产物一致性回归。
 
 本机 Python 138 项，134 通过、4 Docker 专项跳过；前端 94 / 94 通过。角色写入故障不改变指标与分层验收的回归通过。LIBLINEAR 真实角色事件待本次提交后的 CI 再验收，尚未标完成。
+
+
+角色 CI [41408434563](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563) 与工程 CI [41408360857](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408360857) 均成功。下载后独立复核 162 条 JSONL、15 次排程、60 次执行、60 次阶段核查、15 次运行判定、相同 run_id 及 Reporter levels 一致；原始报告/角色 SHA256 写入网页归档 provenance。README 改为真实完成状态并更新本次时长与采样覆盖。归档新增回归后前端共 95 项通过。
