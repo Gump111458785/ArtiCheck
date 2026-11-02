@@ -436,6 +436,8 @@ def handler_for(app: Workbench, static_root: Path):
                         return self.send_json(app.reproduction.get(parts[3]))
                     if len(parts) == 5 and parts[4] == "reviews":
                         return self.send_json({"items":app.reproduction.reviews(parts[3])})
+                    if len(parts) == 5 and parts[4] == "roles":
+                        return self.send_json(app.reproduction.roles(parts[3]))
                     if len(parts) == 5 and parts[4] == "report":
                         report = app.reproduction.report(parts[3])
                         if report is None:

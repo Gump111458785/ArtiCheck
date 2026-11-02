@@ -15,6 +15,7 @@ from ..schema import dump
 from .audit import audit_plan
 from .engine import reproduce
 from .protocol import load_plan
+from .roles import ROLE_CATALOG, load_role_events
 
 
 def now():return datetime.now(timezone.utc).isoformat()
@@ -152,6 +153,15 @@ class ReproductionService:
             return {**row,'progress':{'completed_runs':sum(r['status']=='completed' for r in rows),
                                      'failed_runs':sum(r['status']=='failed' for r in rows),'recorded_runs':len(rows)},
                     'report_ready':report is not None,'report_url':'/api/reproduction/runs/'+run_id+'/report'}
+
+    def roles(self,run_id,limit=500):
+        # Role events are read-only attribution beside the report; live runs return the events so far.
+        if run_id not in self.jobs:raise ValueError('Reproduction job not found')
+        report=self.report(run_id) or {}
+        trace=load_role_events(self.storage/run_id/'run/roles.jsonl',limit=limit,run_id=report.get('run_id'))
+        return {'job_id':run_id,'run_id':report.get('run_id'),'catalog':ROLE_CATALOG,
+                'policy':{'Planner':'frozen_plan','CrossAuditor':'rule_based'},
+                'summary':report.get('roles'),**trace}
 
     def reviews(self,run_id):
         if run_id not in self.jobs:raise ValueError('Reproduction job not found')

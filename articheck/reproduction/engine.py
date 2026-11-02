@@ -21,6 +21,7 @@ from .acceptance import verify_training, verify_fairness, evaluate_levels
 from .runtime_environment import daemon_snapshot, requirement_checks, inspect_image
 from .monitor import ExternalMonitor
 from .gpu_monitor import kernel_identity
+from .roles import RoleTrace
 
 
 def utc():
@@ -90,6 +91,8 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
     report = {'format': 'articheck-reproduction-report-v1', 'run_id': uuid.uuid4().hex,
               'created_at': utc(), 'status': 'running', 'mode': mode, 'experiments': [], 'runs': [],
               'host': collect_environment(output), 'environment': None, 'errors': []}
+    # Role attribution only records which role did what; it never changes control flow.
+    roles = RoleTrace(output/'roles.jsonl', report['run_id'])
     project_monitor=ExternalMonitor(output,disk_limit=plan['resources'].get('project_disk_limit_bytes'))
     project_monitor_task=asyncio.create_task(project_monitor.run())
     def save():
@@ -101,6 +104,7 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
         audit = audit_plan(plan_path, workspace=workspace, imported=imported)
         report['audit'] = audit
         dump(output/'audit.json', audit)
+        roles.emit_audit(audit)
         # No artifact execution when actual identity/data/config bytes contradict references.
         hard = [c for c in audit['checks'] if c['status'] == 'fail' and (c['dimension'] in ('code', 'data', 'settings', 'environment') or c['dimension'] == 'scope' and c['code'].startswith('file:'))]
         if hard:
@@ -115,6 +119,9 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
         dump(output/'source-files.json', source_files)
         snapshot_audit = audit_plan(plan_path, workspace=workspace, imported=imported, repo_override=snapshot)
         snapshot_failures = [c for c in snapshot_audit['checks'] if c['status'] == 'fail' and (c['dimension'] in ('code', 'data', 'settings', 'environment') or c['dimension'] == 'scope' and c['code'].startswith('file:'))]
+        roles.emit('CodeInspector', 'snapshot', status='fail' if snapshot_failures else 'ok',
+                   summary=f'{len(source_files)} source files frozen; re-audit failures: {len(snapshot_failures)}',
+                   evidence=['source-files.json'], failed=[c['code'] for c in snapshot_failures][:20])
         if snapshot_failures:
             raise ValueError('Copied snapshot no longer matches the verified materials')
         report['source_manifest_sha256'] = fingerprint(output/'source-files.json')['sha256']
@@ -126,10 +133,18 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
         daemon=await daemon_snapshot(shutil.which('docker')) if mode=='docker' and shutil.which('docker') else {'status':'not_applicable','source':'trusted local fixture'}
         report['executor']={'mode':mode,'daemon':daemon,'resource_limits':plan['resources'],
                             'requirements':requirement_checks(plan['resources'],daemon,shutil.disk_usage(output).free)}
-        if any(c['status']=='fail' for c in report['executor']['requirements']):
+        requirement_failures=[c for c in report['executor']['requirements'] if c['status']=='fail']
+        roles.emit('Planner', 'resource_check', status='fail' if requirement_failures else 'ok',
+                   summary=f"{len(report['executor']['requirements'])} declared requirements checked against the executor; failed: {len(requirement_failures)}",
+                   evidence=['report.json#executor'])
+        if requirement_failures:
             raise ValueError('Declared resource requirements exceed actual executor limits or available capacity')
         environment = await build_environment(plan, snapshot, output, mode=mode, deadline=deadline, cancel=cancel)
         report['environment'] = environment
+        roles.emit('ExperimentRunner', 'environment_build',
+                   status={'built': 'ok', 'failed': 'fail'}.get(environment['status'], 'skipped'),
+                   summary=f"environment {environment['status']}"+(f" · image {environment['image'][:19]}" if environment.get('image') else ''),
+                   evidence=[environment['log']] if environment.get('log') else [])
         if interrupted():
             raise asyncio.CancelledError()
         if environment['status'] == 'failed':
@@ -149,10 +164,20 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
             result = await executor.execute(snapshot, env_work, materialize(argv, snapshot, env_work, 0, 'environment', mode), timeout=min(60, deadline-time.monotonic()))
             checks.append(result)
             if result['status'] != 'completed':
+                roles.emit('ExperimentRunner', 'environment_verify', status='fail',
+                           summary=f'in-image check {len(checks)}/{len(verify)} did not complete')
                 raise RuntimeError('In-image environment verification failed')
         dump(output/'environment-verification.json', checks)
         environment['verification'] = 'passed' if checks else 'not_verified'
+        roles.emit('ExperimentRunner', 'environment_verify', status='ok' if checks else 'skipped',
+                   summary=f'{len(checks)} in-image verification commands completed',
+                   evidence=['environment-verification.json'] if checks else [])
         environment['compatibility']=await inspect_image(executor,snapshot,env_work,plan['environment'].get('expected',{}),min(60,max(.01,deadline-time.monotonic())),cancel)
+        compatibility_status=environment['compatibility'].get('status')
+        roles.emit('CrossAuditor', 'image_compatibility',
+                   status='fail' if compatibility_status=='failed' else 'ok' if compatibility_status in ('passed','verified','compatible') else 'warn',
+                   summary=f'declared vs observed image environment: {compatibility_status}',
+                   evidence=['report.json#environment.compatibility'])
         if environment['compatibility']['status']=='failed':
             raise ValueError('Actual image Python/package/CUDA environment contradicts the declared requirements')
         observed=environment['compatibility'].get('observed',{})
@@ -180,6 +205,11 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                            'config_sha256': config_digest, 'configuration':cfg,
                            'execution_limits':{'image':environment.get('image'),'cpus':executor.cpus,'memory_bytes':executor.memory,'stage_timeouts':{s['id']:s.get('timeout_seconds',300) for s in exp['stages']}}, 'status': 'running', 'stages': [], 'metric': None}
                     rows.append(row); report['runs'].append(row)
+                    run_dir = work.relative_to(output).as_posix()
+                    run_ref = {'experiment': exp['id'], 'variant': variant['id'], 'seed': seed}
+                    roles.emit('Planner', 'schedule_run', summary=f"{exp['id']} / {variant['id']} ({variant['role']}) / seed {seed}: {len(exp['stages'])} frozen stages",
+                               evidence=[run_dir+'/config.json'], run=run_ref, variant_role=variant['role'],
+                               stages=[s['id'] for s in exp['stages']])
                     passed = set()
                     for stage in exp['stages']:
                         if interrupted():
@@ -187,12 +217,14 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                         if time.monotonic() >= deadline:
                             raise TimeoutError('Total experiment time budget exhausted')
                         if not set(stage.get('needs', [])).issubset(passed):
+                            roles.emit('Planner', 'skip_stage', status='fail', summary=f"{stage['id']}: dependency did not complete", run=run_ref, stage=stage['id'])
                             row['status'] = 'failed'; row['error'] = 'Dependency did not complete'; break
                         inputs = {}
                         for name in stage['inputs']:
                             origin, rel = (snapshot, name[5:]) if name.startswith('repo:') else (work, name)
                             inputs[name] = fingerprint(relative_path(origin, rel))
                         if stage.get('kind')=='train' and exp.get('split_ids') and not row.get('split_verification'):
+                            roles.emit('CrossAuditor', 'split_gate', status='fail', summary=f"{stage['id']}: generated splits not verified before training", run=run_ref, stage=stage['id'])
                             row['status']='failed';row['error']='Generated splits must be verified before training';break
                         prior_models={}
                         training_spec=exp.get('training_evidence',{})
@@ -206,6 +238,11 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                                     environment={'ARTICHECK_SEED': str(seed), 'ARTICHECK_VARIANT': variant['id'], 'ARTICHECK_CONFIG_SHA256': config_digest}, cancel=cancel)
                         result.update(id=stage['id'], kind=stage.get('kind'), argv=argv, input_fingerprints=inputs, output_fingerprints={})
                         row['stages'].append(result)
+                        stage_ref = f"{run_dir}/{stage['id']}-execution.json"
+                        roles.emit('ExperimentRunner', 'stage', status='ok' if result['status']=='completed' else 'fail',
+                                   summary=f"{stage['id']} ({stage.get('kind') or 'stage'}) {result['status']} in {result.get('elapsed_seconds',0):.2f}s",
+                                   evidence=[stage_ref], run=run_ref, stage=stage['id'], inputs=sorted(inputs), outputs=list(stage['outputs']),
+                                   exit_code=result.get('exit_code', result.get('returncode')))
                         for name in stage['outputs']:
                             try:
                                 result['output_fingerprints'][name] = fingerprint(relative_path(work, name))
@@ -231,6 +268,13 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                             result['status']='failed';result['output_error']=str(error)
                         result['output_occupancy_bytes'] = disk_bytes(work)
                         dump(work/(stage['id']+'-execution.json'), result)
+                        if result['status'] != 'cancelled':
+                            performed = ['output_fingerprints', 'input_mutation', 'config_frozen']
+                            if row.get('split_verification'): performed.append('split_verification')
+                            if row.get('training_evidence') and stage.get('id')==training_spec.get('stage_id'): performed.append('training_evidence')
+                            roles.emit('CrossAuditor', 'stage_checks', status='fail' if result.get('output_error') else 'ok',
+                                       summary=f"{stage['id']}: "+(result['output_error'] if result.get('output_error') else 'checks passed: '+', '.join(performed)),
+                                       evidence=[stage_ref], run=run_ref, stage=stage['id'], checks=performed)
                         if result['status'] == 'cancelled':
                             row['status'] = 'cancelled'
                             raise asyncio.CancelledError()
@@ -262,6 +306,14 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                             row['status'] = 'completed'
                         except (OSError, ValueError, KeyError, TypeError) as error:
                             row['status'] = 'failed'; row['error'] = str(error)
+                    independent = row.get('independent_metric') or {}
+                    roles.emit('CrossAuditor', 'run_verdict', status='ok' if row['status']=='completed' else 'fail',
+                               summary=f"{exp['id']} / {variant['id']} / seed {seed}: {row['status']}"
+                                       + (f"; metric {row['metric']:.6g}" if isinstance(row.get('metric'), (int, float)) else '')
+                                       + ('; independently recomputed' if independent else '')
+                                       + (f"; {row['error']}" if row.get('error') else ''),
+                               evidence=[run_dir+'/'+exp['metric']['path']] if row.get('metric_file') else [run_dir],
+                               run=run_ref, metric=row.get('metric'), independent_metric=bool(independent))
                     save()
             acceptance=evaluate_experiment(exp,rows)
             acceptance['fairness']=verify_fairness(exp,rows)
@@ -271,8 +323,16 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
                     comparison['statistical_status']=comparison['status'];comparison['status']='inconclusive'
                     comparison['reason']='Predeclared control/data/selection conditions are not verified'
             report['experiments'].append(acceptance)
+            roles.emit('CrossAuditor', 'experiment_acceptance',
+                       status='ok' if acceptance.get('status')=='supported' or acceptance.get('status')=='passed' else 'warn' if acceptance.get('status')=='inconclusive' else 'fail',
+                       summary=f"{exp['id']}: {acceptance.get('status')} · fairness {acceptance['fairness'].get('status')} · {len(acceptance.get('comparisons',[]))} comparisons",
+                       evidence=['report.json#experiments'], experiment=exp['id'],
+                       acceptance=acceptance.get('status'), fairness=acceptance['fairness'].get('status'))
         # Final source integrity prevents mutations in explicit trusted local mode being overlooked.
         modified = [name for name, digest in source_files.items() if fingerprint(relative_path(snapshot, name)) != digest]
+        roles.emit('CodeInspector', 'source_integrity', status='fail' if modified else 'ok',
+                   summary=f'{len(source_files)} snapshot files re-fingerprinted after execution; modified: {len(modified)}',
+                   evidence=['source-files.json'], modified=modified[:5])
         if modified:
             raise ValueError('Artifact source snapshot mutated during execution: '+str(modified[:5]))
         report['status'] = 'completed' if all(r['status'] == 'completed' for r in report['runs']) else 'failed'
@@ -321,5 +381,15 @@ async def reproduce(plan_path, output, *, mode='docker', allow_local_trusted=Fal
         gpu_peaks=[s['sampled_peak_gpu_process_total_bytes'] for s in external if s.get('sampled_peak_gpu_process_total_bytes') is not None]
         report['measurement'].update(gpu_peak_memory_bytes=max(gpu_peaks) if gpu_peaks else None,gpu_scope='Sampled container compute-process memory on selected NVIDIA UUIDs with matching host kernel; not allocator high-water mark. Unknown without complete attribution.')
         report['levels'],report['level_requirements']=evaluate_levels(plan,report.get('audit',{}),report.get('environment'),report['runs'],report['experiments'],report['status'])
+        completed_runs=sum(1 for r in report['runs'] if r.get('status')=='completed')
+        roles.emit('Planner', 'stop', status='ok' if report['status']=='completed' else 'fail',
+                   summary=f"frozen plan {report['status']}: {completed_runs}/{len(report['runs'])} runs completed"
+                           + (f"; reason: {report['errors'][-1]}" if report['errors'] else '; all scheduled runs executed'),
+                   reason=report['errors'][-1] if report['errors'] else 'plan_exhausted')
+        levels=report['levels']
+        roles.emit('Reporter', 'report', status='ok' if report['status']=='completed' else 'warn',
+                   summary='levels: '+', '.join(f"{k}={'pass' if v else 'fail'}" for k,v in levels.items()),
+                   evidence=['report.json'], levels=levels)
+        report['roles']=roles.summary()
         save()
     return report

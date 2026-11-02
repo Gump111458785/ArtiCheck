@@ -24,11 +24,16 @@
 
 执行中心是独立的记录列表，不在列表下方同时铺开报告。完整实验、短时核查、公开 CI 归档、教学归档可在同一列表检索；类型和来源分别标明。状态计数随搜索与筛选变化，返回列表保留筛选，超过 25 条按需展开。
 
-单次完整实验有“任务概览 / 阶段与输出 / 证据复核 / 完整报告”；单次短时核查有“任务概览 / 角色协作 / 执行事件 / 证据复核”。共用任务身份、来源、计划指纹和一层标签，避免重复任务选择器、执行类型切换与报告标题。
+单次完整实验有“任务概览 / 角色协作 / 阶段与输出 / 证据复核 / 完整报告”；单次短时核查有“任务概览 / 角色协作 / 执行事件 / 证据复核”。共用任务身份、来源、计划指纹和一层标签，避免重复任务选择器、执行类型切换与报告标题。
 
-角色协作页可选择一份短时核查记录，并查看六角色状态及各角色的真实输入输出。`LiteratureReader` 与 `CodeInspector` 共享 preflight 事件，但仅展开所属角色数据；Planner 读 decision/model，执行器读 tool，审计读 audit，报告器读 complete。未执行或无记录时保留空状态。
+角色协作页可选择任一短时核查或完整实验记录，并查看六角色状态及各角色的真实输入输出。
 
-完整实验仍按冻结阶段计划执行，未产生的六角色事件不会展示为完成。归档教学报告缺少时间时显示“未记录时间”，不使用页面打开时间代替。
+- **短时核查**：`LiteratureReader` 与 `CodeInspector` 共享 preflight 事件，但仅展开所属角色数据；Planner 读 decision/model，执行器读 tool，审计读 audit，报告器读 complete。
+- **完整实验**：事件来自执行器写入的 `roles.jsonl`（`GET /api/reproduction/runs/{run_id}/roles`）。阶段归属由 [`articheck/reproduction/roles.py`](../articheck/reproduction/roles.py) 定义：审计 `scope` 维度归 LiteratureReader；`code / data / environment / settings` 维度、源码快照与完整性核对归 CodeInspector；`commands / resources / acceptance` 维度、资源核对、每次运行排程与停止原因归 Planner；镜像构建、环境验证与阶段执行归 ExperimentRunner；镜像兼容、阶段核查、运行判定与实验验收归 CrossAuditor；分层验收归 Reporter。Planner 在此路径按冻结计划排程（`policy: frozen_plan`），不做模型决策。
+- 角色状态只由实际事件推出：无事件为“未开始”，任一事件 `fail` 为“执行失败”，任务进行中为“执行中”。早于角色标注的归档（如当前 LIBLINEAR CI 归档）没有 `roles.jsonl`，页面明确显示“没有角色记录”，不补造事件。
+- 角色记录写入失败只记入 `report.roles.errors`，不改变执行状态、指标或分层验收（`tests/test_reproduction_roles.py` 覆盖）。
+
+归档教学报告缺少时间时显示“未记录时间”，不使用页面打开时间代替。
 
 ## 核心模块
 

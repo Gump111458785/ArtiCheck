@@ -236,6 +236,18 @@ class HTTPContractTests(unittest.TestCase):
                 report=json.load(response)
             self.assertEqual(report["runs"],[])
             self.assertFalse(report["levels"]["run"])
+            # Role events come from the executor's roles.jsonl, including for a run that stops early.
+            with self.call("/api/reproduction/runs/"+job["id"]+"/roles") as response:
+                roles=json.load(response)
+            self.assertTrue(roles["available"])
+            self.assertEqual(roles["policy"]["Planner"],"frozen_plan")
+            names=[(e["role"],e["event"]) for e in roles["events"]]
+            self.assertIn(("CodeInspector","audit"),names)
+            self.assertNotIn(("ExperimentRunner","stage"),names)
+            self.assertEqual(names[-1],("Reporter","report"))
+            self.assertEqual(next(e for e in roles["events"] if e["event"]=="stop")["status"],"fail")
+            with self.assertRaises(urllib.error.HTTPError):
+                self.call("/api/reproduction/runs/"+"0"*32+"/roles")
         finally:
             self.app.workspace=original
             self.app.reproduction.workspace=original
@@ -350,3 +362,10 @@ class HTTPContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GeneratedContractTests(unittest.TestCase):
+    def test_generated_contract_matches_the_served_contract(self):
+        from scripts.build_workbench import contract
+        source = Path(__file__).resolve().parents[1]/'web/dist/openapi.json'
+        self.assertEqual(contract(), json.loads(source.read_text()))

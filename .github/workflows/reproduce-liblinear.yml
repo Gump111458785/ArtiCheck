@@ -18,6 +18,27 @@ jobs:
           python scripts/prepare_liblinear_case.py --output runs/liblinear-input --base-image "$case_base_image"
       - name: Run frozen public-paper experiment matrix
         run: python -m articheck reproduce --plan runs/liblinear-input/plan.json --output runs/liblinear-output
+      - name: Check role attribution covers every run and stage
+        run: |
+          python - <<'EOF'
+          import json
+          from collections import Counter
+          from pathlib import Path
+          out = Path('runs/liblinear-output')
+          report = json.loads((out/'report.json').read_text())
+          rows = [json.loads(line) for line in (out/'roles.jsonl').read_text().splitlines()]
+          kinds = Counter((r['role'], r['event']) for r in rows)
+          stages = sum(len(run['stages']) for run in report['runs'])
+          assert {r['role'] for r in rows} == {'LiteratureReader', 'CodeInspector', 'Planner', 'ExperimentRunner', 'CrossAuditor', 'Reporter'}, kinds
+          assert kinds[('Planner', 'schedule_run')] == len(report['runs']), kinds
+          assert kinds[('ExperimentRunner', 'stage')] == stages, kinds
+          assert kinds[('CrossAuditor', 'run_verdict')] == len(report['runs']), kinds
+          assert rows[-1]['role'] == 'Reporter' and rows[-1]['levels'] == report['levels']
+          assert report['roles']['errors'] == [], report['roles']['errors']
+          print(f"{len(rows)} role events; {len(report['runs'])} runs; {stages} stages")
+          for (role, event), count in sorted(kinds.items()):
+              print(f'{role:18} {event:22} {count}')
+          EOF
       - name: Preserve execution and audit evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -26,6 +47,7 @@ jobs:
           path: |
             runs/liblinear-output/report.json
             runs/liblinear-output/audit.json
+            runs/liblinear-output/roles.jsonl
             runs/liblinear-output/source-files.json
             runs/liblinear-output/environment-build.json
             runs/liblinear-output/environment-verification.json
