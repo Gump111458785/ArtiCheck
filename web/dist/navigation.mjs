@@ -1,7 +1,7 @@
 import {ROLES,roleState,statusLabels} from './execution-core.mjs';
 export const NAV_GROUPS=[
  {title:'工作入口',items:[['home','home','开始']]},
- {title:'复现工作',items:[['projects','book','论文项目'],['workbench','terminal','执行中心'],['roles','route','角色协作'],['evidence','shield','证据复核']]},
+ {title:'复现工作',items:[['projects','book','论文项目'],['workbench','terminal','执行中心'],['roles','route','角色协作'],['evidence','shield','证据复核'],['api-review','code','API 评测']]},
  {title:'评测与数据',items:[['evaluation','grid','系统评测'],['handoff','branch','反馈与训练交接']]},
  {title:'开发工具',items:[['contracts','code','API 与集成']]}
 ];

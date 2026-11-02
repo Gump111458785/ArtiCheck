@@ -1,0 +1,446 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ArtiCheck Static Review API",
+    "version": "1.0.0",
+    "description": "Standalone loopback service. Default unconfigured; no fake fallback. Model mode never executes code. Public auth/CORS/proxy are deployment responsibilities."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8790"
+    }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Inspect readiness without a model call",
+        "responses": {
+          "200": {
+            "description": "service=articheck-review-api; version=1; configured boolean"
+          }
+        }
+      }
+    },
+    "/v1/reviews": {
+      "post": {
+        "operationId": "createReview",
+        "summary": "Submit PDF and code ZIP for static review",
+        "parameters": [
+          {
+            "name": "X-ArtiCheck-Client",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "const": "review-api"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Submission"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted for asynchronous processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "provider_not_configured; no model call",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Queue is full",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request exceeds size limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reviews/{id}": {
+      "get": {
+        "operationId": "getReview",
+        "responses": {
+          "200": {
+            "description": "Current job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$"
+          }
+        }
+      ]
+    },
+    "/v1/reviews/{id}/report": {
+      "get": {
+        "operationId": "getReport",
+        "responses": {
+          "200": {
+            "description": "Model static suggestions; not execution evidence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Report"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "report_not_ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$"
+          }
+        }
+      ]
+    },
+    "/v1/reviews/{id}/cancel": {
+      "post": {
+        "operationId": "cancelReview",
+        "parameters": [
+          {
+            "name": "X-ArtiCheck-Client",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "const": "review-api"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cancellation result; in-flight model call may still incur usage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$"
+          }
+        }
+      ]
+    }
+  },
+  "components": {
+    "schemas": {
+      "Material": {
+        "type": "object",
+        "required": [
+          "name",
+          "content_base64"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "content_base64": {
+            "type": "string",
+            "contentEncoding": "base64"
+          }
+        }
+      },
+      "Submission": {
+        "type": "object",
+        "required": [
+          "paper",
+          "code"
+        ],
+        "properties": {
+          "paper": {
+            "$ref": "#/components/schemas/Material"
+          },
+          "code": {
+            "$ref": "#/components/schemas/Material"
+          },
+          "scope": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        }
+      },
+      "Job": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "source",
+          "execution_performed",
+          "scientific_validation",
+          "report_ready"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "source": {
+            "const": "model_api_static_review"
+          },
+          "execution_performed": {
+            "const": false
+          },
+          "scientific_validation": {
+            "const": false
+          },
+          "report_ready": {
+            "type": "boolean"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        }
+      },
+      "Criterion": {
+        "type": "object",
+        "required": [
+          "dimension",
+          "status",
+          "note"
+        ],
+        "properties": {
+          "dimension": {
+            "enum": [
+              "scope",
+              "code",
+              "data",
+              "environment",
+              "settings",
+              "workflow",
+              "resources",
+              "results"
+            ]
+          },
+          "status": {
+            "enum": [
+              "documented",
+              "needs_review",
+              "missing"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "page": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Report": {
+        "type": "object",
+        "required": [
+          "format",
+          "job_id",
+          "source",
+          "execution_performed",
+          "scientific_validation",
+          "materials",
+          "review"
+        ],
+        "properties": {
+          "format": {
+            "const": "articheck-api-static-review-v1"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "source": {
+            "const": "model_api_static_review"
+          },
+          "execution_performed": {
+            "const": false
+          },
+          "scientific_validation": {
+            "const": false
+          },
+          "materials": {
+            "type": "object"
+          },
+          "review": {
+            "type": "object",
+            "required": [
+              "summary",
+              "criteria",
+              "findings"
+            ],
+            "properties": {
+              "summary": {
+                "type": "string"
+              },
+              "criteria": {
+                "type": "array",
+                "minItems": 8,
+                "maxItems": 8,
+                "items": {
+                  "$ref": "#/components/schemas/Criterion"
+                }
+              },
+              "findings": {
+                "type": "array",
+                "maxItems": 30,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "title",
+                    "detail",
+                    "suggestion"
+                  ],
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "suggestion": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

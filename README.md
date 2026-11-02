@@ -33,6 +33,26 @@
 
 文件名、PDF 页数与代码目录数量来自实际浏览器导入；评测过程与结论为预设演示，不执行代码。演示结果单独保存并标记 `data_source=frontend_demo`，不计入真实复现报告或系统成绩。
 
+## HTTP API 与大模型 API 接入
+
+[接入与配置说明](docs/API_REVIEW.md) · [独立 OpenAPI 契约](web/dist/review-api.openapi.json) · [命令行调用示例](examples/api_review/submit.py) · [配置模板](examples/api_review/provider.env.example)
+
+| 使用方式 | 入口 | 已交付范围 |
+|---|---|---|
+| 纯前端演示 | 上传材料后进入「演示评测」 | 六角色动态过程、三种固定结果场景、报告导出，无后端依赖 |
+| HTTP 后端接入 | `python -m articheck.review_client` / 网页「API 评测」 | 原始 PDF / ZIP 提交、异步状态、取消、报告下载；支持兼容 v1 契约的服务 |
+| 大模型 API 版 | `python -m articheck.review_api` | 服务端模型 URL / 名称 / 密钥配置位、材料摘录、Chat Completions 调用及结构化静态建议 |
+
+```bash
+# 未配置模型也可启动，连接检查返回 configured=false
+python -m articheck.review_api --port 8790 --with-ui
+# 打开 http://127.0.0.1:8790/#api-review
+```
+
+模型接入使用 `ARTICHECK_REVIEW_BASE_URL`、`ARTICHECK_REVIEW_MODEL` 和服务端 `ARTICHECK_API_KEY`。默认没有预填供应商或密钥，未配置时返回明确错误，不生成预设报告。真实调用链已用本地模型替身验证，未调用付费模型。API 报告标记 `model_api_static_review`，提供材料静态审阅建议，不执行论文代码，也不授予实验复现通过状态。
+
+![API 接入界面](docs/assets/api-review.jpg)
+
 ## 三十秒看懂
 
 | 面临的问题 | ArtiCheck 的处理方式 | 可核对的证据 |
@@ -211,8 +231,8 @@ python -m articheck run --task examples/task.json --output runs/review
 |---|---|---|
 | 公开 CPU 案例 | LIBLINEAR / news20，15 次运行、60 个阶段；L2-SVM 准确率 96.76%，样本标准差 0.31 个百分点 | [案例 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/40889691677) · [报告](web/dist/samples/liblinear-reproduction.json) |
 | 内置受控缺陷基准 | 单仓库 4 个版本、12 条主张；FixedPlanner + 规则核查：TP=3、FP=0、TN=9、FN=0，宏 F1=1.000，问题召回率 100%，误报率 0% | [原始结果](docs/smoke/metrics.json) · [问题报告](docs/smoke/metric-defect-report.md) |
-| Python 工程测试 | 121 项：本地 117 项通过，4 项 Docker 专项在 CI 执行；CI 覆盖 Python 3.10–3.12 | [验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41303123050) |
-| 前端测试 | 80 项通过，覆盖演示评测、开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41303123050) |
+| Python 工程测试 | 129 项：本地 125 项通过，4 项 Docker 专项在 CI 执行；CI 覆盖 Python 3.10–3.12 | [验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
+| 前端测试 | 86 项通过，覆盖 API 接入、演示评测、开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
 
 内置基准阈值为 0.5，正例 3 条、负例 9 条，仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 尚无正式成绩；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
 
