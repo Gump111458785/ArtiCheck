@@ -19,7 +19,7 @@
 
 ![工作台界面导览：开始页、执行中心、角色协作与案例详情](docs/assets/workbench-tour.gif)
 
-*四个现有工作台页面的截图轮播，展示各工作视图；不是一次任务的连续执行录像。交互预览仅限获授权账号，真实执行通过本地工作台完成。*
+*轮播展示四个工作台页面，并非一次任务的连续执行录像。交互预览仅限获授权账号，真实任务在本地工作台执行。*
 
 [核心能力](#capabilities) · [界面展示](#showcase) · [系统架构](#architecture) · [实测结果](#results) · [Planner 后训练](#training) · [路线图](#roadmap) · [文档](#docs)
 
@@ -27,11 +27,11 @@
 
 [直接播放内置演示](https://articheck-workbench.onatanolf8074.chatgpt.site/?mode=demo&example=demo) · [打开预设结果页](https://articheck-workbench.onatanolf8074.chatgpt.site/?mode=demo&example=demo&view=report) · [演示操作说明](docs/FRONTEND_DEMO.md)
 
-新建论文评估，导入 PDF 与代码 ZIP（或读取 GitHub 目录），勾选「提交后播放演示评测」，提交后即可观看六角色阶段、进度和事件。约 16 秒后进入八项条件报告；支持暂停、继续、直接查看结果、三种场景切换与 JSON 导出。
+新建论文评估后，导入 PDF 与代码 ZIP（或读取 GitHub 目录），勾选「提交后播放演示评测」。提交后可查看六角色的阶段、进度和事件，约 16 秒后进入八项条件报告。演示支持暂停、继续、直接查看结果、切换三种场景和导出 JSON。
 
 <table><tr><td width="50%"><strong>动态评测进度</strong><br><img src="docs/assets/demo-progress.jpg" alt="六角色演示进度与事件" width="100%"></td><td width="50%"><strong>演示结果与修正建议</strong><br><img src="docs/assets/demo-results.jpg" alt="演示结果、八项条件与修正建议" width="100%"></td></tr></table>
 
-文件名、PDF 页数与代码目录数量来自实际浏览器导入；评测过程与结论为预设演示，不执行代码。演示结果单独保存并标记 `data_source=frontend_demo`，不计入真实复现报告或系统成绩。
+文件名、PDF 页数与代码目录数量来自浏览器实际导入的材料；评测过程与结论采用预设脚本，不执行代码。演示结果单独保存，标记为 `data_source=frontend_demo`，不计入真实复现报告或系统成绩。
 
 ## HTTP API 与大模型 API 接入
 
@@ -49,7 +49,7 @@ python -m articheck.review_api --port 8790 --with-ui
 # 打开 http://127.0.0.1:8790/#api-review
 ```
 
-模型接入使用 `ARTICHECK_REVIEW_BASE_URL`、`ARTICHECK_REVIEW_MODEL` 和服务端 `ARTICHECK_API_KEY`。默认没有预填供应商或密钥，未配置时返回明确错误，不生成预设报告。真实调用链已用本地模型替身验证，未调用付费模型。API 报告标记 `model_api_static_review`，提供材料静态审阅建议，不执行论文代码，也不授予实验复现通过状态。
+通过 `ARTICHECK_REVIEW_BASE_URL`、`ARTICHECK_REVIEW_MODEL` 和服务端 `ARTICHECK_API_KEY` 配置模型接入。默认不预填供应商或密钥；未配置时返回错误，不生成预设报告。调用链已用本地模型替身验证，未调用付费模型。API 报告标记为 `model_api_static_review`，提供材料的静态审阅建议，不执行论文代码，不能据此判定实验复现通过。
 
 ![API 接入界面](docs/assets/api-review.jpg)
 
@@ -65,7 +65,7 @@ python -m articheck.review_api --port 8790 --with-ui
 
 ## 旗舰案例：LIBLINEAR / news20
 
-以 **LIBLINEAR（JMLR 2008）作者代码和公开 news20 数据**为输入，完成 CPU 环境重建、数据准备、训练、预测和独立指标重算。三种方法设置、五个划分种子，共产生 **15 次运行与 60 个阶段证据**。
+使用 **LIBLINEAR（JMLR 2008）作者代码和公开 news20 数据**，完成 CPU 环境重建、数据准备、训练、预测和独立指标重算。三种方法设置各运行五个划分种子，共记录 **15 次运行与 60 个阶段证据**。
 
 ```mermaid
 flowchart LR
@@ -87,7 +87,7 @@ flowchart LR
 | 全阶段子进程峰值 RSS 最大值 | **366.3 MiB** | 同上 |
 | 容器外内存采样峰值 | **217.4 MiB** | 33 / 60 阶段有容器外采样 |
 
-准确率的波动来自本案例的五次重新划分，不是原论文成绩的置信区间。时长不含准备脚本下载及基础镜像拉取；GPU 峰值与费用未测量。
+准确率的波动来自本案例的五次数据重新划分，不代表原论文成绩的置信区间。时长不含准备脚本下载和基础镜像拉取；GPU 峰值与费用未测量。
 
 ### 验收结果：明确区分“运行完成”与“论文结论成立”
 
@@ -99,7 +99,7 @@ flowchart LR
 | 论文训练协议 · `training` | ❌ 未通过 | 使用现代作者代码、80/20 seeded split，原始划分 ID 未找回 |
 | 论文主要结论 · `conclusion` | ❌ 未通过 | Figure 1、rcv1、Pegasos/SVMperf 及论文调参与计时曲线未完整覆盖 |
 
-**报告保留通过项，也直接暴露复现范围与论文协议的差距。** 新增控制项只用于本案例核对，不替代原论文基线；本案例不计作整篇论文复现成功。
+**报告逐项记录通过项、复现范围及与论文协议的差距。** 新增控制项只用于本案例核对，不替代原论文基线；本案例不计作整篇论文复现成功。
 
 > ✅ **六角色真实记录**：本次 CI 保留 162 条角色事件，包含 15 次排程、60 个阶段执行、60 次阶段核查及最终分层结论。[查看角色事件](web/dist/samples/liblinear-roles.jsonl) · [打开角色视图](https://articheck-workbench.onatanolf8074.chatgpt.site/?mode=demo&example=reproduction&case=liblinear&view=roles)
 
@@ -118,13 +118,13 @@ flowchart LR
 | ✅ 可视化工作台 | PDF / 代码材料导入、主张确认、服务器资源核对、执行中心、角色协作与证据复核；26 条 API 路径、30 个操作 | [界面与模块对应](docs/REVIEW_WORKSPACE.md) · [OpenAPI](web/dist/openapi.json) |
 | ✅ 训练轨迹契约 | 保留采样器提供的 token IDs、行为 log-prob 与策略版本；外部接受后的教师轨迹可导出 SFT，缺失原生 token 时拒绝 RL 导出 | [轨迹契约与测试范围](docs/TRAINING.md#5-原生训练轨迹契约) · [导出实现](articheck/training/export.py) |
 
-✅ 表示该行描述的工程行为已有结果或测试依据；训练轨迹字段与过滤经过测试，真实模型服务、GPU 采样及训练收益单独验收。
+✅ 表示该行所述的工程行为有结果或测试依据。训练轨迹字段与过滤已通过测试；真实模型服务、GPU 采样和训练收益需单独验收。
 
 <a id="showcase"></a>
 
 ## 界面展示
 
-从开始页新建论文评估或继续已有项目，再进入执行中心、角色协作和证据审查。页面复用同一套项目、运行与报告数据。
+在开始页新建论文评估或继续已有项目，再进入执行中心、角色协作和证据审查。各页面使用同一套项目、运行与报告数据。
 
 [打开开始页](https://articheck-workbench.onatanolf8074.chatgpt.site/#home) · [浏览执行中心](https://articheck-workbench.onatanolf8074.chatgpt.site/#workbench) · [查看角色协作](https://articheck-workbench.onatanolf8074.chatgpt.site/#roles) · [完整界面图集](docs/UI_GALLERY.md)
 
@@ -144,7 +144,7 @@ flowchart LR
 <tr>
 <td width="50%" valign="top">
 <strong>角色协作 · 查看实际分工</strong><br>
-六角色的输入输出契约，与所选任务的真实事件对应；短时核查与完整实验都可选。
+可选择短时核查或完整实验，对照六角色的输入输出契约与任务中的真实事件。
 <a href="docs/assets/role-workspace.jpg"><img src="docs/assets/role-workspace.jpg" alt="角色协作：六角色导航、职责契约与 Planner 实际事件" width="100%"></a>
 </td>
 <td width="50%" valign="top">
@@ -162,7 +162,7 @@ flowchart LR
 
 </details>
 
-论文项目贯通「论文与代码 → 实验覆盖 → 复现条件 → 服务器核对 → 短时核查主张与配置 → 完整实验 → 评估结果」。PDF 正文与 ZIP 在浏览器准备，候选主张需人工确认；完整实验显式绑定本地材料和执行入口。[开始页设计](docs/HOME_SCREEN.md) · [界面与模块对应](docs/REVIEW_WORKSPACE.md) · [八项复现条件](docs/IMPLEMENTATION_STATUS.md)。
+论文项目按「论文与代码 → 实验覆盖 → 复现条件 → 服务器核对 → 短时核查主张与配置 → 完整实验 → 评估结果」组织。PDF 正文与 ZIP 在浏览器中准备，候选主张需人工确认；运行完整实验前，需明确绑定本地材料和执行入口。[开始页设计](docs/HOME_SCREEN.md) · [界面与模块对应](docs/REVIEW_WORKSPACE.md) · [八项复现条件](docs/IMPLEMENTATION_STATUS.md)。
 
 <a id="architecture"></a>
 
@@ -170,15 +170,15 @@ flowchart LR
 
 ![ArtiCheck 系统架构：核心核查、评测与数据、Planner 训练](docs/assets/architecture.svg)
 
-[打开 SVG 原图](docs/assets/architecture.svg)。图中训练层为代码就绪、GPU 集成待验收；实验执行入口仍需显式配置与人工确认。
+[打开 SVG 原图](docs/assets/architecture.svg)。图中训练层的代码已就绪，GPU 集成待验收；实验执行入口仍需明确配置并经人工确认。
 
-短时核查中，文献读取与代码检查通过 asyncio DAG 并发，Planner 驱动检查与停止循环；固定 Planner 是默认策略。完整实验由冻结计划执行器运行，执行器的每个阶段归属到一个角色并写入 `roles.jsonl`，界面按角色读取这些真实事件，不生成虚构的角色活动。[执行中心的数据与模块对应](docs/EXECUTION_CENTER.md)。
+短时核查通过 asyncio DAG 并发读取文献主张、检查代码，再由 Planner 决定继续检查或停止；默认使用固定 Planner。完整实验按冻结计划执行，执行器为各阶段记录负责角色，并将事件写入 `roles.jsonl`。界面按角色读取实际事件，不补造角色活动。[执行中心的数据与模块对应](docs/EXECUTION_CENTER.md)。
 
 <a id="roles"></a>
 
 ### 六角色：职责与当前实现
 
-同一组角色服务两条执行路径：**短时主张核查**（[`articheck/roles.py`](articheck/roles.py) + [`pipeline.py`](articheck/pipeline.py)）和**完整实验复现**（[`articheck/reproduction/roles.py`](articheck/reproduction/roles.py) 为 [`engine.py`](articheck/reproduction/engine.py) 的各阶段标注角色）。下表写的是代码当前的真实行为，不是规划中的能力。
+六角色用于两条执行路径：**短时主张核查**（[`articheck/roles.py`](articheck/roles.py) + [`pipeline.py`](articheck/pipeline.py)）和**完整实验复现**（[`articheck/reproduction/roles.py`](articheck/reproduction/roles.py) 为 [`engine.py`](articheck/reproduction/engine.py) 的各阶段标注角色）。下表列出各角色当前已实现的职责。
 
 | 角色 | 短时核查：当前实现 | 完整实验：负责的阶段 | 是否调用模型 | 状态 |
 |---|---|---|---|---|
@@ -189,7 +189,7 @@ flowchart LR
 | **CrossAuditor** 交叉核查 | 三类规则：指标容差、训练/测试 ID 不相交、方法与基线训练预算一致；证据缺失时给出 `inconclusive` | 镜像兼容性、未声明的文件改动、配置冻结、划分与训练证据、独立指标重算、实验验收与公平性 | 否 | ✅ 已验证 |
 | **Reporter** 报告 | 生成 Markdown 报告，写明判定只覆盖提交的主张与探针 | 汇总分层验收（`run / environment_rebuilt / training / conclusion`），写入 `report.json` | 否 | ✅ 已验证 |
 
-几点边界：
+使用时需注意：
 
 - **完整实验的角色事件**：✅ LIBLINEAR CI 已验收，15 次运行、60 个阶段和 162 条角色事件；Reporter 的分层结论与原报告一致。[执行依据](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)。
 - **完整实验中的 Planner 不做决策**：它按冻结计划排程并记录停止原因（`policy: frozen_plan`），可学习的 Planner 只在短时核查里运行。
@@ -218,7 +218,7 @@ python -m pip install -e .
 python -m articheck demo --sandbox local --output runs/demo
 ```
 
-执行同一仓库的 clean 与三个单缺陷版本：指标计算、数据划分、baseline 训练预算。`local` 直接执行主机上的可信内置代码；再次运行请使用新的输出目录。
+这条命令核查同一仓库的 clean 版本，以及分别含指标计算、数据划分、baseline 训练预算缺陷的三个版本。`local` 直接在主机上执行可信的内置代码；再次运行请使用新的输出目录。
 
 **3. 查看结果**
 
@@ -232,7 +232,7 @@ python -m articheck demo --sandbox local --output runs/demo
 python -m articheck.workbench --port 8787
 ```
 
-打开 **http://127.0.0.1:8787**。同一 Python 服务提供界面和 API，页面提交真实任务、读取执行进度、报告与反馈，数据保存在 `runs/workbench/`。HTTP API 当前支持固定 Planner，模型服务与训练使用 CLI；托管预览使用归档回放。
+打开 **http://127.0.0.1:8787**。同一 Python 服务提供界面和 API。可在页面提交真实任务，查看执行进度、报告与反馈，数据保存在 `runs/workbench/`。HTTP API 当前支持固定 Planner；模型服务与训练通过 CLI 使用，托管预览回放归档记录。
 
 ### 核查自己的 artifact
 
@@ -243,7 +243,7 @@ docker pull python:3.11-slim
 python -m articheck run --task examples/task.json --output runs/review
 ```
 
-替换任务文件即可绑定自己的执行入口；额外依赖需要预构建镜像。任务字段与 probe 协议见 [数据与执行指南](docs/DATA.md)。
+替换任务文件以绑定自己的执行入口；额外依赖需预先构建到镜像中。任务字段与 probe 协议见 [数据与执行指南](docs/DATA.md)。
 
 <a id="results"></a>
 <a id="benchmarks"></a>
@@ -258,7 +258,7 @@ python -m articheck run --task examples/task.json --output runs/review
 | Python 工程测试 | 138 项：本地 134 项通过，4 项 Docker 专项在 CI 执行；CI 覆盖 Python 3.10–3.12 | [验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
 | 前端测试 | 95 项通过，覆盖完整实验角色事件、API 接入、演示评测、开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
 
-内置基准阈值为 0.5，正例 3 条、负例 9 条，仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 尚无正式成绩；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
+内置基准的阈值为 0.5，包含正例 3 条、负例 9 条。这组结果仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 尚无正式成绩；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
 
 <a id="training"></a>
 
@@ -281,7 +281,7 @@ flowchart LR
 | DAPO / IS 集成 | [独立目标函数](articheck/training/objective.py)；clip-higher 已有启动配置 | 动态补采样、截断 IS 接入分布式循环并完成消融 | 🎯 规划（完整集成） |
 | 推理与训练效率 | FSDP2 / LoRA / 动态批配置及 [vLLM 启动入口](scripts/serve_vllm.sh) | 同硬件同负载开关对照，质量指标不回退；量化另行实现 | 🎯 规划（性能验收与量化） |
 
-训练配置不代表实际训练结果。目前没有 SFT / GRPO 增益、实卡显存收益、量化成绩或付费教师蒸馏数据规模。[训练步骤、依赖版本与接口边界](docs/TRAINING.md)。
+训练配置已提供，但尚无 SFT / GRPO 增益、实卡显存收益、量化成绩或付费教师蒸馏数据规模的实测结果。[训练步骤、依赖版本与接口边界](docs/TRAINING.md)。
 
 | 待实测指标 | 衡量方法 | 结果 |
 |---|---|---|
@@ -293,7 +293,7 @@ flowchart LR
 
 ## 路线图
 
-状态：✅ 已验证 · 🧱 代码就绪 · 🎯 规划。🧪 实验中仅在有正在运行的真实实验与日志时使用。
+状态：✅ 已验证 · 🧱 代码就绪 · 🎯 规划。🧪 实验中表示有真实实验正在运行，并保留日志。
 
 | 阶段 | 交付与验收门槛 | 状态 |
 |---|---|---|
@@ -302,7 +302,7 @@ flowchart LR
 | v0.3 · SFT / GRPO Planner | 训练代码已有；用冻结数据完成 GPU SFT、三种子 GRPO 及等预算对照 | 🧱 代码就绪，实验待验收 |
 | v0.4 · 效率与部署 | 测量训练、缓存和量化的质量 / 显存 / 吞吐 / 延迟 / 成本；完成部署验收 | 🎯 规划 |
 
-更新日期：**2026-11-01**。后续版本按验收结果推进，尚未设定发布日期。结果、配置和日志归档后才更新状态与成绩；当前源代码版本号不代表已创建 GitHub Release。
+更新日期：**2026-11-01**。后续版本尚未设定发布日期，按验收结果推进。状态与成绩在结果、配置和日志归档后更新；当前源代码版本号不代表已创建 GitHub Release。
 
 <a id="docs"></a>
 
@@ -323,10 +323,10 @@ python -m unittest discover -s tests -v
 node --test tests/frontend/*.test.mjs
 ```
 
-开发入口：[核查流水线](articheck/pipeline.py)、[六角色](articheck/roles.py)、[Planner](articheck/planner.py)、[完整实验](articheck/reproduction/)、[本地工作台服务](articheck/workbench.py)、[前端](web/dist/)、[训练适配](articheck/training/)。问题与适配建议可提交至 [Issues](https://github.com/Gump111458785/ArtiCheck/issues)，附去除敏感信息后的任务配置与日志。
+开发入口：[核查流水线](articheck/pipeline.py)、[六角色](articheck/roles.py)、[Planner](articheck/planner.py)、[完整实验](articheck/reproduction/)、[本地工作台服务](articheck/workbench.py)、[前端](web/dist/)、[训练适配](articheck/training/)。如需报告问题或提出适配建议，请提交至 [Issues](https://github.com/Gump111458785/ArtiCheck/issues)，并附上已去除敏感信息的任务配置与日志。
 
 ## 来源与许可
 
-业务 baseline 参考 [Paper Reproducibility Agent](https://github.com/1a1a11a/2026_paper_reproduce)，通过独立进程与 JSON 报告对接，未分发其源码；[固定参考版本与许可说明](docs/BASELINE.md)。Planner 训练接口参考 [verl](https://github.com/verl-project/verl)，推理服务提供 [vLLM](https://github.com/vllm-project/vllm) 接入入口。
+业务 baseline 参考 [Paper Reproducibility Agent](https://github.com/1a1a11a/2026_paper_reproduce)，采用独立进程和 JSON 报告对接，未分发其源码；[固定参考版本与许可说明](docs/BASELINE.md)。Planner 训练接口参考 [verl](https://github.com/verl-project/verl)，推理服务提供 [vLLM](https://github.com/vllm-project/vllm) 接入入口。
 
 PDF 阅读器随仓库分发 PDF.js 6.4.299（Apache-2.0）；字体与 CMap 各自许可见 `web/dist/vendor/pdfjs/`。ArtiCheck 原创代码采用 [MIT License](LICENSE)，外部工具、模型和数据遵循各自许可。
