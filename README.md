@@ -11,7 +11,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![Version](https://img.shields.io/badge/source-v0.1.0-444444)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![CPU case](https://img.shields.io/badge/LIBLINEAR-15_runs_verified-227755)](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)
+[![CPU case](https://img.shields.io/badge/LIBLINEAR-15_runs-227755)](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)
 
 [打开交互预览](https://articheck-workbench.onatanolf8074.chatgpt.site) · [快速开始](#quickstart) · [查看复现案例](#case)
 
@@ -23,33 +23,35 @@
 
 [核心能力](#capabilities) · [界面展示](#showcase) · [系统架构](#architecture) · [实测结果](#results) · [Planner 后训练](#training) · [路线图](#roadmap) · [文档](#docs)
 
-## 上传材料后的动态演示
+## 使用方式
 
-[直接播放内置演示](https://articheck-workbench.onatanolf8074.chatgpt.site/?mode=demo&example=demo) · [打开预设结果页](https://articheck-workbench.onatanolf8074.chatgpt.site/?mode=demo&example=demo&view=report) · [演示操作说明](docs/FRONTEND_DEMO.md)
+ArtiCheck 提供本地工作台和 API 两种使用方式。
 
-新建论文评估后，导入 PDF 与代码 ZIP（或读取 GitHub 目录），勾选「提交后播放演示评测」。提交后可查看六角色的阶段、进度和事件，约 16 秒后进入八项条件报告。演示支持暂停、继续、直接查看结果、切换三种场景和导出 JSON。
-
-<table><tr><td width="50%"><strong>动态评测进度</strong><br><img src="docs/assets/demo-progress.jpg" alt="六角色演示进度与事件" width="100%"></td><td width="50%"><strong>演示结果与修正建议</strong><br><img src="docs/assets/demo-results.jpg" alt="演示结果、八项条件与修正建议" width="100%"></td></tr></table>
-
-文件名、PDF 页数与代码目录数量来自浏览器实际导入的材料；评测过程与结论采用预设脚本，不执行代码。演示结果单独保存，标记为 `data_source=frontend_demo`，不计入真实复现报告或系统成绩。
-
-## HTTP API 与大模型 API 接入
-
-[接入与配置说明](docs/API_REVIEW.md) · [独立 OpenAPI 契约](web/dist/review-api.openapi.json) · [命令行调用示例](examples/api_review/submit.py) · [配置模板](examples/api_review/provider.env.example)
-
-| 使用方式 | 入口 | 已交付范围 |
+| 方式 | 适用场景 | 入口 |
 |---|---|---|
-| 纯前端演示 | 上传材料后进入「演示评测」 | 六角色动态过程、三种固定结果场景、报告导出，无后端依赖 |
-| HTTP 后端接入 | `python -m articheck.review_client` / 网页「API 评测」 | 原始 PDF / ZIP 提交、异步状态、取消、报告下载；支持兼容 v1 契约的服务 |
-| 大模型 API 版 | `python -m articheck.review_api` | 服务端模型 URL / 名称 / 密钥配置位、材料摘录、Chat Completions 调用及结构化静态建议 |
+| 本地 | 在工作台导入论文与代码、确认主张、配置环境、执行核查和复现实验、查看证据 | `python -m articheck.workbench --port 8787` |
+| API | 在脚本或其他应用中提交 PDF / ZIP，查询审阅任务、取消任务和下载报告；服务端接入兼容 Chat Completions 的模型 | `python -m articheck.review_api` / `python -m articheck.review_client` |
+
+### 本地
 
 ```bash
-# 未配置模型也可启动，连接检查返回 configured=false
+python -m articheck.workbench --port 8787
+```
+
+打开 **http://127.0.0.1:8787**，按项目准备论文、代码和实验计划。工作台保存材料指纹、执行记录与审核意见，Docker 执行论文代码并返回阶段证据。
+
+### API
+
+```bash
 python -m articheck.review_api --port 8790 --with-ui
 # 打开 http://127.0.0.1:8790/#api-review
 ```
 
-通过 `ARTICHECK_REVIEW_BASE_URL`、`ARTICHECK_REVIEW_MODEL` 和服务端 `ARTICHECK_API_KEY` 配置模型接入。默认不预填供应商或密钥；未配置时返回错误，不生成预设报告。调用链已用本地模型替身验证，未调用付费模型。API 报告标记为 `model_api_static_review`，提供材料的静态审阅建议，不执行论文代码，不能据此判定实验复现通过。
+通过 `ARTICHECK_REVIEW_BASE_URL`、`ARTICHECK_REVIEW_MODEL` 和服务端 `ARTICHECK_API_KEY` 配置模型地址、名称与密钥。客户端提交原始 PDF / ZIP，服务返回异步任务状态与结构化报告。密钥保留在服务端；缺少配置时返回错误。
+
+API 报告标记为 `model_api_static_review`，用于材料静态审阅；论文代码执行和实验验收使用本地工作台。供应商模型联调与输出质量评测 [待完成]。
+
+[接入说明](docs/API_REVIEW.md) · [OpenAPI 契约](web/dist/review-api.openapi.json) · [Python 调用示例](examples/api_review/submit.py) · [模型配置模板](examples/api_review/provider.env.example)
 
 ![API 接入界面](docs/assets/api-review.jpg)
 
@@ -87,21 +89,21 @@ flowchart LR
 | 全阶段子进程峰值 RSS 最大值 | **366.3 MiB** | 同上 |
 | 容器外内存采样峰值 | **217.4 MiB** | 33 / 60 阶段有容器外采样 |
 
-准确率的波动来自本案例的五次数据重新划分，不代表原论文成绩的置信区间。时长不含准备脚本下载和基础镜像拉取；GPU 峰值与费用未测量。
+准确率的波动来自本案例的五次数据重新划分，不代表原论文成绩的置信区间。时长不含准备脚本下载和基础镜像拉取；GPU 峰值与费用测量 [待完成]。
 
-### 验收结果：明确区分“运行完成”与“论文结论成立”
+### 案例验收
 
 | 核对项 | 本案例结果 | 判定依据 |
 |---|---|---|
-| 执行完成 · `run` | ✅ 通过 | 15 次运行完成，保留 60 阶段证据 |
-| 环境重建 · `environment_rebuilt` | ✅ 通过 | 固定基础镜像，记录构建与环境检查 |
-| 独立指标与控制核对 | ✅ 已记录验证证据 | 预测结果独立重算；新增 LR 控制与正则化消融有实际配置与公平性检查 |
-| 论文训练协议 · `training` | ❌ 未通过 | 使用现代作者代码、80/20 seeded split，原始划分 ID 未找回 |
-| 论文主要结论 · `conclusion` | ❌ 未通过 | Figure 1、rcv1、Pegasos/SVMperf 及论文调参与计时曲线未完整覆盖 |
+| 执行完成 · `run` | `true` | 15 次运行完成，保留 60 阶段证据 |
+| 环境重建 · `environment_rebuilt` | `true` | 固定基础镜像，记录构建与环境检查 |
+| 独立指标与控制核对 | 预测独立重算、控制配置与公平性核对 | 预测结果独立重算；新增 LR 控制与正则化消融有实际配置与公平性检查 |
+| 论文训练协议 · `training` | `false` | 对齐历史作者代码、原始划分 ID 与训练协议 [待完成]；本次使用现代作者代码与 80/20 seeded split |
+| 论文主要结论 · `conclusion` | `false` | 覆盖 Figure 1、rcv1、Pegasos/SVMperf 及论文调参与计时曲线 [待完成] |
 
-**报告逐项记录通过项、复现范围及与论文协议的差距。** 新增控制项只用于本案例核对，不替代原论文基线；本案例不计作整篇论文复现成功。
+报告按运行、环境、训练协议与主要结论分别记录验收值。新增控制项只用于本案例核对，不替代原论文基线；本案例的证据范围为 news20 CPU 实验。
 
-> ✅ **六角色真实记录**：本次 CI 保留 162 条角色事件，包含 15 次排程、60 个阶段执行、60 次阶段核查及最终分层结论。[查看角色事件](web/dist/samples/liblinear-roles.jsonl) · [打开角色视图](https://articheck-workbench.onatanolf8074.chatgpt.site/?mode=demo&example=reproduction&case=liblinear&view=roles)
+> **六角色记录**：本次 CI 保留 162 条角色事件，包含 15 次排程、60 个阶段执行、60 次阶段核查及最终分层结论。[查看角色事件](web/dist/samples/liblinear-roles.jsonl) · [打开角色视图](https://articheck-workbench.onatanolf8074.chatgpt.site/?mode=demo&example=reproduction&case=liblinear&view=roles)
 
 [案例来源与完整运行命令](examples/liblinear_case/README.md) · [证据归档](web/dist/samples/liblinear-reproduction.json) · [执行 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)
 
@@ -109,16 +111,14 @@ flowchart LR
 
 ## 核心能力
 
-| 能力 | 已实现的行为 | 验证与实现 |
+| 能力 | 工作方式 | 代码与证据 |
 |---|---|---|
-| ✅ 主张级核查 | [六角色](#roles)协作，核对指标、样本重叠和训练预算；每条判定引用执行证据，证据不足保留 `inconclusive` | [报告](docs/smoke/metric-defect-report.md) · [流水线](articheck/pipeline.py) |
-| ✅ 受控执行 | Docker 禁网、只读挂载、非 root、移除 capabilities，限制 CPU、内存、进程及输出；工具 / token / 时间 / 费用预算与执行缓存 | [沙箱](articheck/sandbox.py) · [Docker CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
-| ✅ 可审计执行器 | 不可变材料工作区、PDF / ZIP / 计划指纹、阶段与种子矩阵、产物与资源记录 | [执行引擎](docs/REPRODUCTION_ENGINE.md) · [实现](articheck/reproduction/) |
-| ✅ 分层验收 | 结合多次运行、统计与覆盖证据，分别判断运行、环境、训练协议及主要结论 | [完成验收清单](docs/REPRODUCTION_COMPLETION_CHECKLIST.md) |
-| ✅ 可视化工作台 | PDF / 代码材料导入、主张确认、服务器资源核对、执行中心、角色协作与证据复核；26 条 API 路径、30 个操作 | [界面与模块对应](docs/REVIEW_WORKSPACE.md) · [OpenAPI](web/dist/openapi.json) |
-| ✅ 训练轨迹契约 | 保留采样器提供的 token IDs、行为 log-prob 与策略版本；外部接受后的教师轨迹可导出 SFT，缺失原生 token 时拒绝 RL 导出 | [轨迹契约与测试范围](docs/TRAINING.md#5-原生训练轨迹契约) · [导出实现](articheck/training/export.py) |
-
-✅ 表示该行所述的工程行为有结果或测试依据。训练轨迹字段与过滤已通过测试；真实模型服务、GPU 采样和训练收益需单独验收。
+| 主张级核查 | [六角色](#roles)协作，核对指标、样本重叠和训练预算；每条判定引用执行证据，证据不足保留 `inconclusive` | [报告](docs/smoke/metric-defect-report.md) · [流水线](articheck/pipeline.py) |
+| 受控执行 | Docker 禁网、只读挂载、非 root、移除 capabilities，限制 CPU、内存、进程及输出；工具 / token / 时间 / 费用预算与执行缓存 | [沙箱](articheck/sandbox.py) · [Docker CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
+| 可审计执行器 | 不可变材料工作区、PDF / ZIP / 计划指纹、阶段与种子矩阵、产物与资源记录 | [执行引擎](docs/REPRODUCTION_ENGINE.md) · [实现](articheck/reproduction/) |
+| 分层验收 | 结合多次运行、统计与覆盖证据，分别判断运行、环境、训练协议及主要结论 | [完成验收清单](docs/REPRODUCTION_COMPLETION_CHECKLIST.md) |
+| 可视化工作台 | PDF / 代码材料导入、主张确认、服务器资源核对、执行中心、角色协作与证据复核；26 条 API 路径、30 个操作 | [界面与模块对应](docs/REVIEW_WORKSPACE.md) · [OpenAPI](web/dist/openapi.json) |
+| 训练轨迹契约 | 保留采样器提供的 token IDs、行为 log-prob 与策略版本；外部接受后的教师轨迹可导出 SFT，缺失原生 token 时拒绝 RL 导出 | [轨迹契约与测试范围](docs/TRAINING.md#5-原生训练轨迹契约) · [导出实现](articheck/training/export.py) |
 
 <a id="showcase"></a>
 
@@ -170,31 +170,30 @@ flowchart LR
 
 ![ArtiCheck 系统架构：核心核查、评测与数据、Planner 训练](docs/assets/architecture.svg)
 
-[打开 SVG 原图](docs/assets/architecture.svg)。图中训练层的代码已就绪，GPU 集成待验收；实验执行入口仍需明确配置并经人工确认。
+[打开 SVG 原图](docs/assets/architecture.svg)。训练层覆盖轨迹导出、LoRA SFT 与 GRPO Planner；GPU 训练及集成评测 [待完成]。实验执行入口需要明确配置并经人工确认。
 
 短时核查通过 asyncio DAG 并发读取文献主张、检查代码，再由 Planner 决定继续检查或停止；默认使用固定 Planner。完整实验按冻结计划执行，执行器为各阶段记录负责角色，并将事件写入 `roles.jsonl`。界面按角色读取实际事件，不补造角色活动。[执行中心的数据与模块对应](docs/EXECUTION_CENTER.md)。
 
 <a id="roles"></a>
 
-### 六角色：职责与当前实现
+### 六角色：职责与分工
 
-六角色用于两条执行路径：**短时主张核查**（[`articheck/roles.py`](articheck/roles.py) + [`pipeline.py`](articheck/pipeline.py)）和**完整实验复现**（[`articheck/reproduction/roles.py`](articheck/reproduction/roles.py) 为 [`engine.py`](articheck/reproduction/engine.py) 的各阶段标注角色）。下表列出各角色当前已实现的职责。
+六角色用于两条执行路径：**短时主张核查**（[`articheck/roles.py`](articheck/roles.py) + [`pipeline.py`](articheck/pipeline.py)）和**完整实验复现**（[`articheck/reproduction/roles.py`](articheck/reproduction/roles.py) 为 [`engine.py`](articheck/reproduction/engine.py) 的各阶段标注角色）。各角色的输入、动作和输出随任务记录。
 
-| 角色 | 短时核查：当前实现 | 完整实验：负责的阶段 | 是否调用模型 | 状态 |
-|---|---|---|---|---|
-| **LiteratureReader** 文献读取 | 读取人工确认的主张清单（`extraction: manifest`）；不解析 PDF | 计划审计中的 `scope` 维度：论文身份、原文出处、引用与实验覆盖 | 否 | ✅ 已验证 |
-| **CodeInspector** 代码检查 | 列出仓库文件清单，只作上下文，不作科学证据 | `code / data / environment / settings` 维度审计；源码快照与快照再审计；结束时的源码完整性核对 | 否 | ✅ 已验证 |
-| **Planner** 规划 | 观测「主张 / 已查 / 剩余工具预算」，输出 `check` 或 `stop`；默认 `FixedPlanner` 按顺序检查 | 按冻结计划排程：`commands / resources / acceptance` 维度、环境依赖检查、每次运行的排程与停止原因 | 默认否；`ModelPlanner` 可接 OpenAI 兼容服务 | ✅ 固定策略 · 🧱 模型策略代码就绪 |
-| **ExperimentRunner** 执行 | Docker 禁网沙箱执行探针；按「仓库哈希 + argv + 沙箱身份」缓存，仅未命中时消耗工具预算 | 禁网镜像构建、镜像内环境验证、逐阶段执行与输入输出指纹 | 否 | ✅ 已验证 |
-| **CrossAuditor** 交叉核查 | 三类规则：指标容差、训练/测试 ID 不相交、方法与基线训练预算一致；证据缺失时给出 `inconclusive` | 镜像兼容性、未声明的文件改动、配置冻结、划分与训练证据、独立指标重算、实验验收与公平性 | 否 | ✅ 已验证 |
-| **Reporter** 报告 | 生成 Markdown 报告，写明判定只覆盖提交的主张与探针 | 汇总分层验收（`run / environment_rebuilt / training / conclusion`），写入 `report.json` | 否 | ✅ 已验证 |
+| 角色 | 短时核查 | 完整实验 | 模型调用 |
+|---|---|---|---|
+| **LiteratureReader** 文献读取 | 读取人工确认的主张清单（`extraction: manifest`）；不解析 PDF | 计划审计中的 `scope` 维度：论文身份、原文出处、引用与实验覆盖 | 否 |
+| **CodeInspector** 代码检查 | 列出仓库文件清单，只作上下文，不作科学证据 | `code / data / environment / settings` 维度审计；源码快照与快照再审计；结束时的源码完整性核对 | 否 |
+| **Planner** 规划 | 观测「主张 / 已查 / 剩余工具预算」，输出 `check` 或 `stop`；默认 `FixedPlanner` 按顺序检查 | 按冻结计划排程：`commands / resources / acceptance` 维度、环境依赖检查、每次运行的排程与停止原因 | 默认否；`ModelPlanner` 对接 OpenAI 兼容服务；模型策略评测 [待完成] |
+| **ExperimentRunner** 执行 | Docker 禁网沙箱执行探针；按「仓库哈希 + argv + 沙箱身份」缓存，仅未命中时消耗工具预算 | 禁网镜像构建、镜像内环境验证、逐阶段执行与输入输出指纹 | 否 |
+| **CrossAuditor** 交叉核查 | 三类规则：指标容差、训练/测试 ID 不相交、方法与基线训练预算一致；证据缺失时给出 `inconclusive` | 镜像兼容性、未声明的文件改动、配置冻结、划分与训练证据、独立指标重算、实验验收与公平性 | 否 |
+| **Reporter** 报告 | 生成 Markdown 报告，写明判定只覆盖提交的主张与探针 | 汇总分层验收（`run / environment_rebuilt / training / conclusion`），写入 `report.json` | 否 |
 
 使用时需注意：
 
-- **完整实验的角色事件**：✅ LIBLINEAR CI 已验收，15 次运行、60 个阶段和 162 条角色事件；Reporter 的分层结论与原报告一致。[执行依据](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)。
+- **完整实验的角色事件**：LIBLINEAR CI 记录 15 次运行、60 个阶段和 162 条角色事件；Reporter 的分层结论与原报告一致。[执行依据](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)。
 - **完整实验中的 Planner 不做决策**：它按冻结计划排程并记录停止原因（`policy: frozen_plan`），可学习的 Planner 只在短时核查里运行。
 - **角色记录不影响结果**：写入失败只记入 `roles.errors`，不改变执行与验收结论。
-- 前端「动态演示」中的角色进度是脚本演示，页面标注 `data_source=frontend_demo`。
 
 <a id="quickstart"></a>
 
@@ -258,51 +257,50 @@ python -m articheck run --task examples/task.json --output runs/review
 | Python 工程测试 | 138 项：本地 134 项通过，4 项 Docker 专项在 CI 执行；CI 覆盖 Python 3.10–3.12 | [验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
 | 前端测试 | 95 项通过，覆盖完整实验角色事件、API 接入、演示评测、开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
 
-内置基准的阈值为 0.5，包含正例 3 条、负例 9 条。这组结果仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 尚无正式成绩；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
+内置基准的阈值为 0.5，包含正例 3 条、负例 9 条。这组结果仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 评测 [待完成]；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
 
 <a id="training"></a>
 
 ## Planner 后训练
 
-研究问题是：**当证据获取成本不同、执行预算有限时，Planner 应先检查哪个实验、何时停止？** 训练对象是 `check(claim_id)` / `stop` 决策；执行器与核查规则提供环境反馈。
+Planner 学习在预算内选择核查主张，并在继续获取证据的收益不足时停止。训练动作是 `check(claim_id)` / `stop`，执行器与核查规则提供质量、误报和成本反馈。策略训练与评测 [待完成]。
 
 ```mermaid
 flowchart LR
-    A["轨迹与外部接受过滤<br>已验证"] --> B["LoRA SFT<br>代码就绪"]
-    B -.-> C["多候选拒绝采样 SFT<br>手工编排 / 训练待验收"]
-    C -.-> D["verl AgentLoop + GRPO<br>代码就绪 / GPU 待验收"]
+    A["原生轨迹与独立接受过滤"] --> B["LoRA SFT [待完成]"]
+    B --> C["多候选拒绝采样 SFT [待完成]"]
+    C --> D["verl AgentLoop + GRPO [待完成]"]
 ```
 
-| 里程碑 | 现有交付 | 升级为“已验证”的验收条件 | 状态 |
-|---|---|---|---|
-| 训练轨迹与接受过滤 | 原生 token 完整性检查、完整多轮上下文、独立接受清单与导出 | CPU 契约和过滤测试已通过；真实采样服务另行集成 | ✅ 已验证（契约与过滤） |
-| LoRA SFT | [训练脚本](scripts/train_sft.py)，仅 assistant 动作计损失、激活检查点 | 完整 GPU 训练日志、检查点、冻结测试集评测 | 🧱 代码就绪 |
-| GRPO Planner | [verl AgentLoop](articheck/training/verl_loop.py)、[启动配置](scripts/train_grpo.sh)、质量与成本奖励 | 三种子、等预算对照拒绝采样 SFT，保存曲线与置信区间 | 🧱 代码就绪 |
-| DAPO / IS 集成 | [独立目标函数](articheck/training/objective.py)；clip-higher 已有启动配置 | 动态补采样、截断 IS 接入分布式循环并完成消融 | 🎯 规划（完整集成） |
-| 推理与训练效率 | FSDP2 / LoRA / 动态批配置及 [vLLM 启动入口](scripts/serve_vllm.sh) | 同硬件同负载开关对照，质量指标不回退；量化另行实现 | 🎯 规划（性能验收与量化） |
-
-训练配置已提供，但尚无 SFT / GRPO 增益、实卡显存收益、量化成绩或付费教师蒸馏数据规模的实测结果。[训练步骤、依赖版本与接口边界](docs/TRAINING.md)。
-
-| 待实测指标 | 衡量方法 | 结果 |
+| 组件 | 工作方式 | 入口 |
 |---|---|---|
-| 宏 F1、误报率与约束下召回率 | 独立仓库测试集；验证集固定阈值，并报告弃权比例 | 待实测 |
-| 显存与训练吞吐 | 同一 GPU 与 token 负载，逐项开关对照 | 待实测 |
-| 单篇延迟与成本 | 固定主张范围、硬件与预算，记录执行时间、API 用量和计价来源 | 待实测 |
+| 训练轨迹 | 保存原生 token IDs、行为 log-prob、策略版本与完整多轮上下文；通过独立接受清单过滤并导出样本；真实采样服务集成 [待完成] | [轨迹契约](docs/TRAINING.md#5-原生训练轨迹契约) |
+| 多仓库训练数据 [待完成] | 按原始仓库隔离训练、验证与测试集；结合缺陷注入、教师拒绝采样和规则过滤构建多轮数据 | [数据与评测协议](docs/BENCHMARKS.md) |
+| LoRA SFT [待完成] | 仅对 assistant 动作计算损失，结合激活检查点训练 Planner，保存训练日志与模型检查点 | [训练脚本](scripts/train_sft.py) |
+| GRPO Planner [待完成] | 使用 verl AgentLoop 训练实验选择与停止策略，将核查质量、错误指控与调用成本纳入奖励；以三种子、等预算对照拒绝采样 SFT | [AgentLoop](articheck/training/verl_loop.py) · [启动配置](scripts/train_grpo.sh) |
+| DAPO / IS [待完成] | 在分布式循环中组合动态补采样、clip-higher 与截断重要性采样，并用消融比较各项贡献 | [目标函数](articheck/training/objective.py) |
+| 训练与推理效率 [待完成] | 组合 FSDP2、LoRA、动态批与 vLLM，比较同硬件、同 token 负载下的质量、显存、吞吐、延迟与成本，以质量不回退为约束评测量化 | [vLLM 入口](scripts/serve_vllm.sh) · [训练说明](docs/TRAINING.md) |
+
+| 指标 | 评测口径 | 结果 |
+|---|---|---|
+| 宏 F1、误报率与约束下召回率 | 使用独立仓库测试集，在验证集固定阈值，报告弃权比例 | [待完成] |
+| SFT / GRPO 增益 | 在冻结测试集上比较训练前后策略与等预算基线 | [待完成] |
+| 显存与训练吞吐 | 使用同一 GPU 与 token 负载，逐项开关对照 | [待完成] |
+| 单篇延迟与成本 | 固定主张范围、硬件与预算，记录执行时间、API 用量和计价来源 | [待完成] |
+| 量化质量与教师蒸馏规模 | 记录量化前后质量、付费教师数据来源和过滤后的样本量 | [待完成] |
 
 <a id="roadmap"></a>
 
 ## 路线图
 
-状态：✅ 已验证 · 🧱 代码就绪 · 🎯 规划。🧪 实验中表示有真实实验正在运行，并保留日志。
+| 版本 | 范围 |
+|---|---|
+| v0.1.0 · 核查与复现 | 主张级流水线、本地工作台、API 接入、Docker 执行、公开 CPU 案例与证据复核 |
+| v0.2 · 决策环境与多仓库评测 [待完成] | 比较同预算下不同策略的质量与成本；冻结 ≥8 个独立原始仓库，验证 / 测试均含正负例；比较固定工作流 + 7B 与单 Agent |
+| v0.3 · SFT / GRPO Planner [待完成] | 使用冻结数据训练 GPU SFT、三种子 GRPO，保存曲线、置信区间与等预算对照 |
+| v0.4 · 效率与部署 [待完成] | 测量训练、缓存与量化的质量、显存、吞吐、延迟和成本，验收部署与运行配置 |
 
-| 阶段 | 交付与验收门槛 | 状态 |
-|---|---|---|
-| v0.1.0 · 核查与复现 | 主张级流水线、前后端工作台、Docker 执行、公开 CPU 案例与证据复核 | ✅ 已验证，源码版本 |
-| v0.2 · 决策环境与多仓库评测 | 先证明同预算下不同策略产生质量 / 成本差异；冻结 ≥8 个独立原始仓库，验证 / 测试均有正负例；完成固定工作流 + 7B 与单 Agent 对照 | 🎯 规划 |
-| v0.3 · SFT / GRPO Planner | 训练代码已有；用冻结数据完成 GPU SFT、三种子 GRPO 及等预算对照 | 🧱 代码就绪，实验待验收 |
-| v0.4 · 效率与部署 | 测量训练、缓存和量化的质量 / 显存 / 吞吐 / 延迟 / 成本；完成部署验收 | 🎯 规划 |
-
-更新日期：**2026-11-01**。后续版本尚未设定发布日期，按验收结果推进。状态与成绩在结果、配置和日志归档后更新；当前源代码版本号不代表已创建 GitHub Release。
+更新日期：**2026-11-03**。版本范围见上表，结果、配置与日志随评测归档。GitHub Release 发布 [待完成]。
 
 <a id="docs"></a>
 
