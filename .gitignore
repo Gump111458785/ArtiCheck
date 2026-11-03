@@ -16,3 +16,6 @@ vendor/
 .taste-skill/
 
 .articheck-inputs/
+.edgeone-build/
+.edgeone-build.zip
+.edgeone/

@@ -10,3 +10,32 @@ test('API upload refuses directory-only project references before sending materi
 test('network request uses explicit client header, timeout signal and no browser credentials',async()=>{let call;const c=new ReviewAPIClient('https://review.example',async(url,options)=>{call={url,options};return {ok:true,json:async()=>({service:'articheck-review-api',version:1,configured:false})};});assert.equal((await c.health()).configured,false);assert.equal(call.url,'https://review.example/v1/health');assert.equal(call.options.credentials,'omit');assert.equal(call.options.redirect,'error');assert.equal(call.options.headers['X-ArtiCheck-Client'],'review-api');assert.ok(call.options.signal);});
 
 test('native fetch transport is not called with the client as its receiver',async()=>{let receiver;const c=new ReviewAPIClient('https://review.example',async function(){receiver=this;return {ok:true,json:async()=>({service:'articheck-review-api',version:1,configured:false})};});await c.health();assert.equal(receiver,globalThis);});
+
+test('cloud authentication and limits reject before reading or transmitting materials',async()=>{
+ let calls=0;
+ const fetcher=async()=>{calls++;return {ok:true,json:async()=>({service:'articheck-review-api',version:1,configured:true,mode:'synchronous',auth_required:true,limits:{max_body_bytes:5000000}})};};
+ const c=new ReviewAPIClient('https://review.example',fetcher);
+ await assert.rejects(c.submit({}),/网站审阅访问码/);
+ assert.equal(calls,1);
+ const authorized=new ReviewAPIClient('https://review.example',fetcher,{token:'access-code'});
+ await assert.rejects(authorized.submit({paper:{blob:{size:4000000}},repository:{blob:{size:1}}}),/上传上限/);
+ assert.equal(calls,2);
+});
+
+test('cloud synchronous response keeps the validated report without polling nonexistent jobs',async()=>{
+ const prior=globalThis.FileReader;
+ globalThis.FileReader=class{readAsDataURL(){this.result='data:application/octet-stream;base64,AA==';this.onload();}};
+ try{
+  const calls=[];
+  const c=new ReviewAPIClient('https://review.example',async(url,options)=>{
+   calls.push({url,options});
+   return {ok:true,json:async()=>url.endsWith('/health')?{service:'articheck-review-api',version:1,configured:true,mode:'synchronous',auth_required:true}:{job,report:report()}};
+  },{token:'site-access-code'});
+  const result=await c.submit({paper:{name:'x.pdf',blob:{size:1}},repository:{name:'x.zip',blob:{size:1}}});
+  assert.equal(result.id,job.id);
+  assert.equal(c.lastReport.job_id,job.id);
+  assert.equal(calls.length,2);
+  assert.equal(calls[1].options.headers.Authorization,'Bearer site-access-code');
+  assert.ok(!calls[1].options.body.includes('site-access-code'));
+ }finally{globalThis.FileReader=prior;}
+});

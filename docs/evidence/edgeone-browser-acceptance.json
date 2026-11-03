@@ -1,0 +1,130 @@
+{
+  "budget": {
+    "max_attempts": 10,
+    "reserved_attempts": 2,
+    "reserved_cny_per_attempt": 1
+  },
+  "execution_performed": false,
+  "format": "articheck-api-static-review-v1",
+  "job_id": "edf422fb7e4b41648c8918c895db7a61",
+  "materials": {
+    "code": {
+      "bytes": 1024,
+      "name": "toy-artifact.zip",
+      "sha256": "3e16662f02c326b34eccff7cd0f49c34ef0f6c1e82a212218879754ce00b55f7"
+    },
+    "coverage": {
+      "code_files_in_context": 3,
+      "file_list_in_context": 3,
+      "file_list_truncated": false,
+      "paper_pages_in_context": 2,
+      "scope": "Bounded excerpts, not a complete repository audit",
+      "total_code_files": 3
+    },
+    "paper": {
+      "bytes": 2949,
+      "name": "articheck-method-note.pdf",
+      "sha256": "a6ade64af75321f9a831527b7163e0cc230f139651e0f55f54aa12b189fe8e7c"
+    }
+  },
+  "model": "deepseek-flash",
+  "notice": "Static model suggestions; no artifact execution. Report is stored in this browser, not on the cloud function.",
+  "review": {
+    "criteria": [
+      {
+        "dimension": "scope",
+        "file": null,
+        "note": "论文第 1 页明确评估范围为核验报告分数、划分完整性与训练预算，并说明该文档为教学夹具而非已发表研究论文；第 2 页重申三项独立检查。范围界定清晰但仅限摘录所述内容。",
+        "page": 1,
+        "status": "documented"
+      },
+      {
+        "dimension": "code",
+        "file": "toy-artifact/probe.py",
+        "note": "代码摘录包含 probe.py 的宏/微平均分支与输出键 macro_f1，以及 experiment.json 配置和 README 运行说明；摘录为完整文件列表（3/3），但仅为静态文本，未执行验证。",
+        "page": null,
+        "status": "documented"
+      },
+      {
+        "dimension": "data",
+        "file": "toy-artifact/experiment.json",
+        "note": "论文第 2 页列出训练 ID train-1/2/3 与测试 ID test-1/2，experiment.json 中 train_ids 与 test_ids 与之逐项一致，且论文声明训练与测试不重叠；y_true/y_pred 为 6 条标签，但未说明其来源与生成方式。",
+        "page": 2,
+        "status": "documented"
+      },
+      {
+        "dimension": "environment",
+        "file": "toy-artifact/README.md",
+        "note": "README 仅说明使用 Python 标准库、运行 python3 probe.py，未给出 Python 版本、操作系统或依赖锁定信息；论文摘录亦未描述运行环境。环境可复现性证据不足。",
+        "page": null,
+        "status": "needs_review"
+      },
+      {
+        "dimension": "settings",
+        "file": "toy-artifact/experiment.json",
+        "note": "论文第 2 页给出方法训练步数 100 与基线训练步数 100，experiment.json 中 method_steps 与 baseline_steps 均为 100，二者一致；metric_average 设为 macro，与论文所述宏 F1 定义相符。",
+        "page": 2,
+        "status": "documented"
+      },
+      {
+        "dimension": "workflow",
+        "file": "toy-artifact/probe.py",
+        "note": "论文第 1 页给出命令 python3 probe.py 与期望输出键 macro_f1，README 重复该命令；probe.py 读取同目录 experiment.json 并打印含 macro_f1、train_ids、test_ids、method_steps、baseline_steps 的 JSON。工作流步骤在摘录层面可追踪，但未执行。",
+        "page": 1,
+        "status": "documented"
+      },
+      {
+        "dimension": "resources",
+        "file": null,
+        "note": "摘录未提供计算资源、运行时长、内存或硬件需求等信息；论文与 README 均未涉及资源预算。",
+        "page": null,
+        "status": "missing"
+      },
+      {
+        "dimension": "results",
+        "file": null,
+        "note": "论文第 1 页报告宏 F1 为 0.7777777778、容差 0.000001，并提及注入的 metric_average 缺陷会报告另一种平均方法；但摘录未给出实际运行输出或结果文件，无法在静态预审中确认该数值，且论文第 2 页明确单次探针成功不等于整篇论文可复现。",
+        "page": 1,
+        "status": "needs_review"
+      }
+    ],
+    "findings": [
+      {
+        "detail": "论文第 1 页声明报告分数 0.7777777778 与容差 0.000001，但摘录中未包含任何运行输出、日志或结果文件，无法静态确认该数值与 probe.py 输出一致。",
+        "file": null,
+        "page": 1,
+        "suggestion": "在工件中附带一份期望输出样例或结果记录文件，并注明其与论文表 1 的对应关系，便于静态比对。",
+        "title": "结果数值缺少可核对的输出证据"
+      },
+      {
+        "detail": "论文第 1 页提到注入的 metric_average 缺陷会报告另一种平均方法，但摘录未说明如何检测该缺陷、期望的失败表现或核验步骤；experiment.json 当前为 macro，未展示缺陷状态。",
+        "file": "toy-artifact/experiment.json",
+        "page": 1,
+        "suggestion": "补充缺陷注入的说明与预期检测方式（例如切换为 micro 时的输出差异），并在文档中明确核验判据。",
+        "title": "缺陷注入核验未显式说明"
+      },
+      {
+        "detail": "README 仅说明使用 Python 标准库，未给出 Python 版本、操作系统或依赖锁定；论文摘录亦无环境描述，影响可复现性判断。",
+        "file": "toy-artifact/README.md",
+        "page": null,
+        "suggestion": "在 README 中补充经测试的 Python 版本范围与运行平台说明。",
+        "title": "环境与版本信息不足"
+      },
+      {
+        "detail": "experiment.json 中 y_true 与 y_pred 为 6 条整数标签，摘录未说明其来源、类别含义或与 train_ids/test_ids 的关系，数据可追溯性有限。",
+        "file": "toy-artifact/experiment.json",
+        "page": 2,
+        "suggestion": "在文档中说明标签数据的生成方式、类别定义及其与划分 ID 的对应关系。",
+        "title": "数据来源与标签语义未说明"
+      }
+    ],
+    "summary": "本次静态预审针对一份教学用工件（ArtiCheck 教学夹具）的论文摘录与代码摘录进行一致性核对，未执行任何代码，也未复现指标或进行科学验证。摘录显示论文声明了评估范围（核验报告分数、划分完整性与训练预算），并给出宏 F1 报告值 0.7777777778、容差 0.000001、训练/测试样本 ID 与双方训练步数 100；代码摘录包含 probe.py、experiment.json 与 README.md，配置中 metric_average 为 macro，训练与测试 ID 及步数与论文一致。整体上范围、数据、设置与工作流有部分文档化，但环境细节、资源信息与结果证据仍不完整，且缺少对缺陷注入（metric_average 缺陷）的显式核验说明。"
+  },
+  "scientific_validation": false,
+  "source": "model_api_static_review",
+  "usage": {
+    "completion_tokens": 1284,
+    "prompt_tokens": 1376,
+    "total_tokens": 2660
+  }
+}

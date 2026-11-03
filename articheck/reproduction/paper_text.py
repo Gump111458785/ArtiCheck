@@ -1,5 +1,6 @@
 """Independently bind cited text to paper bytes, including CLI plans."""
 import importlib.metadata
+import importlib.util
 import os
 import subprocess
 import sys
@@ -17,7 +18,14 @@ def extract_paper(path):
         with tempfile.TemporaryDirectory(prefix='articheck-paper-') as tmp:
             output=Path(tmp)/'pages.json'
             try:
-                result=subprocess.run([sys.executable,str(worker),str(path),str(output)],env={'PATH':os.defpath,'LANG':'C.UTF-8','PYTHONDONTWRITEBYTECODE':'1'},capture_output=True,timeout=20)
+                # Serverless vendors install dependencies beside the function and
+                # expose them through PYTHONPATH. Forward only the trusted parser
+                # package directory; never forward model keys or the full environment.
+                parser_spec=importlib.util.find_spec('pypdf')
+                worker_env={'PATH':os.defpath,'LANG':'C.UTF-8','PYTHONDONTWRITEBYTECODE':'1'}
+                if parser_spec and parser_spec.origin:
+                    worker_env['PYTHONPATH']=str(Path(parser_spec.origin).resolve().parent.parent)
+                result=subprocess.run([sys.executable,str(worker),str(path),str(output)],env=worker_env,capture_output=True,timeout=20)
             except subprocess.TimeoutExpired as error:raise ValueError('Independent PDF extraction timed out') from error
             if result.returncode:raise ValueError('Independent PDF extraction failed: '+result.stderr.decode(errors='replace')[:300])
             pages=load_json(output)

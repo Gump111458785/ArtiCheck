@@ -1,0 +1,152 @@
+{
+  "job": {
+    "created_at": "2026-11-03T11:58:46.262936+00:00",
+    "error": null,
+    "execution_performed": false,
+    "id": "02813c8acbe84a1c810fd72305a51c2e",
+    "report_ready": true,
+    "scientific_validation": false,
+    "source": "model_api_static_review",
+    "stage": "completed",
+    "status": "completed"
+  },
+  "report": {
+    "budget": {
+      "max_attempts": 10,
+      "reserved_attempts": 1,
+      "reserved_cny_per_attempt": 1
+    },
+    "execution_performed": false,
+    "format": "articheck-api-static-review-v1",
+    "job_id": "02813c8acbe84a1c810fd72305a51c2e",
+    "materials": {
+      "code": {
+        "bytes": 1024,
+        "name": "toy-artifact.zip",
+        "sha256": "3e16662f02c326b34eccff7cd0f49c34ef0f6c1e82a212218879754ce00b55f7"
+      },
+      "coverage": {
+        "code_files_in_context": 3,
+        "file_list_in_context": 3,
+        "file_list_truncated": false,
+        "paper_pages_in_context": 2,
+        "scope": "Bounded excerpts, not a complete repository audit",
+        "total_code_files": 3
+      },
+      "paper": {
+        "bytes": 2949,
+        "name": "articheck-method-note.pdf",
+        "sha256": "a6ade64af75321f9a831527b7163e0cc230f139651e0f55f54aa12b189fe8e7c"
+      }
+    },
+    "model": "deepseek-flash",
+    "notice": "Static model suggestions; no artifact execution. Report is stored in this browser, not on the cloud function.",
+    "review": {
+      "criteria": [
+        {
+          "dimension": "scope",
+          "file": null,
+          "note": "材料明确声明为教学用工件而非已发表论文，并将评估范围限定为报告分数、划分完整性与训练预算三项检查，同时提示探针成功运行不等于整篇论文可复现。",
+          "page": 1,
+          "status": "documented"
+        },
+        {
+          "dimension": "code",
+          "file": "toy-artifact/probe.py",
+          "note": "probe.py 摘录显示按 metric_average 分支计算宏平均 F1 或微平均准确率，并输出 macro_f1、train_ids、test_ids、method_steps、baseline_steps 等键；代码为教学自建、仅用标准库。",
+          "page": null,
+          "status": "documented"
+        },
+        {
+          "dimension": "data",
+          "file": "toy-artifact/experiment.json",
+          "note": "论文摘录给出训练 ID train-1/2/3 与测试 ID test-1/2，experiment.json 中一致，可静态比对无交集；但摘录未提供样本来源、采集方式或划分生成过程，划分完整性仅有声明性文字。",
+          "page": 2,
+          "status": "needs_review"
+        },
+        {
+          "dimension": "environment",
+          "file": "toy-artifact/README.md",
+          "note": "README 仅说明使用 Python 标准库运行 python3 probe.py，未给出 Python 版本、依赖锁定或运行平台信息，环境可复现性证据不足。",
+          "page": null,
+          "status": "needs_review"
+        },
+        {
+          "dimension": "settings",
+          "file": "toy-artifact/experiment.json",
+          "note": "论文摘录与 experiment.json 均记录方法训练步数 100、基线训练步数 100，配置项 method_steps 与 baseline_steps 在代码输出中回显，设置一致。",
+          "page": 2,
+          "status": "documented"
+        },
+        {
+          "dimension": "workflow",
+          "file": "toy-artifact/probe.py",
+          "note": "材料给出运行命令 python3 probe.py 与期望输出键 macro_f1，并说明探针输出 JSON 用于确定性核对；工作流步骤在摘录范围内可追踪。",
+          "page": 1,
+          "status": "documented"
+        },
+        {
+          "dimension": "resources",
+          "file": null,
+          "note": "摘录未提供计算资源、运行时长、硬件或存储需求等信息，无法核对资源条件。",
+          "page": null,
+          "status": "missing"
+        },
+        {
+          "dimension": "results",
+          "file": "toy-artifact/probe.py",
+          "note": "论文摘录报告宏 F1 为 0.7777777778、容差 0.000001，并说明宏 F1 为各类 F1 的算术平均；代码摘录存在对应计算逻辑，但本次未执行代码，未复现该数值，结果一致性仍需人工运行核对。",
+          "page": 1,
+          "status": "needs_review"
+        }
+      ],
+      "findings": [
+        {
+          "detail": "论文第 1 页报告 macro F1 为 0.7777777778，容差 0.000001；probe.py 摘录包含宏平均 F1 计算分支，但本次为静态预审，未执行代码，无法确认输出与报告值一致。",
+          "file": "toy-artifact/probe.py",
+          "page": 1,
+          "suggestion": "由人工在受控环境中运行 python3 probe.py，核对输出 macro_f1 是否落在容差范围内，并记录运行日志。",
+          "title": "指标数值未在本次预审中复现"
+        },
+        {
+          "detail": "论文第 2 页声明训练与测试数据不重叠，并列出 ID；experiment.json 中 ID 一致，但摘录未提供划分生成脚本或原始数据来源，无法静态证明无泄漏。",
+          "file": "toy-artifact/experiment.json",
+          "page": 2,
+          "suggestion": "补充划分生成脚本或数据来源说明，并保留 ID 清单的校验记录。",
+          "title": "数据划分仅有声明性证据"
+        },
+        {
+          "detail": "README 仅说明使用 Python 标准库，未记录 Python 版本、操作系统或依赖锁定信息，环境可复现性证据缺失。",
+          "file": "toy-artifact/README.md",
+          "page": null,
+          "suggestion": "在 README 中补充 Python 版本与运行平台，必要时提供依赖锁定文件。",
+          "title": "运行环境信息不足"
+        },
+        {
+          "detail": "所提供的论文摘录与代码摘录均未涉及计算资源、运行时长或硬件需求，资源维度证据缺失。",
+          "file": null,
+          "page": null,
+          "suggestion": "补充资源需求与实测运行时长记录，或在材料中明确声明资源条件不适用。",
+          "title": "资源条件未记录"
+        }
+      ],
+      "summary": "本次静态预审仅依据所提供的两页教学材料摘录与三个代码文件摘录进行核对，未执行任何代码，也未复现指标或验证科学结论。材料对指标定义、数据划分、基线训练步数及运行命令有明确文字说明，代码摘录中也存在对应配置与计算逻辑；但指标数值本身、划分完整性证明、环境依赖锁定与结果记录仍需人工复核。缺失证据保持为缺失。"
+    },
+    "scientific_validation": false,
+    "source": "model_api_static_review",
+    "usage": {
+      "completion_tokens": 1055,
+      "prompt_tokens": 1401,
+      "total_tokens": 2456
+    }
+  },
+  "acceptance_measurement": {
+    "elapsed_seconds": 10.15,
+    "provider_call_performed": true,
+    "benchmark": "Built-in teaching PDF and toy ZIP; connectivity and schema acceptance only",
+    "deployment_id": "dpwy9jwxmrh2",
+    "estimated_peak_cny": 0.011242,
+    "pricing_date": "2026-11-03",
+    "pricing_url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/"
+  }
+}

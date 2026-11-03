@@ -13,13 +13,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CPU case](https://img.shields.io/badge/LIBLINEAR-15_runs-227755)](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)
 
-[打开交互预览](https://articheck-workbench.onatanolf8074.chatgpt.site) · [快速开始](#quickstart) · [查看复现案例](#case)
+[打开在线工作台](https://articheck-workbench.edgeone.dev) · [快速开始](#quickstart) · [查看复现案例](#case)
 
 </div>
 
 ![工作台界面导览：开始页、执行中心、角色协作与案例详情](docs/assets/workbench-tour.gif)
 
-*轮播展示四个工作台页面，并非一次任务的连续执行录像。界面预览仅限获授权账号。*
+*轮播展示四个工作台页面，并非一次任务的连续执行录像。在线工作台已部署至 EdgeOne；模型审阅需要网站访问码。*
 
 [解决的问题](#problem) · [使用方式](#usage) · [核心能力](#capabilities) · [界面展示](#showcase) · [系统架构](#architecture) · [实测结果](#results) · [Planner 后训练](#training) · [路线图](#roadmap) · [文档](#docs)
 
@@ -51,7 +51,7 @@ ArtiCheck 面向课题组自查、论文评审和研究方法复用，建立了�
 |---|---|---|
 | 本地 | 下载 ArtiCheck 微调模型与权重，在自己的机器上推理；权重发布 [待完成] | 准备模型与运行环境 → 启动推理服务 → 提交核查任务 |
 | API | 使用自己的供应商 API key 直接调用主流大模型，无需下载 ArtiCheck 权重 | 配置模型地址、名称与密钥 → 运行核查 → 查看报告；供应商联调与质量评测 [待完成] |
-| 网站 | 形成了由自有服务器承载模型推理、任务调度和实验执行的网站方案 [待完成] | 打开网站 → 上传论文与代码 → 跟踪评测 → 查看或下载报告 |
+| 网站 | EdgeOne 承载网页与模型审阅接口；托管实验执行 [待完成] | 打开网站 → 上传论文与代码 → 跟踪评测 → 查看或下载报告 |
 
 ### 2.1 本地：运行 ArtiCheck 微调模型
 
@@ -94,7 +94,9 @@ python -m articheck run --task examples/task.json --output runs/provider-api \
 
 打开 ArtiCheck 网站，上传论文 PDF、代码及实验材料，在页面确认评测范围后提交任务。我们的服务器负责模型推理、任务调度、Docker 实验执行和报告保存；用户在浏览器中查看进度、复核证据并下载结果。服务器部署、模型与执行器接入及网站端到端服务 [待完成]。
 
-[查看工作台界面](https://articheck-workbench.onatanolf8074.chatgpt.site/#home)。该地址用于界面预览；服务器服务入口 [待完成]。
+EdgeOne Pages / Makers 部署包包含前端与同域云函数，接入 `deepseek-flash` 完成 PDF / ZIP 材料静态审阅，返回八项条件核对与出处建议。服务端保存供应商密钥，以访问码和共享调用计数限制费用；云端报告在浏览器保存和导出。Docker 实验执行仍使用本地执行器。[部署与密钥配置](docs/EDGEONE_DEPLOYMENT.md)；网页、云函数与 DeepSeek 实际调用已通过联调：内置教学材料返回 8 项核对、4 条建议，耗时 10.15 秒，使用 2,456 tokens，按高峰价格估算约 0.011 元。[验收报告](docs/evidence/edgeone-deepseek-acceptance.json)。该记录验证接口与报告链路，真实论文质量评测 [待完成]。
+
+[打开在线工作台](https://articheck-workbench.edgeone.dev/#home) · [进入 API 审阅](https://articheck-workbench.edgeone.dev/#api-review)。
 
 <a id="case"></a>
 
@@ -136,7 +138,7 @@ flowchart LR
 
 报告按运行、环境、训练协议与主要结论分别记录验收值。新增控制项只用于本案例核对，不替代原论文基线；本案例的证据范围为 news20 CPU 实验。
 
-> **六角色记录**：本次 CI 保留 162 条角色事件，包含 15 次排程、60 个阶段执行、60 次阶段核查及最终分层结论。[查看角色事件](web/dist/samples/liblinear-roles.jsonl) · [打开角色视图](https://articheck-workbench.onatanolf8074.chatgpt.site/?mode=demo&example=reproduction&case=liblinear&view=roles)
+> **六角色记录**：本次 CI 保留 162 条角色事件，包含 15 次排程、60 个阶段执行、60 次阶段核查及最终分层结论。[查看角色事件](web/dist/samples/liblinear-roles.jsonl) · [打开角色视图](https://articheck-workbench.edgeone.dev/?mode=demo&example=reproduction&case=liblinear&view=roles)
 
 [案例来源与完整运行命令](examples/liblinear_case/README.md) · [证据归档](web/dist/samples/liblinear-reproduction.json) · [执行 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)
 
@@ -159,7 +161,7 @@ flowchart LR
 
 在开始页新建论文评估或继续已有项目，再进入执行中心、角色协作和证据审查。各页面使用同一套项目、运行与报告数据。
 
-[打开开始页](https://articheck-workbench.onatanolf8074.chatgpt.site/#home) · [浏览执行中心](https://articheck-workbench.onatanolf8074.chatgpt.site/#workbench) · [查看角色协作](https://articheck-workbench.onatanolf8074.chatgpt.site/#roles) · [完整界面图集](docs/UI_GALLERY.md)
+[打开开始页](https://articheck-workbench.edgeone.dev/#home) · [浏览执行中心](https://articheck-workbench.edgeone.dev/#workbench) · [查看角色协作](https://articheck-workbench.edgeone.dev/#roles) · [完整界面图集](docs/UI_GALLERY.md)
 
 <table>
 <tr>
@@ -280,8 +282,8 @@ python -m articheck run --task examples/task.json --output runs/review
 |---|---|---|
 | 公开 CPU 案例 | LIBLINEAR / news20，15 次运行、60 个阶段；L2-SVM 准确率 96.76%，样本标准差 0.31 个百分点 | [案例 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563) · [报告](web/dist/samples/liblinear-reproduction.json) |
 | 内置受控缺陷基准 | 单仓库 4 个版本、12 条主张；FixedPlanner + 规则核查：TP=3、FP=0、TN=9、FN=0，宏 F1=1.000，问题召回率 100%，误报率 0% | [原始结果](docs/smoke/metrics.json) · [问题报告](docs/smoke/metric-defect-report.md) |
-| Python 工程测试 | 138 项：本地 134 项通过，4 项 Docker 专项在 CI 执行；CI 覆盖 Python 3.10–3.12 | [验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
-| 前端测试 | 95 项通过，覆盖完整实验角色事件、API 接入、演示评测、开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
+| Python 工程测试 | 146 项：本地 142 项通过，4 项 Docker 专项在 CI 执行；CI 覆盖 Python 3.10–3.12 | [验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
+| 前端测试 | 97 项通过，覆盖完整实验角色事件、API 接入、演示评测、开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
 
 内置基准的阈值为 0.5，包含正例 3 条、负例 9 条。这组结果仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 评测 [待完成]；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
 
