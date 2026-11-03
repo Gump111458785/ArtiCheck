@@ -19,43 +19,66 @@
 
 ![工作台界面导览：开始页、执行中心、角色协作与案例详情](docs/assets/workbench-tour.gif)
 
-*轮播展示四个工作台页面，并非一次任务的连续执行录像。交互预览仅限获授权账号，真实任务在本地工作台执行。*
+*轮播展示四个工作台页面，并非一次任务的连续执行录像。界面预览仅限获授权账号。*
 
 [核心能力](#capabilities) · [界面展示](#showcase) · [系统架构](#architecture) · [实测结果](#results) · [Planner 后训练](#training) · [路线图](#roadmap) · [文档](#docs)
 
-## 使用方式
+<a id="usage"></a>
 
-ArtiCheck 提供本地工作台和 API 两种使用方式。
+## 1. 使用方式
 
-| 方式 | 适用场景 | 入口 |
+按模型运行的位置选择使用方式：在自己的机器上运行 ArtiCheck 微调模型，直接调用主流大模型 API，或通过网站提交任务。
+
+| 方式 | 模型与权重 | 使用流程 |
 |---|---|---|
-| 本地 | 在工作台导入论文与代码、确认主张、配置环境、执行核查和复现实验、查看证据 | `python -m articheck.workbench --port 8787` |
-| API | 在脚本或其他应用中提交 PDF / ZIP，查询审阅任务、取消任务和下载报告；服务端接入兼容 Chat Completions 的模型 | `python -m articheck.review_api` / `python -m articheck.review_client` |
+| 本地 | 下载 ArtiCheck 微调模型与权重，在自己的机器上推理；权重发布 [待完成] | 准备模型与运行环境 → 启动推理服务 → 提交核查任务 |
+| API | 使用自己的供应商 API key 直接调用主流大模型，无需下载 ArtiCheck 权重 | 配置模型地址、名称与密钥 → 运行核查 → 查看报告；供应商联调与质量评测 [待完成] |
+| 网站 | 由我们的服务器提供模型推理、任务调度和实验执行 [待完成] | 打开网站 → 上传论文与代码 → 跟踪评测 → 查看或下载报告 |
 
-### 本地
+### 1.1 本地：运行 ArtiCheck 微调模型
 
-```bash
-python -m articheck.workbench --port 8787
-```
+下载 ArtiCheck 微调模型与权重，在自己的 GPU 环境中启动推理服务。Planner 使用本地模型选择核查主张和停止时机，工具调用与实验代码执行也在自己的机器上运行。微调权重、下载入口与运行资源说明 [待完成]。
 
-打开 **http://127.0.0.1:8787**，按项目准备论文、代码和实验计划。工作台保存材料指纹、执行记录与审核意见，Docker 执行论文代码并返回阶段证据。
-
-### API
+准备 vLLM 环境后，用模型目录启动推理服务。下面的路径和版本号需要替换为实际下载的模型目录与检查点版本。
 
 ```bash
-python -m articheck.review_api --port 8790 --with-ui
-# 打开 http://127.0.0.1:8790/#api-review
+export MODEL_PATH="/absolute/path/to/articheck-model"
+bash scripts/serve_vllm.sh
 ```
 
-通过 `ARTICHECK_REVIEW_BASE_URL`、`ARTICHECK_REVIEW_MODEL` 和服务端 `ARTICHECK_API_KEY` 配置模型地址、名称与密钥。客户端提交原始 PDF / ZIP，服务返回异步任务状态与结构化报告。密钥保留在服务端；缺少配置时返回错误。
+在另一个终端提交核查任务：
 
-API 报告标记为 `model_api_static_review`，用于材料静态审阅；论文代码执行和实验验收使用本地工作台。供应商模型联调与输出质量评测 [待完成]。
+```bash
+export MODEL_PATH="/absolute/path/to/articheck-model"
+python -m articheck run --task examples/task.json --output runs/local-model \
+  --planner model --base-url http://127.0.0.1:8000/v1 \
+  --model "$MODEL_PATH" --policy-version your-checkpoint-version
+```
 
-[接入说明](docs/API_REVIEW.md) · [OpenAPI 契约](web/dist/review-api.openapi.json) · [Python 调用示例](examples/api_review/submit.py) · [模型配置模板](examples/api_review/provider.env.example)
+`examples/task.json` 指定论文主张、代码路径和执行命令；使用时替换为自己的任务文件。模型服务与 Docker 执行环境分别配置。[训练与推理说明](docs/TRAINING.md) · [执行协议](docs/DATA.md)。
 
-![API 接入界面](docs/assets/api-review.jpg)
+### 1.2 API：直接调用主流大模型
 
-## 三十秒看懂
+保留 ArtiCheck 的核查流程，将 Planner 的推理请求直接发送给模型供应商。填写自己的 API 地址、模型名称与密钥，无需下载或部署 ArtiCheck 微调模型。密钥由运行核查的进程读取；论文工具与实验代码仍在自己的执行环境中运行。
+
+```bash
+export ARTICHECK_API_KEY="your-provider-key"
+python -m articheck run --task examples/task.json --output runs/provider-api \
+  --planner model --base-url https://your-provider.example/v1 \
+  --model your-provider-model --policy-version your-provider-model-version
+```
+
+示例采用兼容 Chat Completions 的供应商接口，地址、模型名称与版本均需替换。供应商联调、模型适配与质量评测 [待完成]。调用预算与费用配置见 [模型接入说明](docs/TRAINING.md)。
+
+需要在其他应用中提交 PDF / ZIP 并查询审阅任务时，可使用独立的材料静态审阅接口：[接入说明](docs/API_REVIEW.md) · [OpenAPI 契约](web/dist/review-api.openapi.json) · [Python 调用示例](examples/api_review/submit.py) · [配置模板](examples/api_review/provider.env.example)。该接口返回 `model_api_static_review` 报告，实验执行与验收由执行器负责。
+
+### 1.3 网站：浏览器中提交评测
+
+打开 ArtiCheck 网站，上传论文 PDF、代码及实验材料，在页面确认评测范围后提交任务。我们的服务器负责模型推理、任务调度、Docker 实验执行和报告保存；用户在浏览器中查看进度、复核证据并下载结果。服务器部署、模型与执行器接入及网站端到端服务 [待完成]。
+
+[查看工作台界面](https://articheck-workbench.onatanolf8074.chatgpt.site/#home)。该地址用于界面预览；服务器服务入口 [待完成]。
+
+## 2. 三十秒看懂
 
 | 面临的问题 | ArtiCheck 的处理方式 | 可核对的证据 |
 |---|---|---|
@@ -65,7 +88,7 @@ API 报告标记为 `model_api_static_review`，用于材料静态审阅；论�
 
 <a id="case"></a>
 
-## 旗舰案例：LIBLINEAR / news20
+## 3. 旗舰案例：LIBLINEAR / news20
 
 使用 **LIBLINEAR（JMLR 2008）作者代码和公开 news20 数据**，完成 CPU 环境重建、数据准备、训练、预测和独立指标重算。三种方法设置各运行五个划分种子，共记录 **15 次运行与 60 个阶段证据**。
 
@@ -91,7 +114,7 @@ flowchart LR
 
 准确率的波动来自本案例的五次数据重新划分，不代表原论文成绩的置信区间。时长不含准备脚本下载和基础镜像拉取；GPU 峰值与费用测量 [待完成]。
 
-### 案例验收
+### 3.1 案例验收
 
 | 核对项 | 本案例结果 | 判定依据 |
 |---|---|---|
@@ -109,7 +132,7 @@ flowchart LR
 
 <a id="capabilities"></a>
 
-## 核心能力
+## 4. 核心能力
 
 | 能力 | 工作方式 | 代码与证据 |
 |---|---|---|
@@ -122,7 +145,7 @@ flowchart LR
 
 <a id="showcase"></a>
 
-## 界面展示
+## 5. 界面展示
 
 在开始页新建论文评估或继续已有项目，再进入执行中心、角色协作和证据审查。各页面使用同一套项目、运行与报告数据。
 
@@ -155,18 +178,11 @@ flowchart LR
 </tr>
 </table>
 
-<details>
-<summary>手机端开始页</summary>
-
-<img src="docs/assets/home-mobile.jpg" alt="手机端开始页：折叠导航、评估入口与单栏案例摘要" width="320">
-
-</details>
-
 论文项目按「论文与代码 → 实验覆盖 → 复现条件 → 服务器核对 → 短时核查主张与配置 → 完整实验 → 评估结果」组织。PDF 正文与 ZIP 在浏览器中准备，候选主张需人工确认；运行完整实验前，需明确绑定本地材料和执行入口。[开始页设计](docs/HOME_SCREEN.md) · [界面与模块对应](docs/REVIEW_WORKSPACE.md) · [八项复现条件](docs/IMPLEMENTATION_STATUS.md)。
 
 <a id="architecture"></a>
 
-## 系统架构
+## 6. 系统架构
 
 ![ArtiCheck 系统架构：核心核查、评测与数据、Planner 训练](docs/assets/architecture.svg)
 
@@ -176,7 +192,7 @@ flowchart LR
 
 <a id="roles"></a>
 
-### 六角色：职责与分工
+### 6.1 六角色：职责与分工
 
 六角色用于两条执行路径：**短时主张核查**（[`articheck/roles.py`](articheck/roles.py) + [`pipeline.py`](articheck/pipeline.py)）和**完整实验复现**（[`articheck/reproduction/roles.py`](articheck/reproduction/roles.py) 为 [`engine.py`](articheck/reproduction/engine.py) 的各阶段标注角色）。各角色的输入、动作和输出随任务记录。
 
@@ -197,7 +213,7 @@ flowchart LR
 
 <a id="quickstart"></a>
 
-## 快速开始
+## 7. 快速开始
 
 Python 3.10+，macOS 或 Linux。内置受控缺陷基准无需 API key、GPU 或 Docker。
 
@@ -223,7 +239,7 @@ python -m articheck demo --sandbox local --output runs/demo
 
 `runs/demo/metrics.json` 汇总指标；每个版本目录包含 `report.md`、`report.json` 与 `trace.jsonl`。逐主张真值与得分分别保存在 `labels.jsonl`、`scores.jsonl`。
 
-### 启动前后端一体的本地工作台
+### 7.1 材料与执行工作台
 
 <a id="workbench"></a>
 
@@ -231,9 +247,9 @@ python -m articheck demo --sandbox local --output runs/demo
 python -m articheck.workbench --port 8787
 ```
 
-打开 **http://127.0.0.1:8787**。同一 Python 服务提供界面和 API。可在页面提交真实任务，查看执行进度、报告与反馈，数据保存在 `runs/workbench/`。HTTP API 当前支持固定 Planner；模型服务与训练通过 CLI 使用，托管预览回放归档记录。
+打开 **http://127.0.0.1:8787**。同一 Python 服务提供界面和 API。可在页面提交真实任务，查看执行进度、报告与反馈，数据保存在 `runs/workbench/`。工作台的核查入口使用固定 Planner；选择本地模型或供应商模型时，使用上方 CLI。工作台中的模型选择与任务接入 [待完成]。托管界面预览回放归档记录。
 
-### 核查自己的 artifact
+### 7.2 核查自己的 artifact
 
 按 [task.json 示例](examples/task.json) 声明本地仓库、主张和输出 JSON 的 probe，准备好镜像后运行：
 
@@ -248,7 +264,7 @@ python -m articheck run --task examples/task.json --output runs/review
 <a id="benchmarks"></a>
 <a id="example"></a>
 
-## 实测结果
+## 8. 实测结果
 
 | 验证对象 | 范围与结果 | 证据 |
 |---|---|---|
@@ -261,7 +277,7 @@ python -m articheck run --task examples/task.json --output runs/review
 
 <a id="training"></a>
 
-## Planner 后训练
+## 9. Planner 后训练
 
 Planner 学习在预算内选择核查主张，并在继续获取证据的收益不足时停止。训练动作是 `check(claim_id)` / `stop`，执行器与核查规则提供质量、误报和成本反馈。策略训练与评测 [待完成]。
 
@@ -291,20 +307,20 @@ flowchart LR
 
 <a id="roadmap"></a>
 
-## 路线图
+## 10. 路线图
 
 | 版本 | 范围 |
 |---|---|
 | v0.1.0 · 核查与复现 | 主张级流水线、本地工作台、API 接入、Docker 执行、公开 CPU 案例与证据复核 |
 | v0.2 · 决策环境与多仓库评测 [待完成] | 比较同预算下不同策略的质量与成本；冻结 ≥8 个独立原始仓库，验证 / 测试均含正负例；比较固定工作流 + 7B 与单 Agent |
-| v0.3 · SFT / GRPO Planner [待完成] | 使用冻结数据训练 GPU SFT、三种子 GRPO，保存曲线、置信区间与等预算对照 |
-| v0.4 · 效率与部署 [待完成] | 测量训练、缓存与量化的质量、显存、吞吐、延迟和成本，验收部署与运行配置 |
+| v0.3 · SFT / GRPO Planner [待完成] | 使用冻结数据训练 GPU SFT、三种子 GRPO，保存曲线、置信区间与等预算对照，发布模型权重与下载说明 |
+| v0.4 · 效率与部署 [待完成] | 测量训练、缓存与量化的质量、显存、吞吐、延迟和成本，在我们的服务器部署网站、模型服务与执行器，验收端到端任务及运行配置 |
 
 更新日期：**2026-11-03**。版本范围见上表，结果、配置与日志随评测归档。GitHub Release 发布 [待完成]。
 
 <a id="docs"></a>
 
-## 文档与开发
+## 11. 文档与开发
 
 | 入口 | 内容 |
 |---|---|
@@ -323,7 +339,7 @@ node --test tests/frontend/*.test.mjs
 
 开发入口：[核查流水线](articheck/pipeline.py)、[六角色](articheck/roles.py)、[Planner](articheck/planner.py)、[完整实验](articheck/reproduction/)、[本地工作台服务](articheck/workbench.py)、[前端](web/dist/)、[训练适配](articheck/training/)。如需报告问题或提出适配建议，请提交至 [Issues](https://github.com/Gump111458785/ArtiCheck/issues)，并附上已去除敏感信息的任务配置与日志。
 
-## 来源与许可
+## 12. 来源与许可
 
 业务 baseline 参考 [Paper Reproducibility Agent](https://github.com/1a1a11a/2026_paper_reproduce)，采用独立进程和 JSON 报告对接，未分发其源码；[固定参考版本与许可说明](docs/BASELINE.md)。Planner 训练接口参考 [verl](https://github.com/verl-project/verl)，推理服务提供 [vLLM](https://github.com/vllm-project/vllm) 接入入口。
 
