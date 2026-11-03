@@ -107,3 +107,16 @@ python scripts/train_sft.py --data data/planner-sft.jsonl \
 | 等预算消融、跨种子统计与外部基准 | [待完成] |
 | 模型权重、推理质量、显存、时延与实际成本 | [待完成] |
 
+
+
+## 补充：参数化与损失计算
+
+LoRA 对线性层使用 `W = W₀ + (alpha/r)BA`，冻结基础权重 `W₀`，训练低秩矩阵 `A/B`。SFT 使用完整历史作为条件，仅对最后一条 assistant 动作计算交叉熵；上下文与 padding 标签均为 `-100`。聊天模板前缀检查失败时拒绝样本；超长样本整条跳过，跳过统计及验证回调 [待完成]。
+
+GRPO 对同任务轨迹组构造 `Aᵢ = (Rᵢ − mean(R)) / (std(R) + ε)`，将终局优势分配给该轨迹的动作 token，并使用裁剪策略比率与 KL 约束。仅模型生成 token 参与优化，环境观察不参与损失。组内全同奖励轨迹过滤后需要重新采样补足批量；动态采样与课程阶段集成 [待完成]。
+
+重要性修正需区分当前训练策略、更新前策略和实际 rollout 行为策略。独立函数使用更新前策略与 rollout 行为概率之比的截断权重，初值上限 `2.0`；不能把它与 PPO 更新的当前/旧策略比率混为一项。分布式接入 [待完成]。
+
+RL 启动配置对应 prompt batch `16`、更新 mini-batch `8`、每任务 `8` 条轨迹、prompt 长度 `4096` 与 response 总预算 `2048`。AgentLoop 单次动作生成最多 `256` tokens，受剩余总预算约束。配置来自仓库脚本，不代表最低 GPU 资源或实测性能。
+
+源代码：[SFT](../scripts/train_sft.py)、[GRPO 配置](../scripts/train_grpo.sh)、[AgentLoop](../articheck/training/verl_loop.py)、[奖励与独立目标函数](../articheck/training/objective.py)。
