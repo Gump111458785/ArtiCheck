@@ -252,6 +252,15 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         value = store.get(owner, job)
         execution = value.get('execution') or {}
         answer = body().get('answer')
+        preflight=(value.get('review') or {}).get('resource_preflight') or {}
+        if not execution and preflight.get('needs_user'):
+            if answer not in {'unavailable','can_provide'}:
+                raise ReviewError('invalid_feedback','请选择能否提供所需计算条件。')
+            value['availability']={'resource':'compute_capacity','answer':answer,'confirmed_at':now(),
+                'verdict':'当前托管 CPU 条件不足，受影响实验未复现。' if answer=='unavailable' else '可选择本地工作台提供所需资源；当前云端未启动实验。',
+                'scientific_validation':False}
+            store.save(owner,value)
+            return jsonify(value)
         if not execution and value.get('review',{}).get('task')=='reproduction' and not value['materials']['code']:
             if answer not in {'unavailable','can_provide'}:
                 raise ReviewError('invalid_feedback','请选择能否补充代码来源。')

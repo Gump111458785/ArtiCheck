@@ -1,0 +1,153 @@
+[
+  {
+    "case": "diagnostic-paper",
+    "public_source": "https://arxiv.org/abs/1807.03341",
+    "synthetic_input": false,
+    "created_at": "2026-11-04T18:48:36.711044+00:00",
+    "paper_sha256": "715ebafd22d0ee34cd8fa7d2ff858eb473750ad9526873a17431b0feb204600e",
+    "model": "deepseek-flash",
+    "paper_type": "diagnostic",
+    "task": "self_review",
+    "pages_in_text_context": 15,
+    "total_pages": 15,
+    "page_images": 15,
+    "metric_candidates": 0,
+    "findings": 3,
+    "planned_stages": 0,
+    "cross_audit_status": "completed",
+    "coverage_gaps": [
+      "论文为立场/评论类，无实验表格与定量指标，故metrics为空。",
+      "第11–15页为参考文献列表，仅抽查部分条目与正文引用对应关系，未逐条核验全部82条参考文献的准确性。",
+      "未获取所引原始文献全文，无法核实[11][33][63][65]等转述细节。",
+      "未发现作者代码或数据，复现计划不适用。"
+    ],
+    "usage": {
+      "completion_tokens": 1831,
+      "prompt_tokens": 68582,
+      "total_tokens": 70413
+    },
+    "execution_performed": false,
+    "scientific_validation": false
+  },
+  {
+    "case": "survey-paper",
+    "public_source": "https://arxiv.org/abs/1911.02685",
+    "synthetic_input": false,
+    "created_at": "2026-11-04T18:49:19.631967+00:00",
+    "paper_sha256": "448c884f8212fab6434a81f86de33dd4899445aefe42014a1089e828f2e55549",
+    "model": "deepseek-flash",
+    "paper_type": "survey",
+    "task": "self_review",
+    "pages_in_text_context": 31,
+    "total_pages": 31,
+    "page_images": 24,
+    "metric_candidates": 18,
+    "findings": 6,
+    "planned_stages": 0,
+    "cross_audit_status": "completed",
+    "coverage_gaps": [
+      "图5、图6、图7为雷达图，逐任务数值只能视觉估计，未纳入精确指标。",
+      "表4-6中部分逐任务数值未全部列入metrics，仅摘取代表性行；完整逐任务结果需对照原表。",
+      "第26-31页为参考文献，未逐条核对引用完整性。",
+      "未提供作者代码，无法进行代码审查或复现。",
+      "实验环境、超参数和随机种子未报告，无法评估可复现性。",
+      "论文上下文按页节选并优先保留图表；未进入上下文的正文和图表不视为已审查。",
+      "部分论文页面未提供图像，相关纯图片图表保留未核验状态。"
+    ],
+    "usage": {
+      "completion_tokens": 6286,
+      "prompt_tokens": 100043,
+      "total_tokens": 106329
+    },
+    "execution_performed": false,
+    "scientific_validation": false
+  },
+  {
+    "case": "1611.03530",
+    "public_source": "https://arxiv.org/abs/1611.03530",
+    "synthetic_input": false,
+    "created_at": "2026-11-04T18:51:43.425388+00:00",
+    "paper_sha256": "a71f1294a021cebc6939ec977fc073b6d7b4f183950eba761ec55364d30b729f",
+    "model": "deepseek-flash",
+    "paper_type": "diagnostic",
+    "task": "self_review",
+    "pages_in_text_context": 15,
+    "total_pages": 15,
+    "page_images": 15,
+    "metric_candidates": 114,
+    "findings": 4,
+    "planned_stages": 0,
+    "cross_audit_status": "completed",
+    "coverage_gaps": [
+      "图1(a)(b)(c)与图2(a)(b)为曲线，未逐点提取数值，仅作视觉趋势观察。",
+      "表2括号内早停数值已摘录，但未核对早停选择协议的具体实现细节。",
+      "未提供作者代码，无法核对实现层面的超参与数据管线。",
+      "第15页仅脚注与表4说明，无新增数值表。",
+      "未覆盖参考文献的完整引用准确性核查。"
+    ],
+    "usage": {
+      "completion_tokens": 7836,
+      "prompt_tokens": 43508,
+      "total_tokens": 51344
+    },
+    "execution_performed": false,
+    "scientific_validation": false
+  },
+  {
+    "case": "nonpaper-memo",
+    "public_source": null,
+    "synthetic_input": true,
+    "created_at": "2026-11-04T18:57:46.196054+00:00",
+    "paper_sha256": "ca3340132eb377e40e6a9d5544ed96a3c9152cd2d9550a0920fb75ba874dfe80",
+    "model": "deepseek-flash",
+    "paper_type": "nonpaper",
+    "task": "self_review",
+    "pages_in_text_context": 1,
+    "total_pages": 1,
+    "page_images": 1,
+    "metric_candidates": 0,
+    "findings": 0,
+    "planned_stages": 0,
+    "cross_audit_status": null,
+    "coverage_gaps": [
+      "材料仅1页且为非学术备忘录，无图表、实验或代码可覆盖。",
+      "未进行任何代码执行或外部检索。"
+    ],
+    "usage": {
+      "completion_tokens": 514,
+      "prompt_tokens": 2998,
+      "total_tokens": 3512
+    },
+    "execution_performed": false,
+    "scientific_validation": false
+  },
+  {
+    "case": "blank-document",
+    "public_source": null,
+    "synthetic_input": true,
+    "created_at": "2026-11-04T19:01:14.219032+00:00",
+    "paper_sha256": "b37a58fb510237b6b60b1e610deecd3eb013ff71836b831faf66958f83affbe3",
+    "model": "deepseek-flash",
+    "paper_type": "unknown",
+    "task": "self_review",
+    "pages_in_text_context": 1,
+    "total_pages": 1,
+    "page_images": 1,
+    "metric_candidates": 0,
+    "findings": 0,
+    "planned_stages": 0,
+    "cross_audit_status": null,
+    "coverage_gaps": [
+      "第 1 页为空白页，文本层为空且页面图像无可读内容，全部审查维度均无法覆盖。",
+      "未提供代码文件，未进行任何代码审查。",
+      "未提供论文链接或公开标识，未进行公开代码线索核对。"
+    ],
+    "usage": {
+      "completion_tokens": 536,
+      "prompt_tokens": 3011,
+      "total_tokens": 3547
+    },
+    "execution_performed": false,
+    "scientific_validation": false
+  }
+]

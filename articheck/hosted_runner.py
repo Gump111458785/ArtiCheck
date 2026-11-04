@@ -137,10 +137,12 @@ def run_plan(plan, root, results, *, run_as='articheck'):
     report['runtime']['disk_free_after_bytes']=shutil.disk_usage(root).free
     usage=resource.getrusage(resource.RUSAGE_CHILDREN)
     report['runtime']['child_cpu_seconds']=round(usage.ru_utime+usage.ru_stime,3)
-    transient=bool(re.search(r'(429|too many requests|rate.?limit|temporary failure|connection timed out)',logs,re.I))
+    failure_logs='\n'.join(s.get('output','') for s in report['stages'] if s['status']=='failed')
+    transient=failed and bool(re.search(
+        r'((?:HTTP(?:\s+Error|/[\d.]+)?|status(?:\s+code)?)\s*[:=]?\s*429\b|429\s+(?:Client Error|Too Many Requests)|too many requests|rate.?limit|temporary failure|connection timed out)',failure_logs,re.I))
     report['failure_category']='transient_service' if transient else 'execution_blocked' if failed else None
     report['needs_user'] = failed and not transient and bool(re.search(
-        r'(file not found|filenotfound|no such file|permission denied|401|403|credentials|download|dataset|checkpoint|cuda|out of memory)', logs, re.I))
+        r'(file not found|filenotfound|no such file|permission denied|HTTP(?:\s+Error|/[\d.]+)?\s*[:=]?\s*(?:401|403)\b|credentials|download|dataset|checkpoint|cuda|out of memory)', failure_logs, re.I))
     report['question'] = '自动获取或执行遇到阻碍，请查看失败步骤。能否补充缺失的数据、权重或公开获取线索？' if report['needs_user'] else None
     report['acceptance'] = {'process': report['status'] == 'completed', 'paper_conclusion': None,
                             'notice': '阶段退出码和 stdout 指标仅证明本次运行观测；主要结论需核对完整协议与对照。'}

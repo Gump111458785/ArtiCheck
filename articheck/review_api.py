@@ -117,9 +117,11 @@ def prepare_context(body, *, partial=False):
         raise ReviewError('invalid_zip','ZIP cannot be read') from exc
     if code and not files:raise ReviewError('invalid_zip','No code files in ZIP')
     paper_budget=90000 if partial else 50000;paper_excerpts=[]
-    for page in pages:
+    for index,page in enumerate(pages):
         if paper_budget<=0:break
-        take=min(14000 if partial else 8000,paper_budget)
+        # Share the bounded context across the entire paper. A long introduction
+        # must not consume the budget before later result tables are reached.
+        take=min(14000,paper_budget//(len(pages)-index)) if partial else min(8000,paper_budget)
         text=table_first_excerpt(page['text'],take) if partial else page['text'][:take]
         if partial:text=text.encode()[:take].decode('utf-8',errors='ignore')
         paper_budget-=len(text.encode()) if partial else len(text)
@@ -128,6 +130,7 @@ def prepare_context(body, *, partial=False):
             'coverage':{'paper_pages_in_context':len(paper_excerpts),'code_files_in_context':len(excerpts),'total_code_files':len(files),'file_list_in_context':min(len(files),500),'file_list_truncated':len(files)>500,'paper_text_truncated':len(paper_excerpts)<len(pages) or any(p['truncated'] for p in paper_excerpts),'scope':'Bounded excerpts, not a complete repository audit'}}
     if partial:
         context['paper_links']=list(dict.fromkeys(link for page in pages for link in page.get('links',[])))[:100]
+        context['public_paper_ids']=pages[0].get('public_ids',[]) if pages else []
     return context,str(body.get('scope',''))[:2000]
 
 def validate_model_review(value,context):

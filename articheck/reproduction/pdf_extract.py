@@ -1,6 +1,7 @@
 """Bounded PDF parsing in a fresh trusted process, never artifact Python."""
 import json
 import logging
+import re
 import resource
 import sys
 from pathlib import Path
@@ -17,12 +18,17 @@ def main():
         raise ValueError('PDF must be unencrypted and contain 1–150 pages')
     pages=[];total=0
     for number,page in enumerate(reader.pages,1):
-        text=(page.extract_text(extraction_mode='layout') if '--layout' in sys.argv else page.extract_text()) or ''
+        text=((page.extract_text(extraction_mode='layout') if '--layout' in sys.argv else page.extract_text()) or '') if '/Contents' in page else ''
         if len(text)>60000:raise ValueError('Page text exceeds limit; no partial inventory is certified')
         total+=len(text)
         if total>1_500_000:raise ValueError('Extracted PDF text exceeds limit')
         item={'number':number,'text':text}
         if '--layout' in sys.argv:
+            if number == 1:
+                # Layout extraction drops rotated arXiv margin identifiers.
+                # Read only the first page header in ordinary extraction mode.
+                header=((page.extract_text() or '') if '/Contents' in page else '')[:2500]
+                item['public_ids']=re.findall(r'arxiv\s*:\s*(\d{4}\.\d{4,5})(?:v\d+)?',header,re.I)
             links=[]
             for annotation in list(page.get('/Annots', []))[:100]:
                 try:

@@ -86,17 +86,19 @@ python -m articheck run --task examples/task.json --output runs/provider-api \
   --model your-provider-model --policy-version your-provider-model-version
 ```
 
-示例采用兼容 Chat Completions 的供应商接口，地址、模型名称与版本均需替换。供应商联调、模型适配与质量评测 [待完成]。调用预算与费用配置见 [模型接入说明](docs/TRAINING.md)。
+示例采用兼容 Chat Completions 的供应商接口，地址、模型名称与版本均需替换。DeepSeek 的在线接入已通过实际调用；其他供应商适配与跨模型质量评测 [待完成]。调用预算与费用配置见 [模型接入说明](docs/TRAINING.md)。
 
 需要在其他应用中提交 PDF / ZIP 并查询审阅任务时，可使用独立的材料静态审阅接口：[接入说明](docs/API_REVIEW.md) · [OpenAPI 契约](web/dist/review-api.openapi.json) · [Python 调用示例](examples/api_review/submit.py) · [配置模板](examples/api_review/provider.env.example)。该接口返回 `model_api_static_review` 报告，实验执行与验收由执行器负责。
 
 ### 2.3 网站：浏览器中提交评测
 
-打开 ArtiCheck 网站，上传论文 PDF、代码及实验材料，在页面确认评测范围后提交任务。我们的服务器负责模型推理、任务调度、Docker 实验执行和报告保存；用户在浏览器中查看进度、复核证据并下载结果。服务器部署、模型与执行器接入及网站端到端服务 [待完成]。
+打开 [ArtiCheck 在线工作台](https://articheck-workbench.edgeone.dev/#api-review)，上传论文 PDF、代码 ZIP，或粘贴公开 GitHub 地址。系统按材料选择论文自查、复现评估或代码审查；允许仅上传论文或代码，默认检查适用范围，也可指定表格、实验与最长执行时间。试用提交需要管理员提供的网站访问码。
 
-EdgeOne Pages / Makers 部署包包含前端与同域云函数，接入 `deepseek-flash` 完成 PDF / ZIP 材料静态审阅，返回八项条件核对与出处建议。服务端保存供应商密钥，以访问码和共享调用计数限制费用；云端报告在浏览器保存和导出。Docker 实验执行仍使用本地执行器。[部署与密钥配置](docs/EDGEONE_DEPLOYMENT.md)；网页、云函数与 DeepSeek 实际调用已通过联调：内置教学材料返回 8 项核对、4 条建议，耗时 10.15 秒，使用 2,456 tokens，按高峰价格估算约 0.011 元。[验收报告](docs/evidence/edgeone-deepseek-acceptance.json)。该记录验证接口与报告链路，真实论文质量评测 [待完成]。
+网站使用 DeepSeek API 阅读论文文字与原页图像，核对八项条件、图表数字及论证依据。有公开代码线索时自动获取固定提交的源码；有可执行计划时，在 E2B CPU 实例中准备依赖、运行命令并保存日志、退出码和观测值。实际受阻后再请求用户补充材料，确认不可得的实验保留无法复现原因。
 
-[打开在线工作台](https://articheck-workbench.edgeone.dev/#home) · [进入 API 审阅](https://articheck-workbench.edgeone.dev/#api-review)。
+正式网站已完成 LIBLINEAR 作者代码的浏览器上传、模型审查、CPU 编译、训练与预测检查。进程成功、数值符合与论文主要结论成立分开记录；该次 `heart_scale` 运行检查代码流程，不替代下文 news20 案例或论文完整验收。[使用与接口](docs/ONLINE_WORKBENCH.md) · [真实网站验收](docs/ONLINE_ACCEPTANCE.md) · [部署与密钥配置](docs/EDGEONE_DEPLOYMENT.md)。
+
+在线流程使用主流模型 API；ArtiCheck 后训练权重的发布与效果评测 [待完成]。
 
 <a id="case"></a>
 
@@ -159,7 +161,11 @@ flowchart LR
 
 ## 5. 界面展示
 
-在开始页新建论文评估或继续已有项目，再进入执行中心、角色协作和证据审查。各页面使用同一套项目、运行与报告数据。
+在开始页进入在线审查，提交材料后查看报告、执行日志、图表证据与角色记录。本地工作台保留完整实验与归档案例入口。
+
+| 在线审查报告 | 实际 CPU 执行 |
+|---|---|
+| ![问题分组、修正建议与八项条件](docs/assets/online-report.png) | ![真实阶段、环境与执行状态](docs/assets/online-execution.png) |
 
 [打开开始页](https://articheck-workbench.edgeone.dev/#home) · [浏览执行中心](https://articheck-workbench.edgeone.dev/#workbench) · [查看角色协作](https://articheck-workbench.edgeone.dev/#roles) · [完整界面图集](docs/UI_GALLERY.md)
 
@@ -190,7 +196,7 @@ flowchart LR
 </tr>
 </table>
 
-论文项目按「论文与代码 → 实验覆盖 → 复现条件 → 服务器核对 → 短时核查主张与配置 → 完整实验 → 评估结果」组织。PDF 正文与 ZIP 在浏览器中准备，候选主张需人工确认；运行完整实验前，需明确绑定本地材料和执行入口。[开始页设计](docs/HOME_SCREEN.md) · [界面与模块对应](docs/REVIEW_WORKSPACE.md) · [八项复现条件](docs/IMPLEMENTATION_STATUS.md)。
+在线审查按「提交材料 → 自动审查 → 云端执行 → 证据与报告」组织，无需预先绑定本地命令。本地项目保留实验覆盖、人工主张编辑、服务器核对与完整实验的配置流程。[开始页设计](docs/HOME_SCREEN.md) · [界面与模块对应](docs/REVIEW_WORKSPACE.md) · [八项复现条件](docs/IMPLEMENTATION_STATUS.md)。
 
 <a id="architecture"></a>
 
@@ -198,7 +204,7 @@ flowchart LR
 
 ![ArtiCheck 系统架构：核心核查、评测与数据、Planner 训练](docs/assets/architecture.svg)
 
-[打开 SVG 原图](docs/assets/architecture.svg)。训练层覆盖轨迹导出、LoRA SFT 与 GRPO Planner；GPU 训练及集成评测 [待完成]。实验执行入口需要明确配置并经人工确认。
+[打开 SVG 原图](docs/assets/architecture.svg)。训练层覆盖轨迹导出、LoRA SFT 与 GRPO Planner；GPU 训练及集成评测 [待完成]。本地完整实验需要明确配置并确认执行入口；在线 CPU 流程由模型生成计划并冻结后执行。
 
 短时核查通过 asyncio DAG 并发读取文献主张、检查代码，再由 Planner 决定继续检查或停止；默认使用固定 Planner。完整实验按冻结计划执行，执行器为各阶段记录负责角色，并将事件写入 `roles.jsonl`。界面按角色读取实际事件，不补造角色活动。[执行中心的数据与模块对应](docs/EXECUTION_CENTER.md)。
 
@@ -282,7 +288,7 @@ python -m articheck run --task examples/task.json --output runs/review
 |---|---|---|
 | 公开 CPU 案例 | LIBLINEAR / news20，15 次运行、60 个阶段；L2-SVM 准确率 96.76%，样本标准差 0.31 个百分点 | [案例 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563) · [报告](web/dist/samples/liblinear-reproduction.json) |
 | 内置受控缺陷基准 | 单仓库 4 个版本、12 条主张；FixedPlanner + 规则核查：TP=3、FP=0、TN=9、FN=0，宏 F1=1.000，问题召回率 100%，误报率 0% | [原始结果](docs/smoke/metrics.json) · [问题报告](docs/smoke/metric-defect-report.md) |
-| Python 工程测试 | 146 项：本地 142 项通过，4 项 Docker 专项在 CI 执行；CI 覆盖 Python 3.10–3.12 | [验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
+| Python 工程测试 | 168 项：本地 164 项通过、4 项 Docker 专项跳过；CI 覆盖 Python 3.10–3.12 | [网站与回归验收](docs/ONLINE_ACCEPTANCE.md) · [历史验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
 | 前端测试 | 97 项通过，覆盖完整实验角色事件、API 接入、演示评测、开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
 
 内置基准的阈值为 0.5，包含正例 3 条、负例 9 条。这组结果仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 评测 [待完成]；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
@@ -415,7 +421,7 @@ GRPO 方案已采用 SFT 检查点初始化策略，并通过 verl 自定义 Age
 | v0.1.0 · 核查与复现 | 主张级流水线、本地工作台、API 接入、Docker 执行、公开 CPU 案例与证据复核 |
 | v0.2 · 决策环境与多仓库评测 [待完成] | 比较同预算下不同策略的质量与成本；冻结 ≥8 个独立原始仓库，验证 / 测试均含正负例；比较固定工作流 + 7B 与单 Agent |
 | v0.3 · SFT / GRPO Planner [待完成] | 使用冻结数据训练 GPU SFT、三种子 GRPO，保存曲线、置信区间与等预算对照，发布模型权重与下载说明 |
-| v0.4 · 效率与部署 [待完成] | 测量训练、缓存与量化的质量、显存、吞吐、延迟和成本，在我们的服务器部署网站、模型服务与执行器，验收端到端任务及运行配置 |
+| v0.4 · 效率与部署 [待完成] | 测量 GPU 训练、缓存与量化的质量、显存、吞吐、延迟和成本，部署微调权重服务并完成效果对照；网站的模型 API 与 CPU 执行见第 2.3 节 |
 
 更新日期：**2026-11-03**。版本范围已按上表划分，结果、配置与日志纳入统一归档协议。GitHub Release 发布 [待完成]。
 

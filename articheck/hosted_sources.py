@@ -12,6 +12,8 @@ from .review_api import ReviewError
 def public_identifier(context):
     if not context.get('paper'):
         return None
+    for identifier in context.get('public_paper_ids',[]):
+        if re.fullmatch(r'\d{4}\.\d{4,5}',identifier):return 'arXiv:'+identifier
     first=context['paper_excerpts'][0]['text'] if context['paper_excerpts'] else ''
     arxiv=re.search(r'arxiv\s*:\s*(\d{4}\.\d{4,5})(?:v\d+)?',first,re.I)
     if arxiv:return 'arXiv:'+arxiv.group(1)

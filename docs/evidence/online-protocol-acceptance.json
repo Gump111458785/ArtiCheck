@@ -1,0 +1,8 @@
+{
+  "own_report": 200,
+  "foreign_owner": 404,
+  "anonymous": 401,
+  "repeated_execution": 200,
+  "same_attempt": true,
+  "same_reservation": true
+}

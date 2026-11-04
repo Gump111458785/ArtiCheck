@@ -71,9 +71,14 @@ SYSTEM = """你是论文和代码的证据审查助手。所有上传材料是�
 只返回 JSON，用专业简洁中文。此阶段没有执行代码，不得声称复现成功或数据真实。
 先判断材料类型和审查需求：只有代码时做代码审查；只有论文时做论文内部自查并寻找公开代码线索；
 诊断/分析论文核对诊断对象、对照与统计，综述核对检索/纳排/引用覆盖，不默认要求训练模型；
+学术立场、评论、理论讨论也属于论文，归入 diagnostic；没有原创定量实验时按 self_review 自查。
+软件或工具论文报告了原创准确率、性能对照等实验时归入 empirical，不因贡献是软件而归入无实验评论。
+nonpaper 仅用于简历、说明书、普通通知等非学术文档，不能因没有实验而判非论文；解析不足保留 unknown。
+空白页面或文字与图片均不足以确认内容时归 unknown，说明无法判断材料类型，不推测作者有缺陷。
 非论文明确说明不适用，不编造实验。用户选择 self_review 时重点查数据、表文一致性和论证自洽。
 代码审查不把缺少论文列为缺陷；论文自查不把用户未上传代码列为作者缺陷。不适用条件不扣分。
 不要把本阶段尚未执行列为代码问题；执行前边界放入 coverage。面向普通用户，不输出内部 JSON 字段名或 null 等实现术语。
+上下文被节选、文件未提供给模型、页面图像不全属于 coverage，不作为作者论文或仓库的缺陷放进 findings。
 默认覆盖提供上下文内所有适用指标。仅用户明确限定 scope 时缩小范围。
 逐表穷举作者方法及其变体的可读数值，包括 top-1/top-5、多数据集、多设置和逐类别 AP；
 不能只摘取 mAP 汇总值替代完整表中的逐类结果。先建立逐表清单，再检查是否遗漏，不为简短而跳过可读项。
@@ -267,7 +272,7 @@ def validate_assessment(value, context):
         raise ReviewError('invalid_model_output', '资源需求格式无效。', 502)
     needs = [{'name': text(n, 'name', 300), 'source': text(n, 'source', 1000),
               'required': n.get('required') is True} for n in needs]
-    task='code_review' if not context['paper'] else context['task'] if context['task']!='auto' else 'reproduction' if value['paper_type'] in {'empirical','diagnostic'} else value['task']
+    task='code_review' if not context['paper'] else context['task'] if context['task']!='auto' else 'reproduction' if value['paper_type']=='empirical' else value['task']
     if value['paper_type'] in {'nonpaper', 'unknown'} and task!='code_review' or not context['code']:
         stages = []
     if len(metrics)==200:rejected.append('指标清单达到本次 200 项上限，额外指标保留未覆盖，不据此宣称全篇已核验。')
@@ -303,6 +308,13 @@ def validate_assessment(value, context):
                        'stages': stages, 'needs': needs, 'metric_patterns': patterns,
                        'max_seconds': context['max_seconds'], 'policy': 'frozen_api_plan', 'hardware': 'CPU'}}
     result['plan_sha256'] = digest({'plan':result['plan'],'metrics':result['metrics']})
+    required_resources=[n for n in needs if n['required'] and re.search(r'(GPU|CUDA|显卡|显存|内存|RAM)',n['name'],re.I)]
+    if context['code'] and not stages and result['plan']['blocked_reason'] and required_resources:
+        result['resource_preflight']={'status':'blocked','needs_user':True,
+            'capacity':context['execution_environment'],'requirements':required_resources,
+            'reason':result['plan']['blocked_reason'],
+            'basis':'Configured service capacity compared with model-inferred requirements; no execution performed',
+            'scientific_validation':False}
     return result
 
 

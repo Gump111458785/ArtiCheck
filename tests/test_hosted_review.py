@@ -3,6 +3,7 @@ import copy
 import json
 from pathlib import Path
 import tempfile
+import io
 import unittest
 from unittest.mock import patch
 
@@ -103,6 +104,64 @@ class Budget:
 
 
 class HostedReviewTests(unittest.TestCase):
+    def test_valid_blank_pdf_is_not_rejected_as_corrupt(self):
+        from pypdf import PdfWriter
+        writer=PdfWriter();writer.add_blank_page(612,792);buffer=io.BytesIO();writer.write(buffer)
+        context,_=prepare_assessment({'paper':{'name':'blank.pdf','content_base64':base64.b64encode(buffer.getvalue()).decode()}})
+        self.assertEqual(context['paper_pages'],1)
+        self.assertEqual(context['paper_excerpts'][0]['text'],'')
+
+    def test_numeric_outputs_are_not_mistaken_for_http_rate_limits(self):
+        cases=[("printf 'accuracy 0.429 and 403 samples\\n'",None,False),
+               ("printf 'score 429\\n'; exit 1",'execution_blocked',False),
+               ("printf 'HTTP Error 429: Too Many Requests\\n'; exit 1",'transient_service',False),
+               ("printf 'dataset file not found\\n'; exit 1",'execution_blocked',True)]
+        for command,category,needs_user in cases:
+            with self.subTest(command=command),tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);dest=root/'result';dest.mkdir()
+                value=run_plan({'max_seconds':30,'stages':[{'id':'S1','title':'Check','command':command,'file':'check.sh'}],
+                                'metrics':[],'metric_patterns':[]},root,dest,run_as=None)
+                self.assertEqual(value['failure_category'],category)
+                self.assertEqual(value['needs_user'],needs_user)
+
+    def test_insufficient_compute_can_be_confirmed_without_pretending_to_execute(self):
+        context,_=prepare_assessment(materials());answer=output(context)
+        answer['plan'].update(stages=[],blocked_reason='训练需要 CUDA GPU，当前仅有 CPU',
+            needs=[{'name':'CUDA GPU','source':'论文训练设置','required':True}])
+        review=validate_assessment(answer,context)
+        self.assertFalse(review['resource_preflight']['capacity']['gpu'])
+        store=MemoryStore();executor=Executor();app=Flask(__name__)
+        register(app,{'ARTICHECK_REVIEW_TOKEN':TOKEN},Reviewer(),Budget(),store=store,executor=executor)
+        record={'id':'9'*32,'review':review,'execution':None,'scientific_validation':False}
+        store.save(OWNER,record)
+        response=app.test_client().post('/assessments/'+record['id']+'/feedback',
+            json={'answer':'unavailable'},headers=HEADERS)
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.json['availability']['resource'],'compute_capacity')
+        self.assertFalse(response.json['availability']['scientific_validation'])
+        self.assertIsNone(response.json['execution'])
+        self.assertEqual(executor.launches,0)
+        self.assertEqual(store.reservations,0)
+
+    def test_long_paper_keeps_late_result_tables_within_context_budget(self):
+        pages=[{'number':n,'text':('Introduction text ' * 500)+f'\nTable {n}. Results\nOurs 92.3 %\n',
+                **({'public_ids':['1911.02685']} if n==1 else {})} for n in range(1,32)]
+        with patch('articheck.review_api.extract_paper',return_value=(pages,{})):
+            context,_=prepare_assessment({'paper':materials()['paper']})
+        self.assertEqual(len(context['paper_excerpts']),31)
+        self.assertIn('Ours 92.3 %',context['paper_excerpts'][-1]['text'])
+        self.assertLessEqual(sum(len(p['text'].encode()) for p in context['paper_excerpts']),90000)
+        self.assertEqual(public_identifier(context),'arXiv:1911.02685')
+        self.assertTrue(context['coverage']['paper_text_truncated'])
+
+    def test_nonexperimental_academic_analysis_keeps_self_review_task(self):
+        context,_=prepare_assessment({'paper':materials()['paper']})
+        answer=output(context);answer.update(paper_type='diagnostic',task='self_review')
+        result=validate_assessment(answer,context)
+        self.assertEqual(result['paper_type'],'diagnostic')
+        self.assertEqual(result['task'],'self_review')
+        self.assertEqual(result['plan']['stages'],[])
+
     def test_pdf_only_and_code_only_and_empty_material(self):
         for key in ('paper', 'code'):
             context, _ = prepare_assessment({key: materials()[key]})

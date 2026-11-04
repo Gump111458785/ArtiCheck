@@ -2,7 +2,21 @@
 
 工作台从论文材料走向逐主张证据与分层验收。本页选取已归档的真实界面截图，点击图片可查看原尺寸；截图中的公开案例与个人项目分别保存。
 
-[交互预览](https://articheck-workbench.onatanolf8074.chatgpt.site/#home) · [本地启动](WORKBENCH.md#运行方式) · [系统架构原图](assets/architecture.svg)
+[交互预览](https://articheck-workbench.edgeone.dev/#home) · [本地启动](WORKBENCH.md#运行方式) · [系统架构原图](assets/architecture.svg)
+
+## 在线审查：材料、报告与真实执行
+
+论文 PDF 与代码可以分别提交。GitHub 地址自动读取固定提交的源码；有适用计划时在云端 CPU 实例执行。下图来自正式网站的公开 LIBLINEAR 案例，不是预设动画。
+
+[![在线审查报告](assets/online-report.png)](assets/online-report.png)
+
+[![在线执行与日志](assets/online-execution.png)](assets/online-execution.png)
+
+[![在线角色记录](assets/online-roles.png)](assets/online-roles.png)
+
+[![论文图表与出处](assets/online-paper-evidence.png)](assets/online-paper-evidence.png)
+
+论文自查将摘要与标题分开显示；图表清单保留模型、数据集、数值与原页入口。[实际运行范围与验收记录](ONLINE_ACCEPTANCE.md)。以下为本地工作台与归档案例页面。
 
 ## 开始：选择新建、继续项目或查看案例
 
@@ -28,12 +42,6 @@ LIBLINEAR 公开案例展示 15 次运行、60 个阶段和重复实验指标。
 
 [![案例验收](assets/execution-detail.jpg)](assets/execution-detail.jpg)
 
-## 手机端：相同入口，单栏阅读
-
-导航折叠，新建评估在首屏可达；案例、连接状态与个人项目依次展示。
-
-<img src="assets/home-mobile.jpg" alt="ArtiCheck 手机端开始页" width="390">
-
 ## 从界面到实现
 
 | 界面 | 前端入口 | 数据与执行来源 |
@@ -43,4 +51,4 @@ LIBLINEAR 公开案例展示 15 次运行、60 个阶段和重复实验指标。
 | 角色协作 | [execution-core.mjs](../web/dist/execution-core.mjs) | preflight / decision / tool / audit / complete 事件 |
 | 完整实验与审查 | [review-view.mjs](../web/dist/review-view.mjs) | 冻结计划、运行阶段、分层报告与追加复核意见 |
 
-托管预览用于材料准备与归档回放，真实执行使用本地工作台。[开始页说明](HOME_SCREEN.md) · [执行中心说明](EXECUTION_CENTER.md) · [审查模块对应](REVIEW_WORKSPACE.md)。
+在线网站已接入模型 API 和 CPU 执行；本地工作台用于自有材料环境、GPU 或完整实验配置。[开始页说明](HOME_SCREEN.md) · [执行中心说明](EXECUTION_CENTER.md) · [审查模块对应](REVIEW_WORKSPACE.md)。

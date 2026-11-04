@@ -27,7 +27,7 @@ python -m articheck.review_client --base-url http://127.0.0.1:8790 --health
 
 ```bash
 python -m articheck.review_api --port 8790 --with-ui
-# 打开 http://127.0.0.1:8790/#api-review
+# 打开 http://127.0.0.1:8790/#http-api
 ```
 
 如果端口占用，用 `--port 8791` 等其他端口，并打开对应地址。

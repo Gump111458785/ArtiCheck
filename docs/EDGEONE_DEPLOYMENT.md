@@ -1,8 +1,8 @@
 # EdgeOne Pages / Makers 部署
 
-该部署包同时包含静态工作台和 Python 云函数。页面与 `/v1` 接口使用同一域名。部署目标为 EdgeOne 国际站、新加坡云函数区域；平台当前将 Pages 称为 Makers。
+部署包包含静态工作台与 Python 云函数，页面和 `/v1` 接口使用同一域名。项目使用 EdgeOne 国际站、海外访问区域与新加坡云函数；默认域名为 [articheck-workbench.edgeone.dev](https://articheck-workbench.edgeone.dev)，项目 ID 为 `makers-f8jofllfpwva`。
 
-线上工作台：[articheck-workbench.edgeone.dev](https://articheck-workbench.edgeone.dev)。项目 ID：`makers-f8jofllfpwva`。首页与 `/v1/health` 已通过线上检查；真实 DeepSeek 审阅已通过：教学 PDF（2 页）与 ZIP（3 个文件）经云函数解析后，返回 8 项核对和 4 条建议。耗时 10.15 秒，输入 1,401、输出 1,055 tokens，高峰价格估算 0.011242 元。[无密钥验收记录](evidence/edgeone-deepseek-acceptance.json)。这项验收验证服务链路，不代表真实论文审阅质量。
+网站提供模型 API 审查和 E2B CPU 执行；原 v1 材料静态审阅接口继续保留。使用流程与 v2 接口见 [在线工作台](ONLINE_WORKBENCH.md)，实际执行记录见 [网站验收](ONLINE_ACCEPTANCE.md)。
 
 ## 1. 构建与上传
 
@@ -12,64 +12,64 @@ edgeone login --site global
 edgeone makers deploy .edgeone-build.zip -n articheck-workbench -e production --site global --area overseas --skip-ai-gateway-sync
 ```
 
-`.edgeone-build` 与归档 `.edgeone-build.zip` 仅复制 `web/dist`、部署配置和白名单 Python 模块。上传构建把 `.mjs` 模块及引用改为 `.js`，并为入口生成内容指纹文件名，避免平台 MIME 类型和浏览器旧缓存导致空白页。源码文件保持原名。
+构建目录和 ZIP 只包含 `web/dist`、部署配置和白名单 Python 模块。构建时将 `.mjs` 与引用改成 `.js`，为入口生成内容指纹文件名，避免平台 MIME 类型与旧缓存导致空白页；源码保持原名。不要上传整个工作目录。
 
-`.env`、本地导入材料、运行目录、模型权重及训练依赖不进入上传包。不要上传整个工作目录。
+云函数入口为 `cloud-functions/v1/index.py`，框架收到的路径已去掉 `/v1` 前缀。EdgeOne Python 运行环境为 3.10，使用兼容的 `e2b==2.55.1`；不能直接升级到要求 Python 3.11 的 SDK。依赖由 `cloud-functions/requirements.txt` 安装。[平台 Python 说明](https://pages.edgeone.ai/document/python)。
 
-云函数入口为 `cloud-functions/v1/index.py`，框架收到的路径已去掉 `/v1` 前缀。平台配置的执行上限为 120 秒，PDF 解析上限 20 秒，模型请求上限 60 秒。函数在同一个请求中完成解析和模型审阅；没有后台任务队列，也不依赖函数磁盘保存任务。
+函数执行上限为 120 秒。审查在单次请求内完成，应用按 108 秒控制模型与可选复核的剩余时间。长时间代码执行交给 E2B，云函数保存任务状态；页面轮询取回结果，不依赖后台线程或函数本地磁盘。
 
 ## 2. 服务端环境变量
 
-在项目的 **Settings → Environment Variables** 中添加下列变量，作用范围选择 Production。填写后重新部署，使函数读取新配置。界面名称以当前控制台为准。
+在项目 **Settings → Environment Variables** 中设置 Production 变量，保存后重新部署。密钥只填写在服务端控制台。
 
-| 变量 | 填写内容 |
+| 变量 | 用途 |
 |---|---|
-| `ARTICHECK_API_KEY` | DeepSeek 控制台创建的 API Key；只在服务端填写 |
-| `ARTICHECK_PUBLIC_ORIGIN` | 网站公开源，例如 `https://articheck-workbench.edgeone.dev`；用于检查请求来源，不依赖平台转发后的内部 Host |
-| `ARTICHECK_REVIEW_TOKEN` | 随机生成、至少 24 字符的网站审阅访问码；仅提供给试用者 |
-| `UPSTASH_REDIS_REST_URL` | 持久化 Redis 的 HTTPS REST 地址 |
-| `UPSTASH_REDIS_REST_TOKEN` | Redis REST 写入凭据；只在服务端填写 |
-| `ARTICHECK_BUDGET_ID` | 随机生成、16–128 字符的固定预算标识；同一轮联调保持不变 |
+| `ARTICHECK_API_KEY` | DeepSeek API key |
+| `ARTICHECK_PUBLIC_ORIGIN` | `https://articheck-workbench.edgeone.dev`，校验浏览器请求来源 |
+| `ARTICHECK_REVIEW_TOKEN` | 至少 24 字符的网站访问码，按需提供给试用者 |
+| `UPSTASH_REDIS_REST_URL` | 持久化 Redis HTTPS REST 地址 |
+| `UPSTASH_REDIS_REST_TOKEN` | Redis 写入凭据 |
+| `ARTICHECK_BUDGET_ID` | 固定预算标识；同一轮不得变更或重置计数 |
+| `ARTICHECK_MODEL_ATTEMPTS` | 本轮设为 `60`；接受范围 1–60 |
+| `E2B_API_KEY` | 创建、读取和关闭 CPU 执行实例 |
+| `ARTICHECK_GITHUB_TOKEN` | 可选，仅用于提高 GitHub 服务端读取额度 |
 
-模型地址固定为 `https://api.deepseek.com`，型号为 `deepseek-flash`。不接受浏览器传入供应商密钥、模型地址或型号。访问码和供应商 API Key 是两个不同的值。
+模型地址固定为 `https://api.deepseek.com`，型号为 `deepseek-flash`，关闭思考模式。浏览器不能传入供应商密钥、任意服务地址或任意型号。网站访问码和 DeepSeek API key 是两个不同的值。
 
-持久化计数器使用 [Upstash Redis REST API](https://upstash.com/docs/redis/features/restapi)。创建个人账户下的数据库并复制 REST URL 和写入 Token；预算计数无需保存论文、代码或模型输出。选择无自动升级的免费额度或你已有的数据库，实际额度以平台控制台为准。不要使用会过期的临时数据库，也不要给预算键设置 TTL 或启用会驱逐该键的策略。
+Redis 使用 [Upstash REST API](https://upstash.com/docs/redis/features/restapi)，需要写入 Token。预算键不设置 TTL；报告保留 7 天。不要使用可能自动过期或驱逐预算键的数据库配置。
 
-## 3. 本轮 10 元预算
+## 3. 本轮 100 元费用约束
 
-云函数先通过一条原子的 Redis Lua 命令预留调用次数，再发出模型请求。全项目共享同一个计数器，整轮最多 10 次请求，每次按 1 元额度保守预留；失败、超时、格式不合格也不退回额度。服务不自动重试。重启和重新部署不清空计数。数据库故障、缺少凭据、访问码错误或额度耗尽均停止模型调用。
+用户授权的试运行总额不超过 100 元。主审、公开资料检索与交叉复核共用原有持久化计数，最多 60 次外部请求，每次预留 1 元；CPU 实例最多 20 次，每次预留 1 元。应用总预留上限为 80 元，留出 20 元余量。失败、超时和格式不合格不退回预留；重新部署不清零。
 
-输入消息总计不超过 200,000 UTF-8 字节，输出最多 3,000 tokens，关闭思考模式，不调用搜索、抓取或工具接口。按 2026-11-03 查验的 [DeepSeek 官方高峰价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（输入缓存未命中 2 元 / 百万 tokens，输出 8 元 / 百万 tokens），单次上限保守估算约 0.43 元，低于 1 元预留额。缓存优惠不计入上限。
+预留通过 Redis 原子操作在外部请求前完成。存储不可用、凭据缺失、访问码错误或额度耗尽时停止新调用。重复提交同一请求不重复主审；同一次执行不重复启动实例。用户主动重试会另行预留，并保留旧尝试，单份计划最多三次执行。
 
-10 元约束针对这套固定模型、固定配置、本轮计数器发出的请求，不包含账号中其他应用的用量，也不包含域名、托管及数据库费用。供应商调价后需要重新核价。不要通过修改预算标识、清除预算键或重建数据库恢复同一轮额度。建议使用独立 API Key 并关闭自动充值。
+文本消息最多 200,000 UTF-8 字节；原页图片最多 24 张，主审输出最多 24,000 tokens。按 2026-11-05 查验的 [DeepSeek 高峰价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)（缓存未命中输入 2 元 / 百万 tokens，输出 8 元 / 百万 tokens）计算，1 元是保守的单请求预留；Search 成功请求单价为 0.005 元，仍按 1 元预留，不复用免费假设。
+
+CPU 实例使用 2 vCPU、512 MB 内存，执行时间选填 30–600 秒，默认 300 秒，另留最多 60 秒准备时间。状态查询按原始截止时间计算剩余存活时间；浏览器关闭不解除供应商硬时限。结果持久化后主动关闭实例，失败时硬时限兜底。
+
+预留不等于真实账单。免费额度、平台配额和最终扣费以控制台为准；其他应用使用同一供应商账户产生的费用不受本应用计数器约束。不要通过修改预算标识或删除预算键恢复额度。
 
 ## 4. 页面使用
 
-1. 打开部署域名，创建个人论文项目，导入 PDF 和代码 ZIP。
-2. 进入「API 接入」，API 地址保持当前网站域名。
-3. 填写网站审阅访问码并检查连接。访问码只保存在当前页面内存，不进入项目数据或报告。
-4. 确认材料发送授权，提交审阅。等待服务端返回报告后，可在本浏览器查看、导出。
+1. 打开「在线审查」，上传 PDF、ZIP 或填写公开 GitHub 仓库；至少一项材料即可。
+2. 保留自动识别，或选择论文自查、复现评估、代码审查。范围与最长时间可留空。
+3. 填入管理员提供的网站访问码，阅读材料发送说明并确认，然后提交。
+4. 系统读取图表、核对依据并生成报告；有可执行 CPU 计划时自动启动实例。实际受阻后再询问缺失材料。
+5. 查看报告、阶段日志、图表证据与角色事件，导出 JSON。保留浏览器存储或先导出，清除身份凭据后不能仅凭编号恢复旧报告。
 
-PDF 与 ZIP 合计建议小于 3.5 MB；编码后的完整 JSON 请求必须小于 5 MB，给平台 6 MB 限制保留余量。更大的材料使用本地 HTTP 服务。云端仅返回有限文本摘录的静态审阅建议，不执行作者代码，不据此宣称复现论文结论。
+完整 JSON 请求小于 5 MB，原始 PDF 与 ZIP 合计建议小于约 3.5 MB。大型 GPU 训练与受限数据不能在本轮 CPU 条件下完成；实际代码运行和论文结论验收分别记录。
 
 ## 5. 接口与验收
 
-`GET /v1/health` 返回配置状态、`mode: synchronous` 和上传限制，不暴露任何密钥。
+`GET /v1/capabilities` 返回在线 v2 能力、配置状态与限制，不返回密钥。v2 的材料审查、执行、查询、停止及补料接口见 [接口表](ONLINE_WORKBENCH.md#在线接口-v2)。
 
-`POST /v1/reviews` 使用原有 PDF / ZIP JSON 格式，额外要求 `Authorization: Bearer <网站访问码>` 和 `X-ArtiCheck-Client: review-api`。完成后直接返回 `{job, report}`，报告来源为 `model_api_static_review`。云端不提供异步任务查询、取消及报告下载端点，前端已按健康接口模式适配；本地服务保持原有异步协议。
-
-先验证首页和健康接口；缺少配置时必须显示模型未配置。配置完成后，使用仓库自带的教学 PDF / ZIP 做一次供应商端到端验收，核对八项审阅、材料指纹、引用范围和额度。不得以本地假供应商测试代替真实 DeepSeek 验收。
-
-本地检查：
+原有 `GET /v1/health` 和 `POST /v1/reviews` 继续支持 v1 静态审阅。v1 需要 PDF 与 ZIP，返回 `model_api_static_review`；v2 允许单材料，报告来源为 `model_api_review`，执行观测位于 `execution`。本地自托管 v1 页面从 `#http-api` 进入。
 
 ```bash
 python -m pip install -e '.[cloud]'
-python -m unittest discover -s tests -p 'test_edgeone_review.py' -v
-node --test tests/frontend/review-api.test.mjs
+python -m unittest discover -s tests -v
+node --test tests/frontend/*.test.mjs
 ```
 
-平台说明：[Python 云函数](https://pages.edgeone.ai/document/python) · [CLI 部署](https://pages.edgeone.ai/document/edgeone-cli) · [函数时限与区域](https://pages.edgeone.ai/document/edgeone-json)。
-
-实际 Redis 并发验收在独立测试命名空间发起 20 次申请，结果为 10 次允许、10 次拒绝；正式联调计数没有被测试重置。正式首个模型请求的额度编号为 1。
-
-网页端也完成了 PDF / ZIP 导入、访问码校验、真实 DeepSeek 请求、八项审阅展示与 JSON 导出验收。第二份报告的额度编号为 2，已验证下载内容与网页任务编号一致。[网页导出报告](evidence/edgeone-browser-acceptance.json)。
+历史 v1 教学材料验收保留于 [供应商记录](evidence/edgeone-deepseek-acceptance.json) 和 [浏览器导出](evidence/edgeone-browser-acceptance.json)。v2 的真实网站 CPU 执行和材料类型测试单独记录，不用历史教学结果替代。

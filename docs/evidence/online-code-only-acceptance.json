@@ -1,0 +1,389 @@
+{
+  "budget": {
+    "model_max_attempts": 60,
+    "model_reserved_attempts": 15
+  },
+  "created_at": "2026-11-04T18:41:22.504724+00:00",
+  "execution": {
+    "acceptance": {
+      "notice": "阶段退出码和 stdout 指标仅证明本次运行观测；主要结论需核对完整协议与对照。",
+      "paper_conclusion": null,
+      "process": true
+    },
+    "attempt_id": "6c566970063746d49bc0fb64a2ad8c4f",
+    "deadline": 1793818045.9579985,
+    "elapsed_seconds": 6.92,
+    "environment": {
+      "cpu_count": 2,
+      "envd_version": "0.10.0",
+      "memory_mb": 512,
+      "template_id": "rki5dems9wqfm4r03t7g"
+    },
+    "events": [
+      {
+        "kind": "plan_scheduled",
+        "policy": "frozen_api_plan",
+        "role": "planner",
+        "stages": 3,
+        "time": 1793817693.6882765
+      },
+      {
+        "kind": "stage_started",
+        "role": "experiment_runner",
+        "stage": "S1",
+        "time": 1793817693.6885269
+      },
+      {
+        "exit_code": 0,
+        "kind": "stage_finished",
+        "role": "experiment_runner",
+        "stage": "S1",
+        "time": 1793817700.455586,
+        "timed_out": false
+      },
+      {
+        "kind": "stage_checked",
+        "role": "cross_auditor",
+        "stage": "S1",
+        "status": "completed",
+        "time": 1793817700.4555893
+      },
+      {
+        "kind": "stage_started",
+        "role": "experiment_runner",
+        "stage": "S2",
+        "time": 1793817700.4560645
+      },
+      {
+        "exit_code": 0,
+        "kind": "stage_finished",
+        "role": "experiment_runner",
+        "stage": "S2",
+        "time": 1793817700.4904172,
+        "timed_out": false
+      },
+      {
+        "kind": "stage_checked",
+        "role": "cross_auditor",
+        "stage": "S2",
+        "status": "completed",
+        "time": 1793817700.4904194
+      },
+      {
+        "kind": "stage_started",
+        "role": "experiment_runner",
+        "stage": "S3",
+        "time": 1793817700.4907856
+      },
+      {
+        "exit_code": 0,
+        "kind": "stage_finished",
+        "role": "experiment_runner",
+        "stage": "S3",
+        "time": 1793817700.6081753,
+        "timed_out": false
+      },
+      {
+        "kind": "stage_checked",
+        "role": "cross_auditor",
+        "stage": "S3",
+        "status": "completed",
+        "time": 1793817700.6081777
+      },
+      {
+        "kind": "stopped",
+        "policy": "frozen_api_plan",
+        "reason": "completed",
+        "role": "planner",
+        "time": 1793817700.6089337
+      },
+      {
+        "kind": "execution_checked",
+        "metrics": 0,
+        "role": "cross_auditor",
+        "time": 1793817700.6089356
+      },
+      {
+        "kind": "report_written",
+        "role": "reporter",
+        "status": "completed",
+        "time": 1793817700.6089375
+      }
+    ],
+    "execution_performed": true,
+    "failure_category": null,
+    "finished_at": 1793817700.608564,
+    "hardware": {
+      "cpu_count": 2,
+      "gpu": false
+    },
+    "metrics": [],
+    "needs_user": false,
+    "plan_sha256": "130359647dad7269277e114c2efedb5f26049eb0fe3cb9549e86a2f42b430655",
+    "provider": "e2b",
+    "question": null,
+    "reserved_attempt": 7,
+    "runtime": {
+      "architecture": "x86_64",
+      "child_cpu_seconds": 2.59,
+      "disk_free_after_bytes": 21448359936,
+      "disk_free_before_bytes": 21448962048,
+      "disk_total_bytes": 23124877312,
+      "python": "3.11.6",
+      "release": "6.1.189+",
+      "system": "Linux"
+    },
+    "sandbox_id": "i3boo05pyw85k84ua4ozd",
+    "scientific_validation": false,
+    "stages": [
+      {
+        "child_peak_rss_kib": 101300,
+        "command": "make clean >/dev/null 2>&1; make",
+        "exit_code": 0,
+        "experiment": "build",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/Makefile",
+        "finished_at": 1793817700.4555428,
+        "id": "S1",
+        "output": "g++ -Wall -Wconversion -O3 -fPIC -c -o newton.o newton.cpp\ng++ -Wall -Wconversion -O3 -fPIC -c -o linear.o linear.cpp\nmake -C blas OPTFLAGS='-Wall -Wconversion -O3 -fPIC' CC='cc';\nmake[1]: Entering directory '/home/articheck/artifact/blas'\ncc -Wall -Wconversion -O3 -fPIC -c dnrm2.c\ncc -Wall -Wconversion -O3 -fPIC -c daxpy.c\ncc -Wall -Wconversion -O3 -fPIC -c ddot.c\ncc -Wall -Wconversion -O3 -fPIC -c dscal.c\nar rcv blas.a dnrm2.o daxpy.o ddot.o dscal.o\na - dnrm2.o\na - daxpy.o\na - ddot.o\na - dscal.o\nranlib blas.a\nmake[1]: Leaving directory '/home/articheck/artifact/blas'\ng++ -Wall -Wconversion -O3 -fPIC -o train train.c newton.o linear.o blas/blas.a\ng++ -Wall -Wconversion -O3 -fPIC -o predict predict.c newton.o linear.o blas/blas.a\n",
+        "output_truncated": false,
+        "started_at": 1793817693.6885233,
+        "status": "completed",
+        "timed_out": false,
+        "title": "构建命令行工具"
+      },
+      {
+        "child_peak_rss_kib": 101300,
+        "command": "make >/dev/null 2>&1 && ./train heart_scale heart_scale.model && ./predict heart_scale heart_scale.model /tmp/heart_scale.out",
+        "exit_code": 0,
+        "experiment": "smoke_cli",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/train.c",
+        "finished_at": 1793817700.4903917,
+        "id": "S2",
+        "output": "......*\noptimization finished, #iter = 69\nObjective value = -121.097755\nnSV = 195\nAccuracy = 84.4444% (228/270)\n",
+        "output_truncated": false,
+        "started_at": 1793817700.4560618,
+        "status": "completed",
+        "timed_out": false,
+        "title": "heart_scale 训练与预测冒烟"
+      },
+      {
+        "child_peak_rss_kib": 101300,
+        "command": "make lib && cd python && python3 -c \"import sys; sys.path.insert(0,'.'); from liblinear.liblinearutil import svm_read_problem, train, predict; y,x=svm_read_problem('../heart_scale'); m=train(y[:200],x[:200],'-c 4'); p,acc,_=predict(y[200:],x[200:],m); print('ACC',acc[0])\"",
+        "exit_code": 0,
+        "experiment": "smoke_python",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/python/liblinear/liblinearutil.py",
+        "finished_at": 1793817700.6081486,
+        "id": "S3",
+        "output": "g++ -shared -Wl,-soname,liblinear.so.6 linear.o newton.o blas/blas.a -o liblinear.so.6\n.........................***\noptimization finished, #iter = 259\nObjective value = -357.016757\nnSV = 148\nAccuracy = 81.4286% (57/70) (classification)\nACC 81.42857142857143\n",
+        "output_truncated": false,
+        "started_at": 1793817700.4907818,
+        "status": "completed",
+        "timed_out": false,
+        "title": "构建共享库并检查 Python 接口导入"
+      }
+    ],
+    "started_at": 1793817693.6881607,
+    "status": "completed"
+  },
+  "execution_performed": false,
+  "format": "articheck-online-assessment-v2",
+  "id": "baecf79d8e304be8aadcab9c67503cd0",
+  "input_sha256": "5e9d8e12fe1877b1f06733b41534d5fa194ffb629abf9cb5e3b7b301b40ae5a9",
+  "materials": {
+    "code": "6a1b7983ed74c9eb5253373810c09e36e7f8737ddfbdae3686ba24358851f850",
+    "paper": null
+  },
+  "model": "deepseek-flash",
+  "page_images": [],
+  "review": {
+    "classification_reason": "材料仅含代码压缩包与源码片段，无论文正文、图表或链接，故不适用论文自查或复现评估，转为代码审查。",
+    "coverage": {
+      "code_files_in_context": 23,
+      "file_list_in_context": 39,
+      "file_list_truncated": false,
+      "gaps": [
+        "未提供论文，无法核对论文报告数值与代码一致性。",
+        "linear.cpp、newton.cpp、train.c、predict.c、svm-scale.c、blas/blasp.h、matlab/libsvmread.c 等片段被截断，未完整审阅。",
+        "未审阅 python/liblinear/*.py 具体实现细节（仅见 README 用法）。",
+        "MATLAB 接口与 Windows 构建未在本环境验证。",
+        "未执行任何构建或运行，所有结论为静态审查。",
+        "仅提供部分源文件片段，未进入上下文的实现不视为已审查。"
+      ],
+      "note": "覆盖限于提供的文件清单与片段，不代表完整仓库审计。",
+      "paper_images_in_context": 0,
+      "paper_pages_in_context": 0,
+      "paper_text_truncated": false,
+      "scope": "Bounded excerpts, not a complete repository audit",
+      "total_code_files": 39
+    },
+    "criteria": [
+      {
+        "dimension": "scope",
+        "file": null,
+        "note": "审查范围为提供的 39 个文件清单及 23 个文件片段，覆盖核心求解器、命令行工具、BLAS、MATLAB/Python 接口与构建文件；未提供论文，故不评估论文一致性。",
+        "page": null,
+        "status": "documented"
+      },
+      {
+        "dimension": "code",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/linear.cpp",
+        "note": "核心实现 linear.cpp/newton.cpp 与接口层结构清晰，但片段被截断，未完整审阅全部求解器分支；未见单元测试或回归测试目录。",
+        "page": null,
+        "status": "needs_review"
+      },
+      {
+        "dimension": "data",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/README",
+        "note": "仓库自带 heart_scale 样例数据，README 给出训练/预测流程；无其他数据集下载脚本，属工具库而非实验复现包。",
+        "page": null,
+        "status": "documented"
+      },
+      {
+        "dimension": "environment",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/Makefile",
+        "note": "Makefile 使用 g++/gcc，CFLAGS 含 -O3 -fPIC，自带 BLAS 子目录；Python 接口依赖 ctypes，可选 scipy/numba；MATLAB 接口需 MATLABDIR。",
+        "page": null,
+        "status": "documented"
+      },
+      {
+        "dimension": "settings",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/train.c",
+        "note": "train 用法列出全部求解器类型、C、eps、bias、权重、交叉验证与参数搜索选项及默认值，README 与 train.c 帮助文本一致。",
+        "page": null,
+        "status": "documented"
+      },
+      {
+        "dimension": "workflow",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/README",
+        "note": "README 给出 make → train → predict 的基本流程，但缺少端到端脚本、预期输出与版本固定，复现需人工拼接命令。",
+        "page": null,
+        "status": "needs_review"
+      },
+      {
+        "dimension": "resources",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/README",
+        "note": "纯 CPU 线性求解器，无 GPU 需求；样例数据规模小，可在低配 CPU 实例运行；MATLAB 接口需外部商业软件，不在本环境覆盖。",
+        "page": null,
+        "status": "documented"
+      },
+      {
+        "dimension": "results",
+        "file": null,
+        "note": "本次仅做代码审查，不评价与论文实验数值或主要结论的一致性。代码执行结果单独记录。",
+        "page": null,
+        "status": "not_applicable"
+      }
+    ],
+    "findings": [
+      {
+        "detail": "文件清单中无 tests 目录或测试脚本，README 仅给出交互式示例，无法自动判定构建或数值结果是否回归。",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/README",
+        "page": null,
+        "severity": "medium",
+        "suggestion": "增加最小冒烟测试脚本，固定 heart_scale 上的训练/预测命令与预期准确率范围。",
+        "title": "缺少自动化测试与回归基线"
+      },
+      {
+        "detail": "python/README 明确提示 `python setup.py install` 与 `pip install .` 会失败，需用 `pip install -e .` 并保留源码；对普通用户易踩坑。",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/python/README",
+        "page": null,
+        "severity": "low",
+        "suggestion": "在 README 顶部突出推荐安装命令，或在 setup.py 中加入防护提示。",
+        "title": "Python 接口安装方式存在易错点"
+      },
+      {
+        "detail": "matlab/Makefile 默认 MATLABDIR=/usr/local/matlab，需用户手动修改；本审查环境无 MATLAB，无法验证该接口。",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/matlab/Makefile",
+        "page": null,
+        "severity": "low",
+        "suggestion": "文档中说明需设置 MATLABDIR 环境变量，并在 CI 中跳过或单独标注。",
+        "title": "MATLAB 接口依赖外部路径"
+      },
+      {
+        "detail": "linear.cpp、newton.cpp、train.c、predict.c 等片段标记 truncated，部分求解器与参数搜索逻辑未在上下文中完整呈现，审查结论限于可见部分。",
+        "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/linear.cpp",
+        "page": null,
+        "severity": "low",
+        "suggestion": "补充完整文件或关键函数片段以便完整审查。",
+        "title": "源码片段被截断，未完成全量审阅"
+      }
+    ],
+    "metrics": [],
+    "paper_type": "code_only",
+    "plan": {
+      "blocked_reason": "",
+      "hardware": "CPU",
+      "max_seconds": 300,
+      "metric_patterns": [],
+      "needs": [
+        {
+          "name": "heart_scale 样例数据",
+          "required": true,
+          "source": "仓库自带 heart_scale 文件"
+        },
+        {
+          "name": "g++/gcc 与 make",
+          "required": true,
+          "source": "Makefile 依赖，隔离 Linux 环境通常自带"
+        },
+        {
+          "name": "Python3 与可选 scipy",
+          "required": false,
+          "source": "python/README 说明，scipy 仅用于 Scipy 快速开始"
+        }
+      ],
+      "policy": "frozen_api_plan",
+      "purpose": "在隔离 CPU 环境构建 LIBLINEAR 命令行工具，用自带 heart_scale 完成训练与预测冒烟验证，并检查 Python 接口可导入性。",
+      "stages": [
+        {
+          "command": "make clean >/dev/null 2>&1; make",
+          "depends_on": [],
+          "experiment": "build",
+          "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/Makefile",
+          "id": "S1",
+          "title": "构建命令行工具"
+        },
+        {
+          "command": "make >/dev/null 2>&1 && ./train heart_scale heart_scale.model && ./predict heart_scale heart_scale.model /tmp/heart_scale.out",
+          "depends_on": [
+            "S1"
+          ],
+          "experiment": "smoke_cli",
+          "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/train.c",
+          "id": "S2",
+          "title": "heart_scale 训练与预测冒烟"
+        },
+        {
+          "command": "make lib && cd python && python3 -c \"import sys; sys.path.insert(0,'.'); from liblinear.liblinearutil import svm_read_problem, train, predict; y,x=svm_read_problem('../heart_scale'); m=train(y[:200],x[:200],'-c 4'); p,acc,_=predict(y[200:],x[200:],m); print('ACC',acc[0])\"",
+          "depends_on": [
+            "S1"
+          ],
+          "experiment": "smoke_python",
+          "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/python/liblinear/liblinearutil.py",
+          "id": "S3",
+          "title": "构建共享库并检查 Python 接口导入"
+        }
+      ]
+    },
+    "plan_sha256": "130359647dad7269277e114c2efedb5f26049eb0fe3cb9549e86a2f42b430655",
+    "repository_hint": null,
+    "summary": "仅提供 LIBLINEAR 官方源码包（含 C/C++ 核心、命令行工具、MATLAB 与 Python 接口），未提供论文或论文页面，因此按代码审查处理。代码结构完整、构建与使用说明较充分，自带 heart_scale 样例数据可用于 CPU 冒烟验证；但缺少自动化测试、版本/依赖约束与可复现实验脚本，且部分接口需 MATLAB 或外部 BLAS，无法在纯 CPU 环境完整覆盖。",
+    "task": "code_review",
+    "visual_observations": [],
+    "web_checks": []
+  },
+  "scientific_validation": false,
+  "source": "model_api_review",
+  "source_lookup": {
+    "reason": "未识别到论文自身的公开 arXiv / DOI 标识，仅核对已提供材料。",
+    "status": "not_requested"
+  },
+  "status": "completed",
+  "usage": {
+    "completion_tokens": 1939,
+    "prompt_tokens": 26568,
+    "total_tokens": 28507
+  },
+  "web_sources": [],
+  "acceptance_kind": "production_browser_submission"
+}
