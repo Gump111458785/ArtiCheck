@@ -224,14 +224,16 @@ class HTTPContractTests(unittest.TestCase):
                 job = json.load(response)
             with self.call("/api/reproduction/runs", {"audit_token": audit["audit_token"]}) as response:
                 self.assertEqual(json.load(response)["id"], job["id"])
-            deadline=time.monotonic()+5
+            # Docker discovery can be slow on a shared runner. Check the terminal
+            # contract without making five-second startup latency a requirement.
+            deadline=time.monotonic()+20
             while time.monotonic()<deadline:
                 with self.call("/api/reproduction/runs/"+job["id"]) as response:
                     state=json.load(response)
                 if state["status"] in ("failed","completed","cancelled"):break
-                time.sleep(.02)
+                time.sleep(.05)
             # This fixture has no Dockerfile: the job must fail before any artifact stage.
-            self.assertEqual(state["status"],"failed")
+            self.assertEqual(state["status"],"failed",state)
             with self.call("/api/reproduction/runs/"+job["id"]+"/report") as response:
                 report=json.load(response)
             self.assertEqual(report["runs"],[])
