@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validateInput,inputKey,coverageCounts,sessionCapability} from '../../web/dist/online-core.mjs';
+import {validateInput,inputKey,coverageCounts,sessionCapability,metricUnit} from '../../web/dist/online-core.mjs';
 import {IntakeWorkspace} from '../../web/dist/intake.mjs';
+
+test('decimal ratios never acquire an unsupported percent label, including archived reports',()=>{
+ assert.equal(metricUnit({value:0.8338,unit:'%',quote:'Ours 0.8338'}),'（单位待核对）');
+ assert.equal(metricUnit({value:0.8338,unit:'%',quote:'Ours 0.8338%'}),'%');
+ assert.equal(metricUnit({value:0.8338,unit:'',unit_uncertain:true}),'（单位待核对）');
+ assert.equal(metricUnit({value:83.38,unit:'%',quote:'83.38%'}),'%');
+});
 
 test('partial materials are usable without manually confirmed claims or local execution bindings',()=>{
  for(const key of ['paper','repository']){

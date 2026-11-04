@@ -104,6 +104,24 @@ class Budget:
 
 
 class HostedReviewTests(unittest.TestCase):
+    def test_decimal_ratio_with_unsubstantiated_percent_is_not_an_acceptance_target(self):
+        context,_=prepare_assessment(materials())
+        context['paper_excerpts']=[{'page':1,'text':'Table 1. Ours 0.8338'}]
+        answer=output(context)
+        answer['metrics']=[{'id':'M1','reference':'Table 1','page':1,'quote':'Ours 0.8338',
+            'value':0.8338,'unit':'%','metric':'accuracy','model':'Ours','dataset':'test'}]
+        answer['plan']['metric_patterns']=[{'metric_id':'M1','stage_id':'S1','pattern':'acc: ([0-9.]+)','tolerance':0.01}]
+        result=validate_assessment(answer,context)
+        self.assertEqual(result['metrics'][0]['value'],0.8338)
+        self.assertEqual(result['metrics'][0]['unit'],'')
+        self.assertTrue(result['metrics'][0]['unit_uncertain'])
+        self.assertEqual(result['plan']['metric_patterns'],[])
+        context['paper_excerpts'][0]['text']='Table 1. Ours 0.8338 %'
+        answer['metrics'][0]['quote']='Ours 0.8338 %'
+        result=validate_assessment(answer,context)
+        self.assertEqual(result['metrics'][0]['unit'],'%')
+        self.assertEqual(len(result['plan']['metric_patterns']),1)
+
     def test_valid_blank_pdf_is_not_rejected_as_corrupt(self):
         from pypdf import PdfWriter
         writer=PdfWriter();writer.add_blank_page(612,792);buffer=io.BytesIO();writer.write(buffer)
@@ -209,10 +227,10 @@ class HostedReviewTests(unittest.TestCase):
         context['paper_excerpts']=[{'page':1,'text':'Table 1. baseline 0.7 baseline+++ 0.9'}]
         report=assess(Reviewer(),context,'')
         report['review']['findings']=[{'title':'103层疑点','detail':'待核对','suggestion':'对照排版','severity':'high','page':1,'file':None}]
-        report['review']['metrics']=[{'id':'M1','reference':'Table 1','page':1,'dataset':'test','metric':'mAP','unit':'%',
+        report['review']['metrics']=[{'id':'M1','reference':'Table 1','page':1,'dataset':'test','metric':'mAP','unit':'',
              'protocol':'','model':'baseline','author_method':True,'quote':'baseline 0.7','value':0.7}]
         answer={'reviews':[{'index':0,'decision':'remove','reason':'10³ 为数量级表述，不是 103 层。'}],
-            'additional_tables':[{'reference':'Table 1','page':1,'dataset':'test','metric_prefix':'AP','unit':'%','protocol':'',
+            'additional_tables':[{'reference':'Table 1','page':1,'dataset':'test','metric_prefix':'AP','unit':'','protocol':'',
                 'columns':['mAP'],'rows':[{'model':'baseline','author_method':True,'values':[0.7],'quote':'baseline 0.7'},
                                         {'model':'baseline+++','author_method':True,'values':[0.9],'quote':'baseline+++ 0.9'}]}],
             'visual_notes':[]}
