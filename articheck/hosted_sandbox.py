@@ -34,7 +34,10 @@ class E2BExecutor:
                                    '*.githubusercontent.com', 'archive.ics.uci.edu', 'www.csie.ntu.edu.tw',
                                    'huggingface.co', '*.huggingface.co', '*.hf.co', '*.xethub.hf.co',
                                    'download.pytorch.org', 'scikit-learn.org', '*.scikit-learn.org']},
-            idempotency_key='articheck-' + assessment['id']+'-'+(assessment.get('execution') or {}).get('attempt_id','initial'))
+            # Python 3.10-compatible SDK: send the API's idempotency header
+            # directly and avoid automatic creation retries after ambiguity.
+            retries=0, api_headers={'Idempotency-Key': 'articheck-' + assessment['id']+'-'+
+                                   (assessment.get('execution') or {}).get('attempt_id','initial')})
         try:
             info=sb.get_info()
             environment={'template_id':info.template_id,'cpu_count':info.cpu_count,
@@ -70,7 +73,7 @@ for parent,dirs,files in os.walk('/home/articheck'):
             sb.files.write('/root/articheck/runner.py', Path(__file__).with_name('hosted_runner.py').read_text(), user='root')
             sb.files.write('/root/articheck/plan.json', json.dumps(plan), user='root')
             sb.commands.run('python3 /root/articheck/runner.py /root/articheck/plan.json /home/articheck/artifact /root/articheck > /root/articheck/supervisor.log 2>&1',
-                            user='root', background=True, timeout=lifetime, retain_output=False)
+                            user='root', background=True, timeout=lifetime)
             return {'status': 'running', 'sandbox_id': sb.sandbox_id, 'started_at': started,
                     'deadline': started + lifetime, 'plan_sha256': assessment['review']['plan_sha256'],
                     'provider': 'e2b', 'execution_performed': False, 'scientific_validation': False,
@@ -84,7 +87,8 @@ for parent,dirs,files in os.walk('/home/articheck'):
         from e2b import Sandbox
         if time.time() > execution['deadline']:
             return {**execution, 'status': 'expired', 'notice': '执行实例已达到最长存活时间；尚未取回的结果不视为通过。'}
-        sb = Sandbox.connect(execution['sandbox_id'], api_key=self.key, timeout=1)
+        remaining = max(1, int(execution['deadline'] - time.time()))
+        sb = Sandbox.connect(execution['sandbox_id'], api_key=self.key, timeout=remaining)
         try:
             raw = sb.files.read('/root/articheck/status.json', user='root')
         except Exception:
