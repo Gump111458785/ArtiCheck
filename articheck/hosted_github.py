@@ -7,9 +7,10 @@ import urllib.error
 import urllib.request
 from functools import lru_cache
 
-from .review_api import ReviewError, decode_material, prepare_context
+from .review_api import ReviewError, decode_material, prepare_context, MAX_CODE_BYTES
 
-MAX_ZIP = 2_500_000
+MAX_ZIP = MAX_CODE_BYTES
+INLINE_ZIP = 2_500_000
 
 
 def repository(value):
@@ -32,10 +33,12 @@ def read(url, limit, headers=None):
             return redirected
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'ArtiCheck', **(headers or {})})
-        with urllib.request.build_opener(SafeRedirect()).open(req, timeout=25) as response:
+        with urllib.request.build_opener(SafeRedirect()).open(req, timeout=60 if limit==MAX_ZIP else 25) as response:
+            if int(response.headers.get('Content-Length','0'))>limit:
+                raise ReviewError('repository_size','仓库源码包超过 100 MB，请缩小范围或导入实验代码 ZIP。',413)
             raw = response.read(limit + 1)
         if len(raw) > limit:
-            raise ReviewError('repository_size', '仓库较大，请导入仅包含相关实验代码的 ZIP；不会因此判定无法复现。', 413)
+            raise ReviewError('repository_size', '仓库源码包超过 100 MB，请缩小范围或导入实验代码 ZIP；不会因此判定无法复现。', 413)
         return raw
     except urllib.error.HTTPError as exc:
         if exc.code in (403, 429):
@@ -66,8 +69,23 @@ def import_repository(name, cache_period, github_token='', cached_commit=None):
             raise ReviewError('repository_empty', '仓库没有可读取的提交。', 422)
         commit = meta[0]['sha']
     raw = read('https://codeload.github.com/' + name + '/zip/' + commit, MAX_ZIP)
-    material = {'name': name.split('/')[-1] + '.zip', 'content_base64': base64.b64encode(raw).decode()}
-    context, _ = prepare_context({'code': material}, partial=True)
+    filename=name.split('/')[-1]+'.zip'
+    context, _ = prepare_context({'code': {'name':filename,'_raw_bytes':raw}}, partial=True)
+    material=({'name':filename,'content_base64':base64.b64encode(raw).decode()} if len(raw)<=INLINE_ZIP else
+              {'name':filename,'repository':name,'commit':commit,'sha256':context['code']['sha256'],'bytes':len(raw)})
     return {'name': name, 'url': 'https://github.com/' + name, 'commit': commit,
             'sha256': context['code']['sha256'], 'files': [{'path': path} for path in context['files']],
             'material': material}
+
+
+def resolve_repository(material):
+    """Resolve an immutable public reference without a large client JSON body."""
+    name=repository('https://github.com/'+str(material.get('repository','')))
+    commit=material.get('commit','');sha=material.get('sha256','')
+    if not isinstance(commit,str) or not isinstance(sha,str) or not re.fullmatch(r'[a-f0-9]{40}',commit) or not re.fullmatch(r'[a-f0-9]{64}',sha):
+        raise ReviewError('invalid_repository_ref','代码版本引用无效，请重新读取仓库。')
+    raw=read('https://codeload.github.com/'+name+'/zip/'+commit,MAX_ZIP)
+    import hashlib
+    if hashlib.sha256(raw).hexdigest()!=sha:
+        raise ReviewError('material_changed','仓库源码指纹不符，请重新读取仓库。',409)
+    return {'name':name.split('/')[-1]+'.zip','_raw_bytes':raw}

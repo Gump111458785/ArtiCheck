@@ -92,7 +92,7 @@ python -m articheck run --task examples/task.json --output runs/provider-api \
 
 ### 2.3 网站：浏览器中提交评测
 
-打开 [ArtiCheck 在线工作台](https://articheck-workbench.edgeone.dev/#api-review)，上传论文 PDF、代码 ZIP，或粘贴公开 GitHub 地址。系统按材料选择论文自查、复现评估或代码审查；允许仅上传论文或代码，默认检查适用范围，也可指定表格、实验与最长执行时间。试用提交需要管理员提供的网站访问码。
+打开 [ArtiCheck 在线工作台](https://articheck-workbench.edgeone.dev/#api-review)，上传论文 PDF、代码 ZIP，或粘贴公开 GitHub 地址。代码 ZIP 与 GitHub 源码包支持最大 100 MB，大文件通过短期直传通道或固定提交引用处理。系统按材料选择论文自查、复现评估或代码审查；允许仅上传论文或代码，默认检查适用范围，也可指定表格、实验与最长执行时间。试用提交需要管理员提供的网站访问码。
 
 网站使用 DeepSeek API 阅读论文文字与原页图像，核对八项条件、图表数字及论证依据。有公开代码线索时自动获取固定提交的源码；有可执行计划时，在 E2B CPU 实例中准备依赖、运行命令并保存日志、退出码和观测值。实际受阻后再请求用户补充材料，确认不可得的实验保留无法复现原因。
 
@@ -288,8 +288,8 @@ python -m articheck run --task examples/task.json --output runs/review
 |---|---|---|
 | 公开 CPU 案例 | LIBLINEAR / news20，15 次运行、60 个阶段；L2-SVM 准确率 96.76%，样本标准差 0.31 个百分点 | [案例 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563) · [报告](web/dist/samples/liblinear-reproduction.json) |
 | 内置受控缺陷基准 | 单仓库 4 个版本、12 条主张；FixedPlanner + 规则核查：TP=3、FP=0、TN=9、FN=0，宏 F1=1.000，问题召回率 100%，误报率 0% | [原始结果](docs/smoke/metrics.json) · [问题报告](docs/smoke/metric-defect-report.md) |
-| Python 工程测试 | 169 项：本地 165 项通过、4 项 Docker 专项跳过；CI 覆盖 Python 3.10–3.12 | [网站与回归验收](docs/ONLINE_ACCEPTANCE.md) · [历史验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
-| 前端测试 | 104 项通过，覆盖完整实验角色事件、API 接入、演示评测、开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
+| Python 工程测试 | 173 项：本地 169 项通过、4 项 Docker 专项跳过；CI 覆盖 Python 3.10–3.12 | [网站与回归验收](docs/ONLINE_ACCEPTANCE.md) · [历史验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
+| 前端测试 | 106 项通过，覆盖完整实验角色事件、API 接入、演示评测、开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
 
 内置基准的阈值为 0.5，包含正例 3 条、负例 9 条。这组结果仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 评测 [待完成]；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
 

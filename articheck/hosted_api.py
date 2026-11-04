@@ -6,7 +6,8 @@ import time
 import uuid
 import copy
 
-from .hosted_github import import_repository, repository
+from .hosted_github import import_repository, repository, resolve_repository
+from .hosted_uploads import HostedUploads
 from .hosted_review import assess, material_identity, prepare_assessment, digest
 from .hosted_sandbox import E2BExecutor
 from .hosted_store import HostedStore
@@ -20,6 +21,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     from flask import jsonify, request
     store = store or HostedStore(env)
     executor = executor or E2BExecutor(env)
+    uploads = HostedUploads(env,store)
 
     def authorize(*, session=True):
         token = env.get('ARTICHECK_REVIEW_TOKEN', '')
@@ -41,12 +43,34 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             raise ReviewError('invalid_request', '请提交有效的材料对象。')
         return value
 
+    def material_body(payload):
+        payload=dict(payload)
+        for kind in ('paper','code'):
+            material=payload.get(kind)
+            if not isinstance(material,dict):continue
+            if material.get('upload_id'):
+                payload[kind]=uploads.resolve(authorize(),material,kind)
+            elif kind=='code' and material.get('repository'):
+                payload[kind]=resolve_repository(material)
+        return payload
+
+    @app.post('/uploads')
+    def create_upload():
+        owner=authorize()
+        return jsonify(uploads.create(owner,body()))
+
+    @app.post('/uploads/<job>/cancel')
+    def cancel_upload(job):
+        return jsonify(uploads.cancel(authorize(),job))
+
     @app.get('/capabilities')
     def capabilities():
         return jsonify(version=2, service='articheck-online', model=reviewer.model,
                        review_configured=reviewer.configured and budget.configured,
                        sandbox_configured=executor.configured, auth_required=True,
-                       limits={'max_body_bytes': 5_000_000, 'max_seconds': 600,
+                       limits={'max_body_bytes': 5_000_000, 'max_zip_bytes':100*1024**2,
+                               'max_unpacked_bytes':500*1024**2,'max_pdf_bytes':20*1024**2,
+                               'large_upload_transport':'signed_direct_upload','max_seconds': 600,
                                'default_seconds': 300, 'report_retention_days': 7,
                                'compute_reservation_cny': 1, 'compute_attempts': 20})
 
@@ -86,7 +110,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     def create_assessment():
         started=time.monotonic()
         owner = authorize()
-        payload = body()
+        payload = material_body(body())
         try:
             context, scope = prepare_assessment(payload)
         except ReviewError:
@@ -196,6 +220,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         if not value['review']['plan']['stages']:
             raise ReviewError('no_executable_plan', value['review']['plan']['blocked_reason'] or '当前材料未提供可执行代码。请先补充代码或查看论文自查结果。', 422)
         # Revalidate bytes and fingerprint before acquiring a paid launch latch.
+        payload = material_body(payload)
         from .review_api import decode_material, prepare_context
         context, _ = prepare_context({'code': payload.get('code')}, partial=True)
         if material_identity(context)['code'] != value['materials']['code']:

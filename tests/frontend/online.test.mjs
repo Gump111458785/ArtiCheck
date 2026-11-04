@@ -47,3 +47,23 @@ test('a manual claim starts without a fabricated page and can be collapsed, dele
  await i.action('delete-claim',{dataset:{id}});assert.equal(p.claims.length,0);
  await i.action('undo-claim',{});assert.equal(p.claims.length,1);assert.equal(p.claims[0].id,id);
 });
+
+test('a large GitHub reference is a usable material without downloading a browser Blob',async()=>{
+ const {hasCode}=await import('../../web/dist/online-core.mjs');
+ const p={repository:{sha256:'a'.repeat(64),remote:{name:'code.zip',repository:'author/project',commit:'b'.repeat(40)}}};
+ assert.equal(hasCode(p),true);assert.deepEqual(validateInput(p,{token:'access-code',consent:true}),{});
+});
+
+test('large local materials bypass JSON and reuse the completed direct upload',async()=>{
+ const {OnlineWorkspace}=await import('../../web/dist/online-workspace.mjs');
+ const p={repository:{blob:new Blob([new Uint8Array(3_100_000)]),sha256:'a'.repeat(64),name:'source.zip'}};
+ const workspace=new OnlineWorkspace({projects:[p],save:async()=>{},h:{render(){}},esc:v=>v});
+ let requests=0,transfers=0;workspace.request=async(path,body)=>{requests++;assert.equal(path,'/uploads');assert.equal(body.files[0].bytes,3_100_000);return {id:'1'.repeat(32),expires_at:Date.now()/1000+800,files:{code:{upload_url:'https://fixture.e2b.app/files?signature=test',material:{name:'source.zip',upload_id:'1'.repeat(32),kind:'code'}}}};};
+ const original=globalThis.fetch;globalThis.fetch=async(url,options)=>{transfers++;assert.equal(options.headers,undefined);assert.ok(options.body instanceof FormData);return {ok:true};};
+ try{
+  const first=await workspace.payload(p);const second=await workspace.payload(p);
+  assert.equal(first.code.upload_id,'1'.repeat(32));assert.equal(first.code.content_base64,undefined);
+  assert.ok(JSON.stringify(first).length<1000);assert.deepEqual(first,second);assert.equal(requests,1);assert.equal(transfers,1);
+  assert.doesNotMatch(JSON.stringify(p.online_upload),/signature|upload_url/);
+ }finally{globalThis.fetch=original;}
+});

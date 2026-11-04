@@ -1,5 +1,5 @@
 export const MAX_PDF_BYTES = 20 * 1024 * 1024;
-export const MAX_ZIP_BYTES = 50 * 1024 * 1024;
+export const MAX_ZIP_BYTES = 100 * 1024 * 1024;
 export const MAX_PAGES = 150;
 export function githubRepository(value) {
   let url; try { url = new URL(value.trim()); } catch { throw Error('请输入完整的 GitHub 仓库地址'); }
@@ -14,7 +14,7 @@ export function paperLink(value) {
 }
 export function inspectZip(buffer) {
   const view = new DataView(buffer), length = view.byteLength;
-  if (length > MAX_ZIP_BYTES) throw Error('代码 ZIP 最大为 50 MB');
+  if (length > MAX_ZIP_BYTES) throw Error('代码 ZIP 最大为 100 MB');
   let end = -1;
   for (let i = length - 22; i >= Math.max(0, length - 65557); i--) if (view.getUint32(i, true) === 0x06054b50 && i + 22 + view.getUint16(i+20,true) === length) {end = i; break;}
   if (end < 0) throw Error('ZIP 目录损坏或文件格式不受支持');

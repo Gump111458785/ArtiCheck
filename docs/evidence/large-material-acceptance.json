@@ -1,0 +1,458 @@
+{
+  "verified_at": "2026-11-05",
+  "deployment_id": "dp8ac72cstjq",
+  "zip_upload": {
+    "bytes": 104857600,
+    "sha256": "a048bf7ea50f3c698f2a17b8ebffc9d840ca849685f7a1d784b3fd825a763abe",
+    "fixture": "Public LIBLINEAR source plus inert padding for transfer-boundary testing; not a paper benchmark",
+    "report": {
+      "budget": {
+        "model_max_attempts": 60,
+        "model_reserved_attempts": 41
+      },
+      "created_at": "2026-11-04T19:48:05.185757+00:00",
+      "execution": {
+        "acceptance": {
+          "notice": "阶段退出码和 stdout 指标仅证明本次运行观测；主要结论需核对完整协议与对照。",
+          "paper_conclusion": null,
+          "process": true
+        },
+        "attempt_id": "ecfb731d3aaf422ab326edd11cd88921",
+        "deadline": 1793822057.7516947,
+        "elapsed_seconds": 5.031,
+        "environment": {
+          "cpu_count": 2,
+          "envd_version": "0.10.0",
+          "memory_mb": 512,
+          "template_id": "rki5dems9wqfm4r03t7g"
+        },
+        "events": [
+          {
+            "kind": "plan_scheduled",
+            "policy": "frozen_api_plan",
+            "role": "planner",
+            "stages": 4,
+            "time": 1793821732.6691015
+          },
+          {
+            "kind": "stage_started",
+            "role": "experiment_runner",
+            "stage": "S1",
+            "time": 1793821732.66937
+          },
+          {
+            "exit_code": 0,
+            "kind": "stage_finished",
+            "role": "experiment_runner",
+            "stage": "S1",
+            "time": 1793821737.5027552,
+            "timed_out": false
+          },
+          {
+            "kind": "stage_checked",
+            "role": "cross_auditor",
+            "stage": "S1",
+            "status": "completed",
+            "time": 1793821737.5027592
+          },
+          {
+            "kind": "stage_started",
+            "role": "experiment_runner",
+            "stage": "S2",
+            "time": 1793821737.503188
+          },
+          {
+            "exit_code": 0,
+            "kind": "stage_finished",
+            "role": "experiment_runner",
+            "stage": "S2",
+            "time": 1793821737.522049,
+            "timed_out": false
+          },
+          {
+            "kind": "stage_checked",
+            "role": "cross_auditor",
+            "stage": "S2",
+            "status": "completed",
+            "time": 1793821737.522052
+          },
+          {
+            "kind": "stage_started",
+            "role": "experiment_runner",
+            "stage": "S3",
+            "time": 1793821737.5224605
+          },
+          {
+            "exit_code": 0,
+            "kind": "stage_finished",
+            "role": "experiment_runner",
+            "stage": "S3",
+            "time": 1793821737.5323925,
+            "timed_out": false
+          },
+          {
+            "kind": "stage_checked",
+            "role": "cross_auditor",
+            "stage": "S3",
+            "status": "completed",
+            "time": 1793821737.5323946
+          },
+          {
+            "kind": "stage_started",
+            "role": "experiment_runner",
+            "stage": "S4",
+            "time": 1793821737.5328689
+          },
+          {
+            "exit_code": 0,
+            "kind": "stage_finished",
+            "role": "experiment_runner",
+            "stage": "S4",
+            "time": 1793821737.699438,
+            "timed_out": false
+          },
+          {
+            "kind": "stage_checked",
+            "role": "cross_auditor",
+            "stage": "S4",
+            "status": "completed",
+            "time": 1793821737.6994414
+          },
+          {
+            "kind": "stopped",
+            "policy": "frozen_api_plan",
+            "reason": "completed",
+            "role": "planner",
+            "time": 1793821737.7000213
+          },
+          {
+            "kind": "execution_checked",
+            "metrics": 0,
+            "role": "cross_auditor",
+            "time": 1793821737.700023
+          },
+          {
+            "kind": "report_written",
+            "role": "reporter",
+            "status": "completed",
+            "time": 1793821737.7000237
+          }
+        ],
+        "execution_performed": true,
+        "failure_category": null,
+        "finished_at": 1793821737.6999695,
+        "hardware": {
+          "cpu_count": 2,
+          "gpu": false
+        },
+        "metrics": [],
+        "needs_user": false,
+        "plan_sha256": "5b687cfdc493b21a7b97a6582a75332fed2eb940a23975528b4ff1de88aa6eda",
+        "provider": "e2b",
+        "question": null,
+        "reserved_attempt": 12,
+        "runtime": {
+          "architecture": "x86_64",
+          "child_cpu_seconds": 3.129,
+          "disk_free_after_bytes": 21239046144,
+          "disk_free_before_bytes": 21239648256,
+          "disk_total_bytes": 23124877312,
+          "python": "3.11.6",
+          "release": "6.1.189+",
+          "system": "Linux"
+        },
+        "sandbox_id": "izuiasl8a7bu1wse4vchx",
+        "scientific_validation": false,
+        "stages": [
+          {
+            "child_peak_rss_kib": 101384,
+            "command": "make clean >/dev/null 2>&1; make",
+            "exit_code": 0,
+            "experiment": "构建验证",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/Makefile",
+            "finished_at": 1793821737.5027118,
+            "id": "S1",
+            "output": "g++ -Wall -Wconversion -O3 -fPIC -c -o newton.o newton.cpp\ng++ -Wall -Wconversion -O3 -fPIC -c -o linear.o linear.cpp\nmake -C blas OPTFLAGS='-Wall -Wconversion -O3 -fPIC' CC='cc';\nmake[1]: Entering directory '/home/articheck/artifact/blas'\ncc -Wall -Wconversion -O3 -fPIC -c dnrm2.c\ncc -Wall -Wconversion -O3 -fPIC -c daxpy.c\ncc -Wall -Wconversion -O3 -fPIC -c ddot.c\ncc -Wall -Wconversion -O3 -fPIC -c dscal.c\nar rcv blas.a dnrm2.o daxpy.o ddot.o dscal.o\na - dnrm2.o\na - daxpy.o\na - ddot.o\na - dscal.o\nranlib blas.a\nmake[1]: Leaving directory '/home/articheck/artifact/blas'\ng++ -Wall -Wconversion -O3 -fPIC -o train train.c newton.o linear.o blas/blas.a\ng++ -Wall -Wconversion -O3 -fPIC -o predict predict.c newton.o linear.o blas/blas.a\n",
+            "output_truncated": false,
+            "started_at": 1793821732.6693668,
+            "status": "completed",
+            "timed_out": false,
+            "title": "编译命令行工具"
+          },
+          {
+            "child_peak_rss_kib": 101384,
+            "command": "./train heart_scale heart_scale.model",
+            "exit_code": 0,
+            "experiment": "训练流程",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/train.c",
+            "finished_at": 1793821737.5220168,
+            "id": "S2",
+            "output": "......*\noptimization finished, #iter = 69\nObjective value = -121.097755\nnSV = 195\n",
+            "output_truncated": false,
+            "started_at": 1793821737.503185,
+            "status": "completed",
+            "timed_out": false,
+            "title": "训练 heart_scale 并生成模型"
+          },
+          {
+            "child_peak_rss_kib": 101384,
+            "command": "./predict heart_scale heart_scale.model heart_scale.out",
+            "exit_code": 0,
+            "experiment": "预测流程",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/predict.c",
+            "finished_at": 1793821737.5323622,
+            "id": "S3",
+            "output": "Accuracy = 84.4444% (228/270)\n",
+            "output_truncated": false,
+            "started_at": 1793821737.5224555,
+            "status": "completed",
+            "timed_out": false,
+            "title": "在训练集上预测并读取准确率"
+          },
+          {
+            "child_peak_rss_kib": 101384,
+            "command": "make lib && cd python && python3 -c \"from liblinear.liblinearutil import *; y,x=svm_read_problem('../heart_scale'); m=train(y[:200],x[:200],'-c 4'); print(predict(y[200:],x[200:],m)[1])\"",
+            "exit_code": 0,
+            "experiment": "Python 接口冒烟测试",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/python/liblinear/liblinearutil.py",
+            "finished_at": 1793821737.6994028,
+            "id": "S4",
+            "output": "g++ -shared -Wl,-soname,liblinear.so.6 linear.o newton.o blas/blas.a -o liblinear.so.6\n.........................***\noptimization finished, #iter = 259\nObjective value = -357.016757\nnSV = 148\nAccuracy = 81.4286% (57/70) (classification)\n(81.42857142857143, 0.7428571428571429, 0.38771712158808935)\n",
+            "output_truncated": false,
+            "started_at": 1793821737.5328665,
+            "status": "completed",
+            "timed_out": false,
+            "title": "构建并冒烟测试 Python 接口"
+          }
+        ],
+        "started_at": 1793821732.6690116,
+        "status": "completed"
+      },
+      "execution_performed": false,
+      "format": "articheck-online-assessment-v2",
+      "id": "97cc799b11c549269c5f68288dda3952",
+      "input_sha256": "f3b7b502cb9f82b48f2ba3ead0d78ba7646c9c2a16cadb03dd2f72c2bdacef6e",
+      "materials": {
+        "code": "a048bf7ea50f3c698f2a17b8ebffc9d840ca849685f7a1d784b3fd825a763abe",
+        "paper": null
+      },
+      "model": "deepseek-flash",
+      "page_images": [],
+      "review": {
+        "classification_reason": "上传材料只有代码压缩包（liblinear 源码、Makefile、README、Python/MATLAB 接口），paper_pages 为 0、无论文摘录与图片，无法确认论文类型，故归为 code_only 并做代码审查。",
+        "coverage": {
+          "code_files_in_context": 23,
+          "file_list_in_context": 40,
+          "file_list_truncated": false,
+          "gaps": [
+            "未提供论文正文、图表或实验表格，无法进行论文自查或复现论文数值。",
+            "代码仅提供 23/40 个文件的节选，linear.cpp、newton.cpp、train.c、predict.c、svm-scale.c 等均被截断，未覆盖完整求解器、交叉验证与参数搜索实现。",
+            "本阶段未执行编译、训练或预测，所有结论为静态阅读，未验证运行时行为与数值正确性。",
+            "未审查 matlab/ 与 python/ 下全部接口文件（如 liblinear.py、liblinearutil.py、commonutil.py）的完整实现。",
+            "仅提供部分源文件片段，未进入上下文的实现不视为已审查。",
+            "文件 liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/upload-test-padding.bin 未进入源码上下文，相关问题建议没有充足依据，未列为已发现问题。"
+          ],
+          "note": "审查范围限于所提供代码节选与 README，不代表完整仓库审计，也未验证任何运行时结果。",
+          "paper_images_in_context": 0,
+          "paper_pages_in_context": 0,
+          "paper_text_truncated": false,
+          "scope": "Bounded excerpts, not a complete repository audit",
+          "total_code_files": 40
+        },
+        "criteria": [
+          {
+            "dimension": "scope",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/README",
+            "note": "README 明确说明 LIBLINEAR 支持 L2/L1 正则化分类、回归与单类 SVM，并给出各求解器编号与默认参数，审查范围可界定。",
+            "page": null,
+            "status": "documented"
+          },
+          {
+            "dimension": "code",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/linear.cpp",
+            "note": "核心实现 linear.cpp/newton.cpp 仅提供节选，未看到完整求解器与交叉验证实现；已见部分存在输入解析与内存管理可改进点。",
+            "page": null,
+            "status": "needs_review"
+          },
+          {
+            "dimension": "data",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/README",
+            "note": "包内自带 heart_scale 样例数据，README 说明 LIBSVM 稀疏格式且特征下标须从 1 开始；无外部大数据集获取说明。",
+            "page": null,
+            "status": "documented"
+          },
+          {
+            "dimension": "environment",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/Makefile",
+            "note": "Makefile 使用 g++/gcc，CFLAGS 含 -O3 -fPIC，自带 BLAS 子程序；Python 接口依赖 ctypes，可选 scipy/numba。",
+            "page": null,
+            "status": "documented"
+          },
+          {
+            "dimension": "settings",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/train.c",
+            "note": "train 用法列出 -s/-c/-p/-n/-e/-B/-R/-wi/-v/-C/-q 等全部选项及默认值，参数语义清晰。",
+            "page": null,
+            "status": "documented"
+          },
+          {
+            "dimension": "workflow",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/python/README",
+            "note": "README 给出 make 构建、train/predict 训练与评估、svm-scale 归一化的完整流程，Python 接口给出高层与低层两种用法示例。",
+            "page": null,
+            "status": "documented"
+          },
+          {
+            "dimension": "resources",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/README",
+            "note": "纯 CPU 线性求解器，无 GPU 需求；内存随特征数与样本数线性增长，README 提示大数据高维场景适用。",
+            "page": null,
+            "status": "documented"
+          },
+          {
+            "dimension": "results",
+            "file": null,
+            "note": "本次仅做代码审查，不评价与论文实验数值或主要结论的一致性。代码执行结果单独记录。",
+            "page": null,
+            "status": "not_applicable"
+          }
+        ],
+        "findings": [
+          {
+            "detail": "predict.c 的 main 中在解析选项后仅检查 i>=argc，随后直接访问 argv[i]、argv[i+1]、argv[i+2]；若用户只给 1~2 个位置参数，会越界读取 argv 并可能崩溃或打开错误文件。",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/predict.c",
+            "page": null,
+            "severity": "medium",
+            "suggestion": "在打开文件前增加 argc-i<3 的判断并调用 exit_with_help()。",
+            "title": "predict 命令行参数缺少数量校验"
+          },
+          {
+            "detail": "linear.cpp 中 info() 用 char buf[BUFSIZ] 配合 vsprintf，未限制长度；若格式化字符串或参数过长可能溢出。当前调用点格式串固定，风险有限但属不安全写法。",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/linear.cpp",
+            "page": null,
+            "severity": "medium",
+            "suggestion": "改用 vsnprintf(buf, sizeof(buf), fmt, ap) 并截断处理。",
+            "title": "info 使用 vsprintf 写入固定缓冲区"
+          },
+          {
+            "detail": "svm-scale.c 中 restore 分支使用 fscanf 读取缩放参数，未校验返回值即继续使用 y_lower/y_upper 等变量，损坏的 restore 文件可能导致未初始化值参与计算。",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/svm-scale.c",
+            "page": null,
+            "severity": "low",
+            "suggestion": "检查 fscanf 返回值，失败时输出错误并退出。",
+            "title": "svm-scale 对 restore 文件解析缺少健壮性"
+          },
+          {
+            "detail": "python/README 明确提示 python setup.py install 与 pip install . 会失败，需用 pip install -e . 或先 make 生成共享库；对新手不够直观，且依赖源码目录保留。",
+            "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/python/README",
+            "page": null,
+            "severity": "low",
+            "suggestion": "在 setup.py 中增加构建前检查或更明确的错误提示，并在 README 顶部突出推荐安装路径。",
+            "title": "Python 接口安装方式存在易错点"
+          }
+        ],
+        "metrics": [],
+        "paper_type": "code_only",
+        "plan": {
+          "blocked_reason": "",
+          "hardware": "CPU",
+          "max_seconds": 300,
+          "metric_patterns": [],
+          "needs": [
+            {
+              "name": "heart_scale 样例数据",
+              "required": true,
+              "source": "仓库自带 heart_scale 文件"
+            },
+            {
+              "name": "g++/gcc 与 make",
+              "required": true,
+              "source": "Makefile 中 CXX/CC 变量"
+            },
+            {
+              "name": "Python3 与 numpy/scipy（可选）",
+              "required": false,
+              "source": "python/README 中 Quick Start with Scipy"
+            }
+          ],
+          "policy": "frozen_api_plan",
+          "purpose": "在隔离 CPU 环境编译 LIBLINEAR 并用自带 heart_scale 数据完成一次训练与预测，验证构建流程与命令行输出格式。",
+          "stages": [
+            {
+              "command": "make clean >/dev/null 2>&1; make",
+              "depends_on": [],
+              "experiment": "构建验证",
+              "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/Makefile",
+              "id": "S1",
+              "title": "编译命令行工具"
+            },
+            {
+              "command": "./train heart_scale heart_scale.model",
+              "depends_on": [
+                "S1"
+              ],
+              "experiment": "训练流程",
+              "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/train.c",
+              "id": "S2",
+              "title": "训练 heart_scale 并生成模型"
+            },
+            {
+              "command": "./predict heart_scale heart_scale.model heart_scale.out",
+              "depends_on": [
+                "S2"
+              ],
+              "experiment": "预测流程",
+              "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/predict.c",
+              "id": "S3",
+              "title": "在训练集上预测并读取准确率"
+            },
+            {
+              "command": "make lib && cd python && python3 -c \"from liblinear.liblinearutil import *; y,x=svm_read_problem('../heart_scale'); m=train(y[:200],x[:200],'-c 4'); print(predict(y[200:],x[200:],m)[1])\"",
+              "depends_on": [
+                "S1"
+              ],
+              "experiment": "Python 接口冒烟测试",
+              "file": "liblinear-491c9f1188b97ba70847c70a68be363d186ddf9d/python/liblinear/liblinearutil.py",
+              "id": "S4",
+              "title": "构建并冒烟测试 Python 接口"
+            }
+          ]
+        },
+        "plan_sha256": "5b687cfdc493b21a7b97a6582a75332fed2eb940a23975528b4ff1de88aa6eda",
+        "repository_hint": null,
+        "summary": "材料仅包含 LIBLINEAR 官方 C/C++ 源码包（含命令行、MATLAB 与 Python 接口），未提供任何论文正文、图表或实验表格，因此无法进行论文内部自查或复现论文报告数值。按代码审查处理：仓库结构完整、构建与使用说明较充分，但存在若干可改进的工程与安全问题，且本阶段未执行任何编译或运行，结论均基于静态阅读。",
+        "task": "code_review",
+        "visual_observations": [],
+        "web_checks": []
+      },
+      "scientific_validation": false,
+      "source": "model_api_review",
+      "source_lookup": {
+        "reason": "未识别到论文自身的公开 arXiv / DOI 标识，仅核对已提供材料。",
+        "status": "not_requested"
+      },
+      "status": "completed",
+      "usage": {
+        "completion_tokens": 2129,
+        "prompt_tokens": 26783,
+        "total_tokens": 28912
+      },
+      "web_sources": [],
+      "acceptance_kind": "production_browser_submission"
+    },
+    "console_errors": 0,
+    "temporary_upload_cleanup_http": 200
+  },
+  "github_import": {
+    "url": "https://github.com/akamaster/pytorch_resnet_cifar10",
+    "commit": "d5489e8995e81e91ce6b1d69dcc98ad579b0b153",
+    "bytes": 88402763,
+    "sha256": "bb8fed8a7d4136415f66d3af8890f06f8490d8915930ea1cf824e223f4e473ff",
+    "files": 12,
+    "response_json_bytes": 1780,
+    "review_request_json_bytes": 341,
+    "review_material_sha_matches": true,
+    "review_status": "completed",
+    "execution_performed": false
+  }
+}

@@ -29,7 +29,7 @@ class ReviewAPIClient:
     def health(self):return self.request('/v1/health')
     def submit(self,paper,code,scope=''):
         body={'scope':scope}
-        for key,path,limit in [('paper',Path(paper),20*1024**2),('code',Path(code),50*1024**2)]:
+        for key,path,limit in [('paper',Path(paper),20*1024**2),('code',Path(code),100*1024**2)]:
             if path.stat().st_size>limit:raise ValueError(key+' exceeds material limit')
             body[key]={'name':path.name,'content_base64':base64.b64encode(path.read_bytes()).decode()}
         return self.request('/v1/reviews',body)

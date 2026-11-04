@@ -8,9 +8,10 @@ export function metricUnit(m){
  return ambiguous?'（单位待核对）':m.unit||'';
 }
 export function inputKey(p){return JSON.stringify([p.paper?.sha256||null,p.repository?.sha256||null,p.online_task||'auto',p.online_scope||'',p.online_max_seconds||null,p.online_supply_notes||'']);}
+export function hasCode(p){return Boolean(p.repository?.blob||p.repository?.remote?.repository);}
 export function validateInput(p,{token='',consent=false}={}){
  const errors={};
- if(!p.paper?.blob&&!p.repository?.blob)errors.material='请至少上传论文 PDF 或导入代码。';
+ if(!p.paper?.blob&&!hasCode(p))errors.material='请至少上传论文 PDF 或导入代码。';
  if(!token.trim())errors.token='请填写管理员提供的网站访问码。';
  if(p.online_restrict&&!p.online_scope?.trim())errors.scope='请填写本次只审查的表格、实验或指标。';
  const n=p.online_max_seconds;

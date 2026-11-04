@@ -27,7 +27,9 @@ from urllib.parse import urlparse
 from .reproduction.paper_text import extract_paper
 
 DIMENSIONS = ('scope','code','data','environment','settings','workflow','resources','results')
-MAX_BODY = 100 * 1024**2
+MAX_BODY = 165 * 1024**2
+MAX_CODE_BYTES = 100 * 1024**2
+MAX_UNPACKED_BYTES = 500 * 1024**2
 
 def now():
     return datetime.now(timezone.utc).isoformat()
@@ -47,7 +49,9 @@ def decode_material(value, suffix, limit):
     if not isinstance(value,dict) or not isinstance(value.get('name'),str) or not value['name'].lower().endswith(suffix):
         raise ReviewError('invalid_material',f'Expected a named {suffix} material')
     try:
-        raw=base64.b64decode(value['content_base64'],validate=True)
+        # Bytes can only be supplied internally by the hosted transfer adapter;
+        # JSON clients cannot construct a Python bytes instance.
+        raw=value['_raw_bytes'] if isinstance(value.get('_raw_bytes'),bytes) else base64.b64decode(value['content_base64'],validate=True)
     except (KeyError,ValueError,TypeError) as exc:
         raise ReviewError('invalid_material','Material must contain valid base64') from exc
     if not raw or len(raw)>limit:
@@ -88,7 +92,7 @@ def prepare_context(body, *, partial=False):
             path=Path(tmp)/'paper.pdf';path.write_bytes(pdf)
             pages,parser=extract_paper(path, layout=partial)
     if body.get('code') or not partial:
-        code,archive=decode_material(body.get('code'),'.zip',50*1024**2)
+        code,archive=decode_material(body.get('code'),'.zip',MAX_CODE_BYTES)
     files=[];excerpts=[];seen=set();budget=60000 if partial else 50000;unpacked=0
     try:
         with zipfile.ZipFile(io.BytesIO(code)) if code else nullcontext(None) as z:
@@ -104,7 +108,7 @@ def prepare_context(body, *, partial=False):
                 if len(name)>512 or not parts or name.startswith('/') or '\\' in name or any(p in {'..','.'} or ':' in p for p in parts) or name in seen or item.flag_bits&1 or stat.S_ISLNK(item.external_attr>>16):
                     raise ReviewError('invalid_zip','Unsafe, encrypted or duplicate ZIP entry')
                 seen.add(name);unpacked+=item.file_size
-                if unpacked>100*1024**2:raise ReviewError('invalid_zip','Uncompressed ZIP exceeds 100 MiB')
+                if unpacked>MAX_UNPACKED_BYTES:raise ReviewError('invalid_zip','Uncompressed ZIP exceeds 500 MiB')
                 files.append(name)
                 if (Path(name).suffix.lower() in {'.py','.md','.txt','.json','.yaml','.yml','.toml','.sh','.cfg','.ini','.c','.h','.cpp','.cc','.hpp','.r','.js','.mjs','.ts','.java','.rs','.go'} or Path(name).name.lower() in {'readme','makefile','dockerfile','license','copying','copyright'}) and budget>0 and len(excerpts)<80:
                     if item.file_size>1024**2:continue

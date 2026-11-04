@@ -17,7 +17,7 @@
 
 | 项目 | 当前约束 |
 |---|---|
-| 请求体 | 5 MB，包含 JSON 与 base64；原始 PDF 与 ZIP 合计建议不超过约 3.5 MB |
+| 文件与传输 | GitHub 源码 ZIP 和本地代码 ZIP 最大 100 MiB，解压合计最大 500 MiB、5000 项；PDF 最大 20 MiB。小文件内联，大文件通过短期签名 URL 直传，单次页面 JSON 仍小于 5 MB |
 | 代码来源 | 固定 GitHub 提交的源码 ZIP，或用户导入的 ZIP；目录指纹不能代替源码 |
 | 模型上下文 | 论文文字总计 90 KB，按全篇页数分配，优先保留各页图表；代码节选 60 KB，先读取说明、依赖和根目录源码。页面图像最多 24 页，优先标题页与图表页，最长边 1600 像素 |
 | 指标 | 图表编号、页码、逐字引用与数值须能对应；作者方法优先。小数比例不擅自添加百分号；单位不确定的指标保留原值，并排除自动数值验收。实际页面图片参与模型阅读；印刷数字与曲线估计分别记录。曲线估计不作为精确验收目标；首轮最多 200 项，复核补读后最多 400 项，未覆盖项明确记录 |
@@ -31,10 +31,10 @@
 
 ## 存储与费用
 
-- PDF 与 ZIP 留在当前浏览器。提交时发送至服务端解析；有执行任务时将代码放入隔离实例，不向实例注入模型、Redis、EdgeOne 或 E2B 密钥。
+- PDF 与 ZIP 保存在当前浏览器。大文件另经临时 E2B 文件通道传输，最长保留 15 分钟后实例自动回收；提交时由服务端校验大小与 SHA256 后解析；有执行任务时将代码放入隔离实例，不向实例注入模型、Redis、EdgeOne 或 E2B 密钥。
 - Redis 保存浏览器身份隔离的审查报告、计划、执行状态与费用预留，保留 7 天；不保存原始 PDF/ZIP。报告可能包含材料中的引用、源码路径和执行输出。
 - 浏览器生成随机身份凭据。其他浏览器不能仅凭任务编号读取报告；清除浏览器存储后原身份不能自动恢复，应先导出报告。
-- 主审、公开资料检索与交叉复核共用原费用计数，合计最多 60 次，每次保守预留 1 元；CPU 执行最多 20 次，每次预留 1 元。总预留 80 元，低于本轮 100 元授权；余额查询/日志/报告读取不新建实例。
+- 主审、公开资料检索与交叉复核共用原费用计数，合计最多 60 次，每次保守预留 1 元；隔离实例最多创建 20 次（包含大文件暂存与 CPU 实验执行），每次预留 1 元。总预留 80 元，低于本轮 100 元授权；余额查询/日志/报告读取不新建实例。
 - 预留在外部调用之前原子完成，失败不退回。供应商不可用时不自动重试；重复提交同一 `request_id` 不重复请求模型，重复执行同一冻结计划不重复创建实例。实际失败、停止或超时后可主动重试，同一报告最多三次执行，每次单独预留并保留历史。
 - 云端不依赖后台线程或本地文件队列。长任务由 E2B 实例执行，浏览器轮询同域接口，报告取回并保存后关闭实例。
 
@@ -58,14 +58,16 @@ E2B 免费额度、平台免费配额与实际账单以各控制台为准。这�
 | 方法 | 路径 | 请求 / 返回 |
 |---|---|---|
 | GET | `/v1/capabilities` | 运行模式、配置状态、材料与执行限制 |
-| POST | `/v1/repositories` | `{url}` → 固定提交、源码指纹、文件目录与有界源码 ZIP |
+| POST | `/v1/repositories` | `{url}` → 固定提交、源码指纹、文件目录；较大仓库返回不可变源码引用，避免 100 MB 经页面 JSON 往返 |
+| POST | `/v1/uploads` | `request_id`、`files[{kind,name,bytes,sha256}]` → 短期写入 URL 和 `upload_id`；文件直接 POST multipart 到签名 URL |
+| POST | `/v1/uploads/{id}/cancel` | 关闭属于当前浏览器的临时传输通道 |
 | POST | `/v1/assessments` | 可选 `paper` / `code`（至少一项），`task`、可选 `scope` / `max_seconds` / `supplement`、`request_id` → 审查报告或已存在任务 |
 | GET | `/v1/assessments/{id}` | 身份隔离的报告与实际执行状态；不会重建实例 |
 | POST | `/v1/assessments/{id}/execute` | `code` 与 `plan_sha256`，重试另带 `retry_of` → 冻结计划的执行状态；重验源码身份 |
 | POST | `/v1/assessments/{id}/cancel` | 请求停止所选实例，保留已有证据；无法确认停止时不伪装为已停止 |
 | POST | `/v1/assessments/{id}/feedback` | 受阻后提交 `answer: unavailable / can_provide`，记录材料可获得性，不改变科学验收为通过 |
 
-`paper` / `code` 使用 `{name, content_base64}`。`request_id` 推荐使用无连字符 UUID；同一编号不得替换材料、任务目的、范围或时限。报告来源为 `model_api_review`，运行观测单独放在 `execution` 中。
+`paper` / `code` 小文件使用 `{name, content_base64}`，大文件使用 `{name,upload_id,kind}`；GitHub 大仓库使用服务返回的 `{name,repository,commit,sha256,bytes}`。引用解析与大小、哈希校验均在服务端完成，不接受任意下载地址。上传的签名只允许写入固定文件路径，不含模型或 E2B 账号 key。`request_id` 推荐使用无连字符 UUID；同一编号不得替换材料、任务目的、范围或时限。报告来源为 `model_api_review`，运行观测单独放在 `execution` 中。
 
 错误返回稳定 `error.code` 与可操作信息。GitHub 受限、材料不完整、模型请求失败、实例启动失败、时间耗尽和结果不符不互相替代。
 
@@ -82,6 +84,7 @@ PDF 的原页图像与保留布局的文字共同进入主审。长文为每页�
 - `articheck/hosted_review.py`：单材料入口、任务类型、模型审查和执行计划校验。
 - `articheck/hosted_images.py`、`reproduction/pdf_render.py`：独立进程渲染实际 PDF 页面，不向进程传递供应商凭据。
 - `articheck/hosted_sources.py`、`hosted_audit.py`：公开资料检索、保守复核、原建议与修订记录。
+- `articheck/hosted_uploads.py`：短期文件直传、身份隔离、15 分钟硬时限与文件大小/指纹核对。
 - `articheck/hosted_github.py`：固定主机的 GitHub 源码导入、提交冻结、大小与失败处理。
 - `articheck/hosted_store.py`：持久化报告、浏览器身份隔离、原子预留与更新。
 - `articheck/hosted_sandbox.py`：E2B 创建、代码上传、状态取回与销毁。

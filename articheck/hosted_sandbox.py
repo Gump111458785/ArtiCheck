@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import time
 
-from .review_api import ReviewError, decode_material
+from .review_api import ReviewError, decode_material, MAX_CODE_BYTES
 
 
 class E2BExecutor:
@@ -18,7 +18,7 @@ class E2BExecutor:
         from e2b import Sandbox
         if not self.configured:
             raise ReviewError('sandbox_not_configured', '云端执行服务正在配置，暂未启动。', 503)
-        raw, identity = decode_material(body.get('code'), '.zip', 50 * 1024**2)
+        raw, identity = decode_material(body.get('code'), '.zip', MAX_CODE_BYTES)
         if identity['sha256'] != assessment['materials']['code']:
             raise ReviewError('material_changed', '代码已变化，请先重新审查并生成本次执行计划。', 409)
         plan = {**assessment['review']['plan'], 'metrics': assessment['review']['metrics']}
@@ -47,7 +47,7 @@ class E2BExecutor:
             sb.files.write('/root/articheck/source.zip', raw, user='root')
             # One upload avoids thousands of SDK round trips. ZIP paths were
             # validated before the immutable material fingerprint was frozen.
-            setup = '''import os, pathlib, zipfile, pwd
+            setup = '''import os, pathlib, zipfile, pwd, shutil
 root=pathlib.Path('/home/articheck/artifact')
 with zipfile.ZipFile('/root/articheck/source.zip') as z:
  names=[n for n in z.namelist() if not n.endswith('/')]
@@ -59,7 +59,8 @@ with zipfile.ZipFile('/root/articheck/source.zip') as z:
   path=root/name
   if not path.resolve().is_relative_to(root): raise ValueError('Unsafe archive')
   path.parent.mkdir(parents=True,exist_ok=True)
-  path.write_bytes(z.read(item))
+  with z.open(item) as source, path.open('wb') as target:
+   shutil.copyfileobj(source,target,1024*1024)
   if item.external_attr>>16 & 0o111: path.chmod(0o755)
 uid=pwd.getpwnam('articheck').pw_uid
 for parent,dirs,files in os.walk('/home/articheck'):
