@@ -5,11 +5,13 @@ from uploaded material. This service never executes artifact code.
 """
 from __future__ import annotations
 import argparse
+from contextlib import nullcontext
 import base64
 import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import stat
 import tempfile
@@ -52,19 +54,50 @@ def decode_material(value, suffix, limit):
         raise ReviewError('material_size','Material is empty or exceeds size limit',413)
     return raw,{'name':Path(value['name']).name,'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)}
 
-def prepare_context(body):
-    pdf,paper=decode_material(body.get('paper'),'.pdf',20*1024**2)
-    code,archive=decode_material(body.get('code'),'.zip',50*1024**2)
-    if not pdf.startswith(b'%PDF-'):
-        raise ReviewError('invalid_pdf','Paper is not a PDF')
-    with tempfile.TemporaryDirectory(prefix='articheck-api-paper-') as tmp:
-        path=Path(tmp)/'paper.pdf';path.write_bytes(pdf)
-        pages,parser=extract_paper(path)
-    files=[];excerpts=[];seen=set();budget=50000;unpacked=0
+def table_first_excerpt(value, limit):
+    if len(value)<=limit:
+        return value
+    # Captions often sit BELOW a table. Preserve the preceding aligned rows as
+    # well as the caption, instead of treating prose mentions as table data.
+    matches=list(re.finditer(r'^[ \t]*(?:table|figure|fig\.|表|图)[ \t]*[0-9IVX]+[.:：\s]',value,re.I|re.M))
+    if not matches:
+        return value[:limit]
+    head=min(600,limit//4)
+    ranges=[]
+    for m in matches:
+        start=max(head,m.start()-1800);end=min(len(value),m.start()+1800)
+        if ranges and start<=ranges[-1][1]:
+            ranges[-1]=(ranges[-1][0],max(end,ranges[-1][1]))
+        else:ranges.append((start,end))
+    parts=[value[:head]]; remaining=limit-head
+    for start,end in ranges:
+        if remaining<=0:break
+        block=value[start:end]
+        take=block[:remaining];parts.append(take);remaining-=len(take)
+    return '\n[节选分隔]\n'.join(parts)
+
+def prepare_context(body, *, partial=False):
+    if not isinstance(body, dict) or partial and not (body.get('paper') or body.get('code')):
+        raise ReviewError('missing_material', '请上传论文 PDF、代码 ZIP，或填写公开 GitHub 仓库。')
+    pages=[];parser=None;paper=None;archive=None;code=None
+    if body.get('paper') or not partial:
+        pdf,paper=decode_material(body.get('paper'),'.pdf',20*1024**2)
+        if not pdf.startswith(b'%PDF-'):
+            raise ReviewError('invalid_pdf','Paper is not a PDF')
+        with tempfile.TemporaryDirectory(prefix='articheck-api-paper-') as tmp:
+            path=Path(tmp)/'paper.pdf';path.write_bytes(pdf)
+            pages,parser=extract_paper(path, layout=partial)
+    if body.get('code') or not partial:
+        code,archive=decode_material(body.get('code'),'.zip',50*1024**2)
+    files=[];excerpts=[];seen=set();budget=60000 if partial else 50000;unpacked=0
     try:
-        with zipfile.ZipFile(io.BytesIO(code)) as z:
-            if len(z.infolist())>5000:raise ReviewError('invalid_zip','At most 5000 ZIP entries')
-            for item in z.infolist():
+        with zipfile.ZipFile(io.BytesIO(code)) if code else nullcontext(None) as z:
+            entries=z.infolist() if z else []
+            if len(entries)>5000:raise ReviewError('invalid_zip','At most 5000 ZIP entries')
+            # Read instructions/dependencies before large source modules consume
+            # the excerpt budget; provenance still uses full archive paths.
+            entries=sorted(entries,key=lambda f:(0 if Path(f.filename).name.lower() in {'readme.md','readme','readme.txt','requirements.txt','pyproject.toml','environment.yml','makefile'} else 1,len(PurePosixPath(f.filename).parts),f.filename))
+            for item in entries:
                 name=item.filename
                 if item.is_dir():continue
                 parts=PurePosixPath(name).parts
@@ -73,21 +106,29 @@ def prepare_context(body):
                 seen.add(name);unpacked+=item.file_size
                 if unpacked>100*1024**2:raise ReviewError('invalid_zip','Uncompressed ZIP exceeds 100 MiB')
                 files.append(name)
-                if Path(name).suffix.lower() in {'.py','.md','.txt','.json','.yaml','.yml','.toml','.sh','.cfg','.ini'} and budget>0 and len(excerpts)<80:
+                if (Path(name).suffix.lower() in {'.py','.md','.txt','.json','.yaml','.yml','.toml','.sh','.cfg','.ini','.c','.h','.cpp','.cc','.hpp','.r','.js','.mjs','.ts','.java','.rs','.go'} or Path(name).name.lower() in {'readme','makefile','dockerfile','license','copying','copyright'}) and budget>0 and len(excerpts)<80:
                     if item.file_size>1024**2:continue
                     raw=z.read(item)
-                    text=raw.decode('utf-8',errors='replace');take=text[:min(5000,budget)];budget-=len(take)
+                    text=raw.decode('utf-8',errors='replace');take=text[:min(5000,budget)]
+                    if partial:take=take.encode()[:budget].decode('utf-8',errors='ignore')
+                    budget-=len(take.encode()) if partial else len(take)
                     excerpts.append({'file':name,'text':take,'truncated':len(take)<len(text)})
     except (zipfile.BadZipFile,RuntimeError,NotImplementedError) as exc:
         raise ReviewError('invalid_zip','ZIP cannot be read') from exc
-    if not files:raise ReviewError('invalid_zip','No code files in ZIP')
-    paper_budget=50000;paper_excerpts=[]
+    if code and not files:raise ReviewError('invalid_zip','No code files in ZIP')
+    paper_budget=90000 if partial else 50000;paper_excerpts=[]
     for page in pages:
         if paper_budget<=0:break
-        text=page['text'][:min(8000,paper_budget)];paper_budget-=len(text)
+        take=min(14000 if partial else 8000,paper_budget)
+        text=table_first_excerpt(page['text'],take) if partial else page['text'][:take]
+        if partial:text=text.encode()[:take].decode('utf-8',errors='ignore')
+        paper_budget-=len(text.encode()) if partial else len(text)
         paper_excerpts.append({'page':page['number'],'text':text,'truncated':len(text)<len(page['text'])})
-    return {'paper':paper,'code':archive,'paper_pages':len(pages),'files':files,'paper_excerpts':paper_excerpts,'code_excerpts':excerpts,'parser':parser,
-            'coverage':{'paper_pages_in_context':len(paper_excerpts),'code_files_in_context':len(excerpts),'total_code_files':len(files),'file_list_in_context':min(len(files),500),'file_list_truncated':len(files)>500,'scope':'Bounded excerpts, not a complete repository audit'}},str(body.get('scope',''))[:2000]
+    context={'paper':paper,'code':archive,'paper_pages':len(pages),'files':files,'paper_excerpts':paper_excerpts,'code_excerpts':excerpts,'parser':parser,
+            'coverage':{'paper_pages_in_context':len(paper_excerpts),'code_files_in_context':len(excerpts),'total_code_files':len(files),'file_list_in_context':min(len(files),500),'file_list_truncated':len(files)>500,'paper_text_truncated':len(paper_excerpts)<len(pages) or any(p['truncated'] for p in paper_excerpts),'scope':'Bounded excerpts, not a complete repository audit'}}
+    if partial:
+        context['paper_links']=list(dict.fromkeys(link for page in pages for link in page.get('links',[])))[:100]
+    return context,str(body.get('scope',''))[:2000]
 
 def validate_model_review(value,context):
     if not isinstance(value,dict) or not isinstance(value.get('summary'),str) or not value['summary'].strip():
@@ -121,11 +162,13 @@ class ModelReviewer:
     def configured(self):
         return bool(self.base_url and self.model and os.environ.get(self.key_env))
     def post(self,body):
+        body=dict(body)
+        timeout=max(5,min(80,float(body.pop('_http_timeout',60))))
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self,*args,**kwargs):
                 raise ReviewError('provider_redirect','Model endpoint redirects are not followed',502)
         req=urllib.request.Request(self.base_url+'/chat/completions',data=json.dumps(body,ensure_ascii=False).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ[self.key_env]})
-        with urllib.request.build_opener(NoRedirect()).open(req,timeout=60) as response:
+        with urllib.request.build_opener(NoRedirect()).open(req,timeout=timeout) as response:
             raw=response.read(2_000_001)
         if len(raw)>2_000_000:raise ReviewError('model_response_size','Model response exceeds 2 MB',502)
         return json.loads(raw)

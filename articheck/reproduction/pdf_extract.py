@@ -17,11 +17,22 @@ def main():
         raise ValueError('PDF must be unencrypted and contain 1–150 pages')
     pages=[];total=0
     for number,page in enumerate(reader.pages,1):
-        text=page.extract_text() or ''
+        text=(page.extract_text(extraction_mode='layout') if '--layout' in sys.argv else page.extract_text()) or ''
         if len(text)>60000:raise ValueError('Page text exceeds limit; no partial inventory is certified')
         total+=len(text)
         if total>1_500_000:raise ValueError('Extracted PDF text exceeds limit')
-        pages.append({'number':number,'text':text})
+        item={'number':number,'text':text}
+        if '--layout' in sys.argv:
+            links=[]
+            for annotation in list(page.get('/Annots', []))[:100]:
+                try:
+                    uri=annotation.get_object().get('/A', {}).get('/URI')
+                    if isinstance(uri,str) and uri.startswith(('http://','https://')) and len(uri)<=2000:
+                        links.append(uri)
+                except (AttributeError,ValueError,TypeError):
+                    continue
+            item['links']=links
+        pages.append(item)
     raw=(json.dumps(pages,ensure_ascii=False,indent=2)+'\n').encode('utf-8')
     if len(raw)>2_000_000:raise ValueError('Extracted PDF text exceeds 2 MB')
     Path(sys.argv[2]).write_bytes(raw)

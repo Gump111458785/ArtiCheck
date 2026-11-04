@@ -1,0 +1,274 @@
+"""Hosted v2 routes. v1 remains available for existing API clients."""
+import hmac
+import json
+import re
+import time
+import uuid
+import copy
+
+from .hosted_github import import_repository, repository
+from .hosted_review import assess, material_identity, prepare_assessment, digest
+from .hosted_sandbox import E2BExecutor
+from .hosted_store import HostedStore
+from .hosted_images import text_materials
+from .hosted_sources import lookup
+from .hosted_audit import cross_audit
+from .review_api import ReviewError, now
+
+
+def register(app, env, reviewer, budget, *, store=None, executor=None):
+    from flask import jsonify, request
+    store = store or HostedStore(env)
+    executor = executor or E2BExecutor(env)
+
+    def authorize(*, session=True):
+        token = env.get('ARTICHECK_REVIEW_TOKEN', '')
+        if len(token) < 24 or not hmac.compare_digest(request.headers.get('Authorization', '').encode(), ('Bearer ' + token).encode()):
+            raise ReviewError('unauthorized', '请填写网站访问码，不是模型供应商密钥。', 401)
+        if request.headers.get('X-ArtiCheck-Client') != 'review-api':
+            raise ReviewError('invalid_client', '请从网站提交审查。', 403)
+        origin = request.headers.get('Origin')
+        if origin and origin.rstrip('/') != (env.get('ARTICHECK_PUBLIC_ORIGIN') or request.host_url).rstrip('/'):
+            raise ReviewError('origin_forbidden', '请从同一网站提交材料。', 403)
+        owner = request.headers.get('X-ArtiCheck-Session', '')
+        if session and not re.fullmatch(r'[a-f0-9]{64}', owner):
+            raise ReviewError('invalid_session', '当前浏览器身份无效，请刷新页面。', 401)
+        return owner
+
+    def body():
+        value = request.get_json(silent=True)
+        if not isinstance(value, dict):
+            raise ReviewError('invalid_request', '请提交有效的材料对象。')
+        return value
+
+    @app.get('/capabilities')
+    def capabilities():
+        return jsonify(version=2, service='articheck-online', model=reviewer.model,
+                       review_configured=reviewer.configured and budget.configured,
+                       sandbox_configured=executor.configured, auth_required=True,
+                       limits={'max_body_bytes': 5_000_000, 'max_seconds': 600,
+                               'default_seconds': 300, 'report_retention_days': 7,
+                               'compute_reservation_cny': 1, 'compute_attempts': 20})
+
+    @app.post('/repositories')
+    def import_code():
+        owner=authorize()
+        payload=body()
+        name=repository(payload.get('url'))
+        assessment=store.get(owner,payload['assessment_id']) if payload.get('assessment_id') else None
+        if assessment and assessment['review'].get('repository_hint')!='https://github.com/'+name:
+            raise ReviewError('source_mismatch','自动获取的仓库必须对应本次报告中的来源线索。',409)
+        cached=None
+        if not payload.get('refresh'):
+            try:cached=store.repository_ref(name)
+            except ReviewError:pass
+        try:
+            result=import_repository(name,int(time.time()//300),env.get('ARTICHECK_GITHUB_TOKEN',''),
+                                     cached.get('commit') if cached else None)
+        except ReviewError as exc:
+            if assessment:
+                assessment['source_discovery']={'status':'failed','url':'https://github.com/'+name,
+                                                'error':exc.code,'reason':str(exc),'attempted_at':now()}
+                store.save(owner,assessment)
+            raise
+        fetched_at=cached.get('fetched_at') if cached else time.time()
+        if not cached:
+            try:store.repository_ref(name,{'commit':result['commit'],'fetched_at':fetched_at})
+            except ReviewError:pass
+        if assessment:
+            assessment['source_discovery']={'status':'downloaded','url':result['url'],
+                                            'commit':result['commit'],'sha256':result['sha256'],'attempted_at':now()}
+            store.save(owner,assessment)
+        return jsonify({**result,'cached_reference':bool(cached),'fetched_at':fetched_at,
+                        **({'assessment':assessment} if assessment else {})})
+
+    @app.post('/assessments')
+    def create_assessment():
+        started=time.monotonic()
+        owner = authorize()
+        payload = body()
+        try:
+            context, scope = prepare_assessment(payload)
+        except ReviewError:
+            raise
+        except Exception as exc:
+            raise ReviewError('invalid_material','论文或代码包无法安全解析，请检查文件是否完整、加密或损坏。',422) from exc
+        if len(json.dumps(text_materials(context), ensure_ascii=False).encode()) > 175_000:
+            raise ReviewError('context_too_large', '材料解析后的内容过大，请缩小代码包或论文范围。', 413)
+        job = payload.get('request_id') or uuid.uuid4().hex
+        if not isinstance(job, str) or not re.fullmatch(r'[a-f0-9]{32}', job):
+            raise ReviewError('invalid_request_id', '请求编号无效。')
+        identity = digest({'materials': material_identity(context), 'task': context['task'],
+                           'scope': scope, 'max_seconds': context['max_seconds'],'supplement':context['supplement']})
+        pending = {'id': job, 'status': 'reviewing', 'created_at': now(), 'started_at': time.time(),
+                   'format': 'articheck-online-assessment-v2', 'source': 'model_api_review',
+                   'materials': material_identity(context), 'input_sha256': identity, 'review': None,
+                   'execution': None, 'execution_performed': False, 'scientific_validation': False}
+        if not store.claim(owner, pending):
+            existing = store.get(owner, job)
+            if existing.get('input_sha256') != identity:
+                raise ReviewError('request_changed', '同一请求编号不能替换材料或审查范围。', 409)
+            return jsonify(existing)
+        # Material parsing and the durable idempotency claim precede reservation.
+        try:
+            lookup(context,budget,store)
+            while len(json.dumps(text_materials(context),ensure_ascii=False).encode())>175_000 and context.get('web_sources'):
+                sources=context['web_sources']
+                if any(s.get('content') for s in sources):
+                    for source in sources:source['content']=source.get('content','')[:len(source.get('content',''))//2]
+                elif any(s.get('summary') for s in sources):
+                    for source in sources:source['summary']=''
+                else:sources.pop()
+                context['source_lookup']['context_truncated']=True
+            attempt = budget.reserve()
+            value = assess(reviewer, context, scope, request_timeout=max(5,min(80,108-(time.monotonic()-started))))
+        except Exception as exc:
+            pending.update(status='failed', error=exc.code if isinstance(exc, ReviewError) else 'provider_failed')
+            store.save(owner, pending)
+            if isinstance(exc, ReviewError):
+                raise
+            raise ReviewError('provider_failed', '模型请求失败，调用额度已预留；未自动重试。', 502) from exc
+        remaining=108-(time.monotonic()-started)
+        if context['paper'] and value['review']['paper_type'] in {'empirical','diagnostic','survey'} and (value['review']['findings'] or value['review']['metrics']):
+            if remaining>=8:
+                try:
+                    attempt=budget.reserve()
+                    value=cross_audit(reviewer,context,value,request_timeout=min(25,remaining))
+                except Exception as exc:
+                    value['audit']={'status':'not_completed','reason':exc.code if isinstance(exc,ReviewError) else 'cross_audit_failed'}
+            else:
+                value['audit']={'status':'not_completed','reason':'request_deadline'}
+        value.update(id=job, status='completed', input_sha256=identity)
+        value['budget'] = {'model_reserved_attempts': attempt, 'model_max_attempts': getattr(budget,'max_attempts',10)}
+        store.save(owner, value)
+        return jsonify(value)
+
+    @app.get('/assessments/<job>')
+    def get_assessment(job):
+        owner = authorize()
+        value = store.get(owner, job)
+        previous = copy.deepcopy(value)
+        if value.get('status') == 'reviewing' and time.time() - value['started_at'] > 125:
+            value.update(status='failed', error='review_response_unavailable')
+            if not store.replace(owner, previous, value):
+                return jsonify(store.get(owner, job))
+        execution = value.get('execution')
+        if execution and execution['status'] == 'starting' and time.time() > execution.get('deadline', float('inf')):
+            value['execution'] = {**execution, 'status': 'expired', 'notice': '未能确认实例启动结果，保留未验收状态。'}
+            store.replace(owner, previous, value)
+            return jsonify(store.get(owner, job))
+        if execution and execution['status'] == 'running':
+            try:
+                value['execution'] = executor.poll(execution)
+            except ReviewError:
+                raise
+            except Exception as exc:
+                raise ReviewError('sandbox_poll_failed', '暂时无法获取执行状态，可稍后刷新；不会重新启动任务。', 502) from exc
+            if not store.replace(owner, previous, value):
+                return jsonify(store.get(owner, job))
+            if value['execution']['status'] in {'completed', 'failed'}:
+                try:
+                    executor.stop(value['execution'])
+                except Exception:
+                    pass  # Provider hard deadline is the final billing bound.
+        return jsonify(value)
+
+    @app.post('/assessments/<job>/execute')
+    def execute(job):
+        owner = authorize()
+        value = store.get(owner, job)
+        payload = body()
+        if not value.get('review'):
+            raise ReviewError('review_not_ready', '请等待材料审查完成后再执行。', 409)
+        if payload.get('plan_sha256') != value['review']['plan_sha256']:
+            raise ReviewError('plan_changed', '执行计划已变化，请刷新后再提交。', 409)
+        previous_execution=value.get('execution')
+        retry=payload.get('retry_of')
+        if previous_execution and not retry:
+            return jsonify(value)  # Idempotent across repeated clicks/requests.
+        history=value.get('execution_history',[])
+        if retry and (not previous_execution or previous_execution['status'] not in {'failed','expired','cancelled'} or
+                      previous_execution.get('attempt_id')!=retry or len(history)>=2):
+            raise ReviewError('retry_changed','该执行不能按此版本重试，请刷新状态；每份计划最多执行三次。',409)
+        attempt_number=len(history)+2 if retry else 1
+        if not executor.configured:
+            raise ReviewError('sandbox_not_configured', '云端执行服务尚未配置，未消耗执行额度。', 503)
+        if not value['review']['plan']['stages']:
+            raise ReviewError('no_executable_plan', value['review']['plan']['blocked_reason'] or '当前材料未提供可执行代码。请先补充代码或查看论文自查结果。', 422)
+        # Revalidate bytes and fingerprint before acquiring a paid launch latch.
+        from .review_api import decode_material, prepare_context
+        context, _ = prepare_context({'code': payload.get('code')}, partial=True)
+        if material_identity(context)['code'] != value['materials']['code']:
+            raise ReviewError('material_changed', '代码版本已变化，请重新审查。', 409)
+        if not store.lock(owner, job,attempt_number):
+            raise ReviewError('execution_already_requested', '这份计划已提交过执行。请刷新状态；不会重复启动或扣费。', 409)
+        try:
+            attempt = store.reserve_compute()
+        except ReviewError:
+            # No provider call has started. A transient ledger outage must not
+            # permanently turn this frozen plan into an unstartable task.
+            store.unlock_before_launch(owner,job,attempt_number)
+            raise
+        if retry:value['execution_history']=history+[previous_execution]
+        attempt_id=uuid.uuid4().hex
+        value['execution'] = {'status': 'starting', 'execution_performed': False,'attempt_id':attempt_id,
+                              'scientific_validation': False, 'reserved_attempt': attempt,
+                              'deadline': time.time() + value['review']['plan']['max_seconds'] + 60}
+        store.save(owner, value)
+        try:
+            value['execution'] = {**executor.launch(value, payload), 'reserved_attempt': attempt,'attempt_id':attempt_id}
+        except Exception as exc:
+            value['execution'] = {**value['execution'], 'status': 'failed',
+                                  'notice': '云端实例启动失败，本次预留保留；请联系管理员，避免反复提交。'}
+            store.save(owner, value)
+            if isinstance(exc, ReviewError):
+                raise
+            raise ReviewError('sandbox_launch_failed', value['execution']['notice'], 502) from exc
+        store.save(owner, value)
+        return jsonify(value)
+
+    @app.post('/assessments/<job>/cancel')
+    def cancel(job):
+        owner = authorize()
+        value = store.get(owner, job)
+        execution = value.get('execution')
+        previous = copy.deepcopy(value)
+        if execution and execution['status'] in {'running', 'cancelling'}:
+            value['execution'] = {**execution, 'status': 'cancelling'}
+            if not store.replace(owner, previous, value):
+                return jsonify(store.get(owner, job))
+            try:
+                snapshot = executor.poll(execution)
+                executor.stop(execution)
+            except Exception as exc:
+                raise ReviewError('cancel_pending', '暂时无法确认停止，请点击重试停止；实例仍受最长时限限制。', 502) from exc
+            value['execution'] = {**snapshot, 'status': 'cancelled', 'notice': '用户停止执行，保留已产生的证据。'}
+            store.save(owner, value)
+        return jsonify(value)
+
+    @app.post('/assessments/<job>/feedback')
+    def answer_blocker(job):
+        owner = authorize()
+        value = store.get(owner, job)
+        execution = value.get('execution') or {}
+        answer = body().get('answer')
+        if not execution and value.get('review',{}).get('task')=='reproduction' and not value['materials']['code']:
+            if answer not in {'unavailable','can_provide'}:
+                raise ReviewError('invalid_feedback','请选择能否补充代码来源。')
+            discovery=value.get('source_discovery',{})
+            if value['review'].get('repository_hint') and not discovery:
+                raise ReviewError('source_not_attempted','已定位到代码线索，请先尝试自动获取。',409)
+            value['availability']={'resource':'source_code','answer':answer,'confirmed_at':now(),
+                 'verdict':'当前条件下无法取得代码，代码执行保留为未复现。' if answer=='unavailable' else '等待补充 GitHub 地址或代码 ZIP 后重新审查。',
+                 'scientific_validation':False}
+            store.save(owner,value)
+            return jsonify(value)
+        if not execution.get('needs_user') or answer not in {'unavailable', 'can_provide'}:
+            raise ReviewError('invalid_feedback', '只有实际执行遇到材料阻碍后，才需要确认补充情况。')
+        execution['user_answer'] = answer
+        execution['availability_verdict'] = '当前条件下无法复现受阻实验' if answer == 'unavailable' else '等待补充材料后重新生成计划'
+        # A skip cannot become a scientific pass, including after user feedback.
+        execution['scientific_validation'] = False
+        value['execution'] = execution
+        store.save(owner, value)
+        return jsonify(value)

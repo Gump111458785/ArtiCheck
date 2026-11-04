@@ -9,7 +9,7 @@ from pathlib import Path
 from .protocol import fingerprint,load_json
 
 
-def extract_paper(path):
+def extract_paper(path, *, layout=False):
     path=Path(path)
     with path.open('rb') as stream:signature=stream.read(5)
     if signature==b'%PDF-' or path.suffix.lower()=='.pdf':
@@ -25,7 +25,7 @@ def extract_paper(path):
                 worker_env={'PATH':os.defpath,'LANG':'C.UTF-8','PYTHONDONTWRITEBYTECODE':'1'}
                 if parser_spec and parser_spec.origin:
                     worker_env['PYTHONPATH']=str(Path(parser_spec.origin).resolve().parent.parent)
-                result=subprocess.run([sys.executable,str(worker),str(path),str(output)],env=worker_env,capture_output=True,timeout=20)
+                result=subprocess.run([sys.executable,str(worker),str(path),str(output)]+(['--layout'] if layout else []),env=worker_env,capture_output=True,timeout=20)
             except subprocess.TimeoutExpired as error:raise ValueError('Independent PDF extraction timed out') from error
             if result.returncode:raise ValueError('Independent PDF extraction failed: '+result.stderr.decode(errors='replace')[:300])
             pages=load_json(output)
