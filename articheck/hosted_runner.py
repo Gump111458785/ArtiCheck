@@ -26,10 +26,11 @@ def atomic(path, value):
     tmp.replace(path)
 
 
-def limits():
+def limits(address_space_mb=3072):
     resource.setrlimit(resource.RLIMIT_FSIZE, (128 * 1024**2, 128 * 1024**2))
     if sys.platform.startswith('linux'):
-        resource.setrlimit(resource.RLIMIT_AS, (3 * 1024**3, 3 * 1024**3))
+        bound=max(3072,min(18432,int(address_space_mb))) * 1024**2
+        resource.setrlimit(resource.RLIMIT_AS, (bound, bound))
     resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
@@ -76,7 +77,7 @@ def run_plan(plan, root, results, *, run_as='articheck'):
                 os.setuid(account.pw_uid)
             # Drop identity directly. Utilities such as runuser can reset
             # RLIMIT_AS / RLIMIT_FSIZE after the supervisor has applied them.
-            limits()
+            limits(plan.get('address_space_mb',3072))
         timed_out = False
         with log_path.open('wb') as log:
             process = subprocess.Popen(command, cwd=root, stdout=log, stderr=subprocess.STDOUT,

@@ -22,6 +22,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     store = store or HostedStore(env)
     executor = executor or E2BExecutor(env)
     uploads = HostedUploads(env,store)
+    from .hosted_auth import Accounts
+    accounts = Accounts(app,env,store)
 
     def authorize(*, session=True):
         token = env.get('ARTICHECK_REVIEW_TOKEN', '')
@@ -35,7 +37,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         owner = request.headers.get('X-ArtiCheck-Session', '')
         if session and not re.fullmatch(r'[a-f0-9]{64}', owner):
             raise ReviewError('invalid_session', '当前浏览器身份无效，请刷新页面。', 401)
-        return owner
+        return accounts.owner() or owner
 
     def body():
         value = request.get_json(silent=True)
@@ -68,6 +70,9 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         return jsonify(version=2, service='articheck-online', model=reviewer.model,
                        review_configured=reviewer.configured and budget.configured,
                        sandbox_configured=executor.configured, auth_required=True,
+                       accounts={'registration':True,'session_days':30,'method':'username_password'},
+                       compute={'capacity':getattr(executor,'capacity',{'provider':'e2b','cpu_count':2,'memory_mb':512,'gpu':False}),
+                                'gpu':{'status':'not_configured','setup_url':'https://modal.com/signup'}},
                        limits={'max_body_bytes': 5_000_000, 'max_zip_bytes':100*1024**2,
                                'max_unpacked_bytes':500*1024**2,'max_pdf_bytes':20*1024**2,
                                'large_upload_transport':'signed_direct_upload','max_seconds': 600,
@@ -113,6 +118,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         payload = material_body(body())
         try:
             context, scope = prepare_assessment(payload)
+            context['execution_environment']=getattr(executor,'capacity',context['execution_environment'])
         except ReviewError:
             raise
         except Exception as exc:
@@ -133,8 +139,20 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             if existing.get('input_sha256') != identity:
                 raise ReviewError('request_changed', '同一请求编号不能替换材料或审查范围。', 409)
             return jsonify(existing)
+        # Observable workflow facts only; no model reasoning or fabricated agent turns.
+        pending['activity'] = []
+        def activity(title, roles, detail='', status='running'):
+            for event in pending['activity']:
+                if event['status']=='running':event['status']='failed' if status in {'failed','skipped'} else 'completed'
+            pending['activity'].append({'title':title,'roles':roles,'detail':detail,
+                                        'status':status,'time':time.time()})
+            try:store.save(owner,pending)
+            except ReviewError:pass  # Progress telemetry must not change the assessment.
+        activity('材料解析完成',[role for role,present in [('literature_reader',context.get('paper')),('code_inspector',context.get('code'))] if present],
+                 '论文与源码已按输入预算解析；仅处理实际提供的材料。','completed')
         # Material parsing and the durable idempotency claim precede reservation.
         try:
+            activity('核对公开来源',['literature_reader'],'正在识别可核对的公开出处；无有效标识时仅核对导入材料。')
             lookup(context,budget,store)
             while len(json.dumps(text_materials(context),ensure_ascii=False).encode())>175_000 and context.get('web_sources'):
                 sources=context['web_sources']
@@ -145,23 +163,34 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                 else:sources.pop()
                 context['source_lookup']['context_truncated']=True
             attempt = budget.reserve()
+            activity('联合审阅与计划编排',
+                     [role for role,present in [('literature_reader',context.get('paper')),('code_inspector',context.get('code')),('planner',True)] if present],
+                     '主审模型正在核对图表、实现与实验条件，并生成结构化建议和执行计划。')
             value = assess(reviewer, context, scope, request_timeout=max(5,min(80,108-(time.monotonic()-started))))
         except Exception as exc:
+            activity('主审请求未完成',['reporter'],'保留已取得的活动记录，不自动重试。','failed')
             pending.update(status='failed', error=exc.code if isinstance(exc, ReviewError) else 'provider_failed')
             store.save(owner, pending)
             if isinstance(exc, ReviewError):
                 raise
             raise ReviewError('provider_failed', '模型请求失败，调用额度已预留；未自动重试。', 502) from exc
+        activity('主审结果已返回',['planner'],'图表与代码核查结果、执行计划已完成结构化校验。','completed')
         remaining=108-(time.monotonic()-started)
         if context['paper'] and value['review']['paper_type'] in {'empirical','diagnostic','survey'} and (value['review']['findings'] or value['review']['metrics']):
             if remaining>=8:
                 try:
                     attempt=budget.reserve()
+                    activity('交叉核查依据',['cross_auditor'],'独立复核建议与图表数字，撤回依据不足的条目。')
                     value=cross_audit(reviewer,context,value,request_timeout=min(25,remaining))
                 except Exception as exc:
                     value['audit']={'status':'not_completed','reason':exc.code if isinstance(exc,ReviewError) else 'cross_audit_failed'}
             else:
                 value['audit']={'status':'not_completed','reason':'request_deadline'}
+        if value.get('audit',{}).get('status')!='completed':
+            activity('交叉复核未执行或未完成',['cross_auditor'],
+                     '本次不适用、请求时限不足或复核请求未成功；以报告标记为准。','skipped')
+        activity('汇总审查报告',['reporter'],'建议、图表出处、覆盖缺口与执行计划已整理。','completed')
+        value['activity']=pending['activity']
         value.update(id=job, status='completed', input_sha256=identity)
         value['budget'] = {'model_reserved_attempts': attempt, 'model_max_attempts': getattr(budget,'max_attempts',10)}
         store.save(owner, value)

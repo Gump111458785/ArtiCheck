@@ -18,6 +18,24 @@
 
 论文自查将摘要与标题分开显示；图表清单保留模型、数据集、数值与原页入口。[实际运行范围与验收记录](ONLINE_ACCEPTANCE.md)。以下为本地工作台与归档案例页面。
 
+## 动态协作、分层指标与账户
+
+动态协作截图来自正式网站的一次代码验收提交，随后在 4 GB 实例上实际分配 1 GB 内存；这是系统功能验收，不是论文效果评测。指标截图展示已归档的 ResNet 报告，分组与筛选不改变原报告数值。账户截图来自实际注册登录和资料保存。
+
+[![动态协作进度](assets/review-collaboration-live.png)](assets/review-collaboration-live.png)
+
+[![多级图表指标](assets/metrics-classified.png)](assets/metrics-classified.png)
+
+[![登录界面](assets/account-login.png)](assets/account-login.png)
+
+[![个人中心](assets/account-center.png)](assets/account-center.png)
+
+资源不足操作区使用显式界面验收样例，展示两组操作的排版，不代表已执行 GPU 实验。
+
+[![资源补充与执行位置分开排列](assets/resources-layout.png)](assets/resources-layout.png)
+
+[使用说明与核心模块](ACCOUNTS_AND_COLLABORATION.md)。
+
 ## 开始：选择新建、继续项目或查看案例
 
 新建论文评估进入现有的 PDF / 代码材料表单；最近项目来自当前浏览器，内置样例不计入个人项目数量。公开 LIBLINEAR 案例拥有独立入口。

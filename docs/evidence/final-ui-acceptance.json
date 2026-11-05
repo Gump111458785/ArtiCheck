@@ -1,0 +1,60 @@
+{
+  "checks": [
+    "Final deployment accepts existing account login",
+    "Public profile has no password, session or report capability",
+    "Real pre-upgrade review remains accessible to its authenticated account",
+    "Knowing public account ID and shared review code cannot read account report anonymously",
+    "Resource choices and execution-location controls have separate rows and spacing",
+    "Resource configuration shows actual 4 GiB and explicitly unconnected GPU",
+    "Completed runtime has no agent left falsely running",
+    "Browser back restores personal center route",
+    "Personal center lists current account local project",
+    "Logout hides account projects from home screen"
+  ],
+  "screens": [
+    "resources-layout.png"
+  ],
+  "audits": [
+    {
+      "view": "execution",
+      "width": 1440,
+      "findings": [
+        {
+          "level": "WARN",
+          "id": "small-title",
+          "width": 1440,
+          "message": "The h1 is 28px (\"在线审查\").",
+          "fix": "Set the title at display size, or make the large text of the first screen the h1."
+        },
+        {
+          "level": "WARN",
+          "id": "tiny-text",
+          "width": 1440,
+          "message": "48% of the text is under 13px.",
+          "fix": "Data and labels read at 13–14px; keep 11–12px for sublines and axis ticks."
+        }
+      ]
+    },
+    {
+      "view": "execution",
+      "width": 1280,
+      "findings": [
+        {
+          "level": "WARN",
+          "id": "small-title",
+          "width": 1280,
+          "message": "The h1 is 28px (\"在线审查\").",
+          "fix": "Set the title at display size, or make the large text of the first screen the h1."
+        },
+        {
+          "level": "WARN",
+          "id": "tiny-text",
+          "width": 1280,
+          "message": "48% of the text is under 13px.",
+          "fix": "Data and labels read at 13–14px; keep 11–12px for sublines and axis ticks."
+        }
+      ]
+    }
+  ],
+  "consoleErrorCount": 0
+}

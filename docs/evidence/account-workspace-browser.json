@@ -1,0 +1,51 @@
+{
+  "screens": [
+    "account-login.png",
+    "account-center.png",
+    "metrics-classified.png"
+  ],
+  "audits": [
+    {
+      "width": 1440,
+      "findings": [
+        {
+          "level": "WARN",
+          "id": "small-title",
+          "width": 1440,
+          "message": "The h1 is 28px (\"在线审查\").",
+          "fix": "Set the title at display size, or make the large text of the first screen the h1."
+        }
+      ]
+    },
+    {
+      "width": 1280,
+      "findings": [
+        {
+          "level": "WARN",
+          "id": "small-title",
+          "width": 1280,
+          "message": "The h1 is 28px (\"在线审查\").",
+          "fix": "Set the title at display size, or make the large text of the first screen the h1."
+        }
+      ]
+    }
+  ],
+  "checks": [
+    "Guest has login action",
+    "Registration or login produces signed-in avatar",
+    "Avatar opens personal center menu",
+    "Personal center is a real route",
+    "Profile changes persist through server",
+    "Metrics grouped under dataset hierarchy",
+    "Grouped metrics retain report values and sources",
+    "Unfiltered grouped count equals actual report metrics",
+    "Author filter count matches real rows",
+    "Search has useful empty state",
+    "Cloud configuration shows verified 4 GB memory",
+    "New review is a substantial filled button with plus icon",
+    "Logout clears signed-in state",
+    "Existing account can log back in",
+    "HttpOnly login survives page reload"
+  ],
+  "consoleErrorCount": 0
+}

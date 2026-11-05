@@ -92,7 +92,7 @@ python -m articheck run --task examples/task.json --output runs/provider-api \
 
 ### 2.3 网站：浏览器中提交评测
 
-打开 [ArtiCheck 在线工作台](https://articheck-workbench.edgeone.dev/#api-review)，上传论文 PDF、代码 ZIP，或粘贴公开 GitHub 地址。代码 ZIP 与 GitHub 源码包支持最大 100 MB，大文件通过短期直传通道或固定提交引用处理。系统按材料选择论文自查、复现评估或代码审查；允许仅上传论文或代码，默认检查适用范围，也可指定表格、实验与最长执行时间。试用提交需要管理员提供的网站访问码。
+打开 [ArtiCheck 在线工作台](https://articheck-workbench.edgeone.dev/#api-review)，上传论文 PDF、代码 ZIP，或粘贴公开 GitHub 地址。代码 ZIP 与 GitHub 源码包支持最大 100 MB，大文件通过短期直传通道或固定提交引用处理。系统按材料选择论文自查、复现评估或代码审查；允许仅上传论文或代码，默认检查适用范围，也可指定表格、实验与最长执行时间。试用提交需要管理员提供的网站访问码。右上角支持注册登录、头像菜单和个人中心；登录后，审查报告按账户隔离。CPU 执行采用 2 vCPU、4 GB 内存，GPU 保留配置入口。
 
 网站使用 DeepSeek API 阅读论文文字与原页图像，核对八项条件、图表数字及论证依据。有公开代码线索时自动获取固定提交的源码；有可执行计划时，在 E2B CPU 实例中准备依赖、运行命令并保存日志、退出码和观测值。实际受阻后再请求用户补充材料，确认不可得的实验保留无法复现原因。
 
@@ -161,7 +161,17 @@ flowchart LR
 
 ## 5. 界面展示
 
-在开始页进入在线审查，提交材料后查看报告、执行日志、图表证据与角色记录。本地工作台保留完整实验与归档案例入口。
+在开始页进入在线审查，提交材料后查看报告、执行日志、图表证据与角色记录。本地工作台保留完整实验与归档案例入口。审查中实时展示各职责的实际活动；图表指标按数据集、类别、图表与评测协议分层，支持作者方法筛选。
+
+| 动态协作进度 | 分层图表指标 |
+|---|---|
+| ![实际审查期间的角色活动](docs/assets/review-collaboration-live.png) | ![数据集、类别、协议与模型分层](docs/assets/metrics-classified.png) |
+
+| 注册与登录 | 个人中心 |
+|---|---|
+| ![账户登录表单](docs/assets/account-login.png) | ![个人资料、安全设置与最近审查](docs/assets/account-center.png) |
+
+[账户与协作功能说明](docs/ACCOUNTS_AND_COLLABORATION.md)。
 
 | 在线审查报告 | 实际 CPU 执行 |
 |---|---|

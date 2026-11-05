@@ -9,6 +9,15 @@ from .review_api import ReviewError, decode_material, MAX_CODE_BYTES
 class E2BExecutor:
     def __init__(self, env):
         self.key = env.get('E2B_API_KEY', '')
+        self.template = env.get('ARTICHECK_E2B_TEMPLATE') or None
+        self.memory_mb = int(env.get('ARTICHECK_CPU_MEMORY_MB','512'))
+        if self.memory_mb not in {512,1024,2048,4096,8192}:
+            raise ValueError('Unsupported CPU memory configuration')
+
+    @property
+    def capacity(self):
+        return {'provider':'e2b','cpu_count':2,'memory_mb':self.memory_mb,
+                'gpu':False,'single_file_limit_mib':128}
 
     @property
     def configured(self):
@@ -26,7 +35,7 @@ class E2BExecutor:
         # function dies. Polling does NOT extend the deadline.
         lifetime = plan['max_seconds'] + 60
         started = time.time()
-        sb = Sandbox.create(api_key=self.key, timeout=lifetime, secure=True,
+        sb = Sandbox.create(template=self.template, api_key=self.key, timeout=lifetime, secure=True,
             metadata={'project': 'articheck', 'assessment_id': assessment['id']},
             network={'allow_public_traffic': False,
                      'deny_out': ['0.0.0.0/0'],
@@ -42,6 +51,10 @@ class E2BExecutor:
             info=sb.get_info()
             environment={'template_id':info.template_id,'cpu_count':info.cpu_count,
                          'memory_mb':info.memory_mb,'envd_version':info.envd_version}
+            if info.memory_mb < self.memory_mb:
+                raise ReviewError('compute_capacity_changed','实例内存小于审查时声明的容量，已停止；请管理员核对实验模板。',409)
+            # Address space includes shared libraries; physical RAM is bounded by the VM.
+            plan['address_space_mb']=max(3072,min(18432,info.memory_mb*2+2048))
             # A fresh user has no default image user's sudo privileges.
             sb.commands.run('useradd -m -s /bin/bash articheck && install -d -m 700 /root/articheck && install -d -o articheck -g articheck /home/articheck/artifact', user='root')
             sb.files.write('/root/articheck/source.zip', raw, user='root')
