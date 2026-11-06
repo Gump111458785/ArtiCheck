@@ -506,10 +506,18 @@ class HostedReviewTests(unittest.TestCase):
                     with log_path.open('wb') as log:
                         proc = subprocess.run(['/bin/bash', '-c', command], cwd=work_dir, stdout=log, stderr=subprocess.STDOUT, timeout=10)
                     return proc.returncode, False, False
+                from articheck.gpu_worker import bwrap_args, bwrap_env
                 worker.run_stage_command = local_stage
+                bwrap_cmd = bwrap_args(Path(tmp), 'echo ok', runtime='/usr')
+                self.assertIn('--share-net', bwrap_cmd)
+                self.assertEqual(bwrap_env('/usr')['PYTHONUSERBASE'], '/work/.pydeps')
+                self.assertEqual(bwrap_env('/usr')['TORCH_HOME'], '/work/.cache/torch')
+                self.assertEqual(bwrap_env('/usr')['SSL_CERT_FILE'], '/etc/ssl/certs/ca-certificates.crt')
                 processed = worker.poll_once()
                 self.assertEqual(processed['status'], 'completed')
                 self.assertIsNone(processed['source_url'])
+                self.assertTrue(processed['result']['runtime'].get('workspace_cleaned'))
+                self.assertEqual(list(Path(tmp).iterdir()), [])
                 polled = hybrid.poll(launched)
                 self.assertEqual(polled['status'], 'completed')
                 self.assertTrue(polled['execution_performed'])

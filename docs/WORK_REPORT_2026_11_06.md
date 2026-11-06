@@ -9,7 +9,7 @@
 - **日期**：2026-11-06（北京时间）
 - **GitHub 仓库**：`https://github.com/Gump111458785/ArtiCheck`（分支 `main`）
 - **EdgeOne 生产域名**：`https://articheck-workbench.edgeone.dev`（登录页：`https://articheck-workbench.edgeone.dev/login.html`）
-- **EdgeOne 项目 ID / 部署 ID**：`makers-f8jofllfpwva` / `dpcx8t5a48yd`
+- **EdgeOne 项目 ID / 部署 ID**：`makers-f8jofllfpwva` / `dp5jifitpyre`（前序部署：`dpcx8t5a48yd`、`dpeka5nesmh2`）
 - **自有 GPU 服务器**：`10.30.41.183`（NVIDIA GeForce RTX 4090，24,564 MiB 物理显存 / 24,111 MiB CUDA 可用显存，systemd 服务 `articheck-gpu-worker.service`）
 
 ---
@@ -26,8 +26,17 @@
 2. **GPU 服务器侧拉取守护进程与无特权隔离（`articheck/gpu_worker.py`）**：
    - 部署位置：`10.30.41.183:/opt/articheck-worker/gpu_worker.py`，由 `/etc/systemd/system/articheck-gpu-worker.service` 托管运行。
    - 凭据隔离：`/etc/articheck-gpu-worker.env`（`0600`）仅包含 `UPSTASH_REDIS_REST_URL`、`UPSTASH_REDIS_REST_TOKEN`、`ARTICHECK_BUDGET_ID`，不含 DeepSeek、GitHub、E2B 密钥。
-   - 运行时与磁盘保护：将 `/root/miniconda3/envs/deim` 只读绑定挂载至 `/opt/articheck-runtime`（不修改服务器既有文件与环境）；单任务工作目录创建于 `/dev/shm` tmpfs（约 16 GB 可用空间）并在任务结束后通过 `TemporaryDirectory` 自动清理，保护仅剩 2.4 GB 的 `/` 根分区。
-   - `bwrap` 沙箱边界：每个阶段命令在 `/usr/bin/bwrap` 中以无特权用户（宿主机降权至 `articheck`，容器内映射为 `65534:65534`）运行，启用 `--unshare-all`（隔离 user / net / pid / ipc / uts / cgroup 命名空间）、`--cap-drop ALL`、`--new-session`、`--die-with-parent`，仅只读挂载系统库与 `/opt/articheck-runtime`、按需绑定 `/dev/nvidia0` / `/dev/nvidiactl` / `/dev/nvidia-uvm` / `/dev/nvidia-uvm-tools`。已通过探针实测验证：容器内无法访问外网（`network_reachable: false`）、无法读取 `/root/.ssh`（`root_ssh_visible: false`）、宿主机环境变量不泄露（`secret_in_environment: false`）。
+   - 运行时与磁盘保护：将 `/root/miniconda3/envs/deim` 只读绑定挂载至 `/opt/articheck-runtime`（不修改服务器既有文件与环境）；单任务工作目录创建于 `/dev/shm` tmpfs（约 16 GB 可用空间），并在任务结束（无论通过、失败、超时或取消）后立即执行 `shutil.rmtree(work_dir, ignore_errors=True)` 彻底删除工作目录并退出 `TemporaryDirectory`，记录 `runtime.workspace_cleaned = True`，保护仅剩 2.4 GB 的 `/` 根分区与 `/dev/shm` 内存盘。
+   - `bwrap` 沙箱与在线下载复现支持：每个阶段命令在 `/usr/bin/bwrap` 中以无特权用户（宿主机降权至 `articheck`，容器内映射为 `65534:65534`）运行，启用 `--unshare-all --share-net`（隔离 user / pid / ipc / uts / cgroup 命名空间并开启外网连接）、`--cap-drop ALL`、`--new-session`、`--die-with-parent`，只读挂载系统库、`/opt/articheck-runtime` 及系统 DNS/CA 证书（`/etc/resolv.conf`、`/etc/ssl`、`/etc/ca-certificates`），并注入 `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`、`REQUESTS_CA_BUNDLE`、`TORCH_HOME=/work/.cache/torch`、`HF_HOME=/work/.cache/huggingface`、`PIP_CACHE_DIR=/work/.cache/pip`、`PYTHONUSERBASE=/work/.pydeps`、`PIP_USER=1`，支持自动下载公开数据集（如 CIFAR-10）、预训练权重与缺失依赖包并完整执行实验。
+
+### 2.4 2026-11-06 第二批 6 项视觉与 GPU 在线下载复现反馈修复
+
+1. **下拉框右侧箭头内距（图 1）**：`web/dist/feedback-redesign.css` 为全站 `select:not([multiple])` 设置 `appearance: none`、内嵌 SVG 下拉箭头（`background-position: right 14px center`）与 `padding-right: 42px !important; padding-left: 14px !important`，彻底消除原生下拉箭头紧贴右边框的问题。
+2. **全站和谐底色与卡片表面层级**：`web/dist/feedback-redesign.css`、`web/dist/login.css`、`web/dist/index.html` 将外框与侧边栏底色设为柔和岩灰蓝 `--ground: #e8eef5`、`.page` 画布设为珍珠浅灰蓝 `#f4f7fb`、内部功能卡片（`.online-form`、`.online-rail`、`.online-stage`、`.online-criterion` 等）保持纯白 `#ffffff` 悬浮卡片层级，并清除遗留灰绿硬编码色（`#e0e6e2` 等），与开始页深海蓝案例卡片（`#173d61`）自然融合。
+3. **右侧“本次审查”实时状态与高对比胶囊徽章（图 2）**：`web/dist/online-workspace.mjs`（`railRows`）与 `web/dist/feedback-redesign.css`（`.rail-badge`）为“论文 / 代码 / 范围 / 执行位置”四栏提供实时状态胶囊（`ready` 翠绿、`running` 亮蓝配旋转指示器与每秒计时、`failed` 醒目红、`gpu` 深海蓝、`active` 琥珀黄、`info` 钢蓝、`empty` 虚线中性灰）及文件名/页数/文件数/提交号副标题；上传槽新增 `.has-file` 实线绿框与“已就绪”角标。
+4. **执行阶段列表状态区分度（图 3）**：`web/dist/online-workspace.mjs`（`execution`）与 `web/dist/feedback-redesign.css` 将各阶段卡片拆分为 `.stage-{running,planned,completed,failed,skipped}` 与 `.status-{running,planned,completed,failed,skipped}`：执行中采用亮蓝实心胶囊 `#1f6feb`、4px 亮蓝左边框、微蓝底色 `#f4f9ff` 与高亮序号圆标；计划中采用虚线边框与中性灰标签；已执行采用森林绿左边框与绿底胶囊；执行失败采用醒目红左边框与红底胶囊；顶部 `.online-kicker` 改为结构化胶囊徽章。
+5. **全站状态对比度巡检与增强**：统一升级八项审查条件卡片（`.online-criterion.{documented,needs_review,missing,not_applicable}`）、问题严重度胶囊（`.online-severity.{high,medium,low}`）、六角色协作泳道（`.review-role-lane.{completed,running,failed,idle}`）及指标目录表头与作者方法胶囊标签。
+6. **GPU 在线下载复现与运行后自动删除**：`articheck/hosted_review.py` 与 `articheck/gpu_worker.py` 允许 GPU 阶段在线下载公开数据集、权重与缺失 Python 依赖，并在运行结束后无论通过与否均执行 `shutil.rmtree(work_dir, ignore_errors=True)` 彻底删除所有下载和生成文件。
 
 ### 2.2 邀请制账户、独立登录页与移除额外网站访问码
 
@@ -70,13 +79,14 @@
      /Users/gump/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --test /Users/gump/Documents/Codex/2026-10-26/1-articheck-artifact-pytorch-verl-vllm/outputs/ArtiCheck/tests/frontend/*.test.mjs
      ```
 2. **生产环境真机 GPU 与浏览器验收证据**：
-   - 结构化验收记录：`docs/evidence/feedback-gpu-acceptance.json`（包含 17 项断言、`/v1/capabilities` 返回的 RTX 4090 容量、评估 ID `d64bc0d8df7f48e38fba3eb1a4d84263`、`plan_hardware: "GPU"`、`provider: "owned_gpu"`、阶段 `exit_code: 0` 与实测输出 `gpu_device: NVIDIA GeForce RTX 4090` / `cuda_square_sum: 85344.0`）。
+   - 结构化验收记录：`docs/evidence/feedback-gpu-acceptance.json`（包含 23 项断言、`/v1/capabilities` 返回的 RTX 4090 容量、评估 ID `f51badca5a5f4cea86e439cc9e1e5792`、`plan_hardware: "GPU"`、`provider: "owned_gpu"`、阶段 `exit_code: 0`、实测外网 HTTPS 下载 `download_ok: True bytes= 65536`、CUDA 输出 `gpu_device: NVIDIA GeForce RTX 4090` / `cuda_square_sum: 85344.0` 以及运行后工作目录清理确认 `workspace_cleaned: true`）。
    - 生产截图归档：
      - `docs/assets/feedback-login.png`（独立受邀登录页与眼睛图标）
-     - `docs/assets/feedback-home.png`（开始页与深海蓝公开案例卡片）
+     - `docs/assets/feedback-home.png`（开始页和谐岩灰蓝/珍珠白底色与深海蓝公开案例卡片）
+     - `docs/assets/feedback-materials-rail.png`（准备材料页自定义下拉箭头、已就绪上传槽与“本次审查”高对比实时胶囊徽章）
      - `docs/assets/feedback-task-choice.png`（材料初步识别后的四选一需求弹窗）
      - `docs/assets/feedback-onepage-report.png`（一页式最终报告）
-     - `docs/assets/feedback-gpu-execution.png`（RTX 4090 过程详情与默认展开的分层活动记录）
+     - `docs/assets/feedback-gpu-execution.png`（RTX 4090 过程详情、阶段状态胶囊与默认展开的分层活动记录）
      - `docs/assets/feedback-admin-accounts.png`（管理员受邀账户管理）
 3. **GPU 服务器状态核查**：
    - 在可访问 `10.30.41.183` 的环境中运行 `ssh root@10.30.41.183 systemctl status articheck-gpu-worker.service` 可确认拉取守护进程在线，且 `df -h / /dev/shm` 可确认根分区未被任务临时文件占用。

@@ -126,7 +126,7 @@ def extract_archive(raw, dest):
 
 
 def bwrap_args(work_dir, command, runtime=RUNTIME_DIR):
-    args = ['/usr/bin/bwrap', '--unshare-all', '--new-session', '--die-with-parent',
+    args = ['/usr/bin/bwrap', '--unshare-all', '--share-net', '--new-session', '--die-with-parent',
             '--ro-bind', '/usr', '/usr', '--ro-bind', '/bin', '/bin',
             '--ro-bind', '/lib', '/lib', '--ro-bind', '/lib64', '/lib64',
             '--ro-bind', '/sys', '/sys', '--proc', '/proc', '--dev', '/dev',
@@ -134,6 +134,12 @@ def bwrap_args(work_dir, command, runtime=RUNTIME_DIR):
             '--tmpfs', runtime + '/conda-meta', '--tmpfs', runtime + '/etc',
             '--bind', str(work_dir), '/work', '--chdir', '/work',
             '--uid', '65534', '--gid', '65534', '--cap-drop', 'ALL']
+    resolv = Path('/etc/resolv.conf')
+    if resolv.exists():
+        args += ['--ro-bind', str(resolv.resolve()), '/etc/resolv.conf']
+    for etc_path in ('/etc/hosts', '/etc/nsswitch.conf', '/etc/ssl', '/etc/ca-certificates', '/etc/pki', '/etc/alternatives'):
+        if Path(etc_path).exists():
+            args += ['--ro-bind', etc_path, etc_path]
     for dev in ('nvidia0', 'nvidiactl', 'nvidia-uvm', 'nvidia-uvm-tools'):
         dev_path = '/dev/' + dev
         if Path(dev_path).exists():
@@ -142,15 +148,25 @@ def bwrap_args(work_dir, command, runtime=RUNTIME_DIR):
 
 
 def bwrap_env(runtime=RUNTIME_DIR):
+    ca_bundle = '/etc/ssl/certs/ca-certificates.crt'
     return {'PYTHONHOME': runtime,
-            'PATH': f'{runtime}/bin:/usr/local/bin:/usr/bin:/bin',
+            'PATH': f'/work/.pydeps/bin:{runtime}/bin:/usr/local/bin:/usr/bin:/bin',
             'HOME': '/work',
+            'PYTHONUSERBASE': '/work/.pydeps',
+            'PIP_USER': '1',
+            'PIP_CACHE_DIR': '/work/.cache/pip',
+            'XDG_CACHE_HOME': '/work/.cache',
+            'TORCH_HOME': '/work/.cache/torch',
+            'HF_HOME': '/work/.cache/huggingface',
+            'SSL_CERT_FILE': ca_bundle,
+            'SSL_CERT_DIR': '/etc/ssl/certs',
+            'REQUESTS_CA_BUNDLE': ca_bundle,
+            'CURL_CA_BUNDLE': ca_bundle,
             'LANG': 'C.UTF-8',
             'OMP_NUM_THREADS': '4',
             'OPENBLAS_NUM_THREADS': '4',
             'MKL_NUM_THREADS': '4',
             'PYTHONUNBUFFERED': '1',
-            'PYTHONNOUSERSITE': '1',
             'PIP_DISABLE_PIP_VERSION_CHECK': '1',
             'CUDA_VISIBLE_DEVICES': '0'}
 
@@ -220,7 +236,7 @@ class GPUWorker:
         account = pwd.getpwnam(self.run_as) if self.run_as else None
 
         def child_setup():
-            resource.setrlimit(resource.RLIMIT_FSIZE, (256 * 1024**2, 256 * 1024**2))
+            resource.setrlimit(resource.RLIMIT_FSIZE, (2048 * 1024**2, 2048 * 1024**2))
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
             resource.setrlimit(resource.RLIMIT_NPROC, (256, 256))
             if account and os.getuid() == 0:
@@ -304,6 +320,8 @@ class GPUWorker:
             results_dir = base / 'results'
             results_dir.mkdir(parents=True, exist_ok=True)
             extract_archive(archive_bytes, work_dir)
+            (work_dir / '.cache').mkdir(parents=True, exist_ok=True)
+            (work_dir / '.pydeps').mkdir(parents=True, exist_ok=True)
             if self.run_as and os.getuid() == 0:
                 account = pwd.getpwnam(self.run_as)
                 os.chown(base, account.pw_uid, account.pw_gid)
@@ -387,15 +405,20 @@ class GPUWorker:
                 record['notice'] = '部分 GPU 阶段未通过或受阻，请查看实际日志。'
             report['finished_at'] = time.time()
             report['elapsed_seconds'] = round(report['finished_at'] - started, 3)
-            report['runtime']['disk_free_after_bytes'] = shutil.disk_usage(work_dir).free
+            shutil.rmtree(work_dir, ignore_errors=True)
+            report['runtime']['disk_free_after_bytes'] = shutil.disk_usage(base).free
+            report['runtime']['workspace_cleaned'] = not work_dir.exists()
             usage = resource.getrusage(resource.RUSAGE_CHILDREN)
             report['runtime']['child_cpu_seconds'] = round(usage.ru_utime + usage.ru_stime, 3)
             failure_logs = '\n'.join(s.get('output', '') for s in report['stages'] if s['status'] == 'failed')
-            report['failure_category'] = 'execution_blocked' if failed else None
-            report['needs_user'] = failed and bool(re.search(
-                r'(file not found|filenotfound|no such file|permission denied|credentials|download|dataset|checkpoint|cuda|out of memory|modulenotfounderror|importerror)',
+            transient = failed and bool(re.search(
+                r'((?:HTTP(?:\s+Error|/[\d.]+)?|status(?:\s+code)?)\s*[:=]?\s*429\b|429\s+(?:Client Error|Too Many Requests)|too many requests|rate.?limit|temporary failure|connection timed out)',
                 failure_logs, re.I))
-            report['question'] = 'GPU 隔离环境无外网访问且仅含预装依赖，执行遇到缺失文件或依赖阻碍。能否补充所需数据、权重或代码文件？' if report['needs_user'] else None
+            report['failure_category'] = 'transient_service' if transient else 'execution_blocked' if failed else None
+            report['needs_user'] = failed and not transient and bool(re.search(
+                r'(file not found|filenotfound|no such file|permission denied|HTTP(?:\s+Error|/[\d.]+)?\s*[:=]?\s*(?:401|403)\b|credentials|download|dataset|checkpoint|cuda|out of memory|modulenotfounderror|importerror)',
+                failure_logs, re.I))
+            report['question'] = '自动下载或 GPU 执行遇到阻碍，请查看失败步骤日志。能否补充缺失的数据、权重或公开获取线索？' if report['needs_user'] else None
             report['acceptance'] = {'process': report['status'] == 'completed', 'paper_conclusion': None,
                                     'notice': '阶段退出码和 stdout 指标仅证明本次 GPU 运行观测；主要结论需核对完整协议与对照。'}
             event('planner', 'stopped', reason=report['status'], policy='frozen_api_plan')

@@ -88,7 +88,22 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  const activityHtml=activityView(failedReport,v=>String(v??''));
  assert.match(activityHtml,/<details class="review-activity-log" open>/);
  const ws=new OnlineWorkspace({projects:[],save:async()=>{},h:{render(){}},esc:v=>String(v??'')});
- const execHtml=ws.execution(failedReport,false);
+ ws.capabilities={compute:{capacity:{gpu:true}}};
+ const matHtml=ws.materials({paper:{name:'resnet.pdf',pages:[1,2,3]},repository:null,online_auto_execute:true});
+ assert.match(matHtml,/rail-badge ready">已导入 · 3 页/);
+ assert.match(matHtml,/rail-badge empty">未提供/);
+ assert.match(matHtml,/rail-badge gpu">云端 CPU \/ 自有 GPU/);
+ assert.match(matHtml,/online-upload has-file/);
+ const multiStageReport={...failedReport,
+  review:{...failedReport.review,plan:{...failedReport.review.plan,stages:[
+   {id:'S1',title:'Stage 1',command:'python s1.py',file:'s1.py'},
+   {id:'S2',title:'Stage 2',command:'python s2.py',file:'s2.py'}]}},
+  execution:{...failedReport.execution,status:'running',stages:[{id:'S1',status:'running'}]}};
+ const execHtml=ws.execution(multiStageReport,false);
  assert.match(execHtml,/自有 GPU 隔离执行/);
  assert.match(execHtml,/NVIDIA GeForce RTX 4090/);
+ assert.match(execHtml,/online-stage stage-running/);
+ assert.match(execHtml,/online-status status-running running/);
+ assert.match(execHtml,/online-stage stage-planned/);
+ assert.match(execHtml,/online-status status-planned needs_review/);
 });
