@@ -101,9 +101,46 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
   execution:{...failedReport.execution,status:'running',stages:[{id:'S1',status:'running'}]}};
  const execHtml=ws.execution(multiStageReport,false);
  assert.match(execHtml,/自有 GPU 隔离执行/);
+ assert.match(execHtml,/持续运行至完成/);
+ assert.match(execHtml,/停止执行/);
  assert.match(execHtml,/NVIDIA GeForce RTX 4090/);
  assert.match(execHtml,/online-stage stage-running/);
  assert.match(execHtml,/online-status status-running running/);
  assert.match(execHtml,/online-stage stage-planned/);
  assert.match(execHtml,/online-status status-planned needs_review/);
+ assert.doesNotMatch(matHtml,/id="online-seconds"/);
+ assert.match(activityHtml,/review-timeline-axis/);
+ assert.match(activityHtml,/timeline-track-fill/);
+ assert.match(activityHtml,/data-role-jump="experiment_runner"/);
+
+ // Paper-only review filters out unused code/planner/experiment roles and hides execution section
+ const paperOnlyReport={status:'completed',materials:{paper:'a',code:null},
+  activity:[{title:'论文审阅与指标核查',roles:['literature_reader'],status:'completed',time:1700000001},{title:'汇总审查报告',roles:['reporter'],status:'completed',time:1700000002}],
+  review:{paper_type:'empirical',task:'self_review',summary:'整体自洽',classification_reason:'纯论文审查',
+   paper_title:'Deep Residual Learning for Image Recognition',
+   paper_abstract:'Deeper neural networks are more difficult to train. We present a residual learning framework.',
+   paper_contributions:['提出残差学习框架解决深层网络退化问题','在 ImageNet 与 CIFAR-10 上取得突破性精度'],
+   criteria:[],findings:[],metrics:[],
+   coverage:{gaps:[],note:'',paper_pages_in_context:12,code_files_in_context:0,total_code_files:0},
+   plan:{hardware:'CPU',max_seconds:300,purpose:'',blocked_reason:'未提供代码',stages:[]}},
+  execution:null};
+ const paperTimeline=activityView(paperOnlyReport,v=>String(v??''));
+ assert.match(paperTimeline,/文献审阅/);
+ assert.match(paperTimeline,/交叉核查/);
+ assert.match(paperTimeline,/报告整理/);
+ assert.doesNotMatch(paperTimeline,/代码检查/);
+ assert.doesNotMatch(paperTimeline,/计划编排/);
+ assert.doesNotMatch(paperTimeline,/实验执行/);
+
+ const finalHtml=ws.finalReport(paperOnlyReport,{title:'我的 ResNet 审查项目',paper:{name:'1512.03385v1.pdf',pages:[{text:'Deep Residual Learning'}]}});
+ const idxProject=finalHtml.indexOf('我的 ResNet 审查项目');
+ const idxPaper=finalHtml.indexOf('Deep Residual Learning for Image Recognition');
+ const idxContrib=finalHtml.indexOf('提出残差学习框架解决深层网络退化问题');
+ const idxVerdict=finalHtml.indexOf('review-verdict');
+ assert.ok(idxProject>=0 && idxProject<idxPaper && idxPaper<idxContrib && idxContrib<idxVerdict);
+ assert.match(finalHtml,/data-report-jump="metrics"/);
+ assert.match(finalHtml,/data-report-jump="findings"/);
+ assert.match(finalHtml,/data-report-jump="observations"/);
+ assert.match(finalHtml,/data-report-jump="coverage"/);
+ assert.doesNotMatch(finalHtml,/查看计划与执行条件/);
 });

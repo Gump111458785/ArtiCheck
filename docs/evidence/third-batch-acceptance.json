@@ -1,0 +1,94 @@
+{
+  "verified_at": "2026-11-06T13:32:02.194Z",
+  "base_url": "https://articheck-workbench.edgeone.dev",
+  "checks": [
+    "Unauthenticated workbench redirects to independent /login.html",
+    "Login via /v1/auth/login succeeded",
+    "Sidebar has removed redundant .workspace-context button (Item 11)",
+    "Topbar has removed redundant .mode-label text (Item 11)",
+    "Owned RTX 4090 GPU ready in capabilities",
+    "Cloud compute execution quota expanded to >= 5000 (Item 6)",
+    "Account Center settings formatted into balanced 2-card layout (Item 12)",
+    "Main body background is pure white #ffffff (Item 1)",
+    "Materials page has removed the max_seconds input (Item 3)",
+    "Visual 4-mode strip is rendered (\"use design to explain text\") (Item 5)",
+    "Upload slot uses clean white card surface with subtle blue border and restrained tag (Item 1)",
+    "Real assessment and GPU execution completed successfully without quota 429",
+    "Execution ran on owned_gpu provider",
+    "Owned GPU execution completed with status=completed",
+    "GPU sandbox performed online HTTPS download during execution (Item 6)",
+    "GPU worker cleaned up workspace after execution",
+    "PPT-style horizontal timeline axis rendered with track and milestone nodes (Item 10)",
+    "Final report starts with user project name (Item 9)",
+    "User project name & overview precede review verdict (Item 9)",
+    "Final report contains 4 clickable summary count cards (Item 7)",
+    "Clicking summary count card triggers smooth-scroll and highlight pulse (Item 7)"
+  ],
+  "total_checks": 21,
+  "capabilities": {
+    "accounts": {
+      "invitation_only": true,
+      "method": "username_password",
+      "registration": false,
+      "session_days": 30
+    },
+    "auth_required": true,
+    "compute": {
+      "capacity": {
+        "cpu_count": 8,
+        "gpu": true,
+        "gpu_memory_mb": 24111,
+        "gpu_name": "NVIDIA GeForce RTX 4090",
+        "memory_mb": 16384,
+        "provider": "owned_gpu",
+        "single_file_limit_mib": 128
+      },
+      "gpu": {
+        "provider": "owned_server",
+        "status": "ready"
+      }
+    },
+    "limits": {
+      "compute_attempts": 100000,
+      "compute_reservation_cny": 1,
+      "default_seconds": 300,
+      "large_upload_transport": "signed_direct_upload",
+      "max_body_bytes": 5000000,
+      "max_pdf_bytes": 20971520,
+      "max_seconds": 600,
+      "max_unpacked_bytes": 524288000,
+      "max_zip_bytes": 104857600,
+      "report_retention_days": 7
+    },
+    "model": "deepseek-flash",
+    "review_configured": true,
+    "sandbox_configured": true,
+    "service": "articheck-online",
+    "version": 2
+  },
+  "assessment_id": "e220179fde954eb38978abc8a20768f8",
+  "execution": {
+    "provider": "owned_gpu",
+    "status": "completed",
+    "stages": [
+      {
+        "id": "S1",
+        "title": "运行 CUDA 探针脚本",
+        "status": "completed",
+        "exit_code": 0
+      }
+    ],
+    "runtime": {
+      "architecture": "x86_64",
+      "child_cpu_seconds": 4.549,
+      "disk_free_after_bytes": 16828571648,
+      "disk_free_before_bytes": 16828567552,
+      "disk_total_bytes": 16828575744,
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "python": "3.8.10",
+      "release": "5.4.0-216-generic",
+      "system": "Linux",
+      "workspace_cleaned": true
+    }
+  }
+}

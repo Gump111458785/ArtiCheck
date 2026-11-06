@@ -303,8 +303,8 @@ class GPUWorker:
 
         plan = record['plan']
         started = time.time()
-        deadline = min(time.monotonic() + plan['max_seconds'],
-                       time.monotonic() + max(5, record['deadline'] - time.time()))
+        deadline = time.monotonic() + max(int(plan.get('max_seconds') or 0),
+                                          record.get('deadline', time.time() + 86400) - time.time())
         report = {'status': 'running', 'started_at': started, 'stages': [], 'metrics': [],
                   'execution_performed': False, 'scientific_validation': False,
                   'hardware': {'cpu_count': self.capacity['cpu_count'], 'gpu': True,

@@ -96,12 +96,14 @@ nonpaper 仅用于简历、说明书、普通通知等非学术文档，不能�
 在所提供代码片段和 README 中寻找依赖、数据下载、预处理、训练、评估命令、硬件需求和输出字段。
 只在明确有可执行代码时生成阶段计划；根据 execution_environment 的真实资源选择 CPU 或 GPU。若 gpu=false，不得生成需要 GPU 的可执行计划。完整长时训练不能以小型替代实验冒充完成。
 计划默认先自动尝试下载公开数据集、预训练权重并安装缺失依赖；私有数据、账号或付费下载不能猜测或使用主机凭据。
-计划运行在隔离 Linux 环境，无供应商密钥，不可调用模型 API。CPU 与 owned_gpu 环境均支持联网下载公开数据、权重与 Python 依赖（owned_gpu 已预装 PyTorch、torchvision 及 CUDA，运行结束后自动清空全部下载文件与临时产物）。plan.hardware 填 CPU 或 GPU；需要 CUDA 的评估、推理或时限内可完成的 GPU 实验选 GPU。
+计划运行在隔离 Linux 环境，无供应商密钥，不可调用模型 API。CPU 与 owned_gpu 环境均支持联网下载公开数据、权重与 Python 依赖（owned_gpu 已预装 PyTorch、torchvision 及 CUDA，默认持续运行至全部阶段完成，运行结束后自动清空全部下载文件与临时产物）。plan.hardware 填 CPU 或 GPU；需要 CUDA 的评估、推理或 GPU 实验选 GPU。
 GitHub ZIP 的统一外层目录会被剥除。命令在剥除外层后的仓库根目录运行，引用文件可用仓库相对路径。
 命令可写小型检查脚本，但不得把论文报告值硬编码为观测结果，不得生成虚假的训练/评估输出。
-阶段总时间受 max_seconds 限制。不要为运行不了的论文制造 toy 替代结果。
+不要为运行不了的论文制造 toy 替代结果。如有论文，务必准确提取论文题目（paper_title）、摘要（paper_abstract）及 2–5 条核心创新点或主要贡献（paper_contributions）。
 JSON 结构：
-{"summary":"总体判断", "paper_type":"empirical|diagnostic|survey|nonpaper|unknown|code_only",
+{"summary":"总体判断", "paper_title":"论文题目（无论文则为空字符串）", "paper_abstract":"论文摘要（无论文则为空字符串）",
+ "paper_contributions":["论文核心创新点或贡献1","创新点或贡献2"],
+ "paper_type":"empirical|diagnostic|survey|nonpaper|unknown|code_only",
  "task":"self_review|reproduction|code_review", "classification_reason":"依据", "repository_hint":null,
  "criteria":[{"dimension":"scope|code|data|environment|settings|workflow|resources|results",
  "status":"documented|needs_review|missing|not_applicable", "note":"说明", "page":null,"file":null}],
@@ -306,7 +308,34 @@ def validate_assessment(value, context):
     hint=value.get('repository_hint')
     known={url.lower():url for url in candidates}
     hint=known.get(hint.rstrip('/').removesuffix('.git').lower()) if isinstance(hint,str) else None
-    result = {'summary': text(value, 'summary', 4000), 'paper_type': value['paper_type'],
+    paper_title = optional_text(value, 'paper_title', 600).strip()
+    paper_abstract = optional_text(value, 'paper_abstract', 4000).strip()
+    raw_contribs = value.get('paper_contributions')
+    paper_contributions = [text({'item': c.strip()}, 'item', 1000) for c in (raw_contribs if isinstance(raw_contribs, list) else [])[:6] if isinstance(c, str) and c.strip()]
+    if context.get('paper'):
+        first_page = (context['paper_excerpts'][0]['text'] if context.get('paper_excerpts') else '').strip()
+        lines = [ln.strip() for ln in first_page.splitlines() if ln.strip() and not re.match(r'^(arXiv:|page\s*\d+|\d+$)', ln.strip(), re.I)]
+        if not paper_title:
+            paper_title = lines[0][:240] if lines else re.sub(r'\.pdf$', '', context['paper'].get('name') or '上传论文', flags=re.I)
+        if not paper_abstract:
+            abs_match = re.search(r'(?:Abstract|摘\s*要)[:\s—\-]*([\s\S]{30,1800}?)(?:\n\s*(?:1\.?\s+Introduction|I\.\s+INTRODUCTION|Keywords|Index Terms|引\s*言|关键词)|\Z)', first_page, re.I)
+            if abs_match:
+                paper_abstract = re.sub(r'\s+', ' ', abs_match.group(1)).strip()[:1800]
+            elif len(lines) > 1:
+                paper_abstract = re.sub(r'\s+', ' ', ' '.join(lines[1:12])).strip()[:1200]
+            else:
+                paper_abstract = text(value, 'summary', 4000)
+        if not paper_contributions:
+            paper_contributions = [text(value, 'summary', 4000)]
+            if value.get('classification_reason'):
+                paper_contributions.append(text(value, 'classification_reason'))
+    else:
+        paper_title = ''
+        paper_abstract = ''
+        paper_contributions = []
+    result = {'summary': text(value, 'summary', 4000), 'paper_title': paper_title,
+              'paper_abstract': paper_abstract, 'paper_contributions': paper_contributions,
+              'paper_type': value['paper_type'],
               'task':task, 'repository_hint':hint,
               'classification_reason': text(value, 'classification_reason'), 'criteria': criteria,
               'findings': clean_findings, 'metrics': sorted(clean_metrics, key=lambda m: not m['author_method']),

@@ -9,7 +9,7 @@
 - **日期**：2026-11-06（北京时间）
 - **GitHub 仓库**：`https://github.com/Gump111458785/ArtiCheck`（分支 `main`）
 - **EdgeOne 生产域名**：`https://articheck-workbench.edgeone.dev`（登录页：`https://articheck-workbench.edgeone.dev/login.html`）
-- **EdgeOne 项目 ID / 部署 ID**：`makers-f8jofllfpwva` / `dp5jifitpyre`（前序部署：`dpcx8t5a48yd`、`dpeka5nesmh2`）
+- **EdgeOne 项目 ID / 部署 ID**：`makers-f8jofllfpwva` / `dpajm6db04kg`（前序部署：`dp7mkzgp3a3y`、`dp5jifitpyre`、`dpcx8t5a48yd`、`dpeka5nesmh2`）
 - **自有 GPU 服务器**：`10.30.41.183`（NVIDIA GeForce RTX 4090，24,564 MiB 物理显存 / 24,111 MiB CUDA 可用显存，systemd 服务 `articheck-gpu-worker.service`）
 
 ---
@@ -63,6 +63,39 @@
    - **最终报告（`report`）**：单页汇总顶部结论横幅（`.review-verdict`，未通过采用醒目红字 `#a6293b`，通过采用 `#17664b`，未执行或缺少观测值明确标为“待进一步核查”）、总体判断、八项条件、问题建议、四列对齐的“论文目标与实际观测”比较表（`.metric-comparison`，右对齐 `tabular-nums`，严格区分“未观测”与数值 0）、图表指标目录与覆盖边界。
    - **过程详情（`process`）**：整合默认展开（`open=true`）且按阶段父子层级分组的六角色协作活动记录（`.review-activity-log`）、强化区分度的角色状态卡片（`.review-role-lane`）以及各阶段命令与实际 stdout 日志。
 
+### 2.5 2026-11-06 第三批 12 项反馈全面实施与闭环
+
+1. **通透纯白底色与绿色全面收敛（UF-Item 1）**：
+   - `web/dist/feedback-redesign.css`：将 `body` 与 `.page` 画布底色统一为纯白 `#ffffff`，侧边栏改为极淡冷灰白 `#f8fafc`。
+   - 上传就绪槽（`.online-upload.has-file`）与角色卡片从刺眼大绿底改为纯白表面（`#ffffff`）+ 柔和蓝边框（`#2563eb`）+ 低饱和柔绿状态胶囊（`#ecfdf5` / `#059669`），主标题为深石板黑（`#0f172a`），彻底解决大块绿色与主题蓝色冲突问题。
+2. **运行态防打断与解耦阻断报错（UF-Item 2）**：
+   - `web/dist/online-workspace.mjs`：当用户正在 `process`（过程详情）、`execution` 或 `roles` 查看日志时，禁止强制切换标签页，保留在过程视图。
+   - 彻底解耦材料审查成功与自动执行，主审完成后不再因执行额度或条件而在顶部弹出全站阻断红框，执行状态与重试操作内嵌于执行卡片内。
+3. **取消 300 秒强杀限制，默认持续运行至完成并提供主动中断（UF-Item 3）**：
+   - `web/dist/online-workspace.mjs`：彻底移除材料页 `#online-seconds` 输入框，文案统一为“持续运行至完成 · 支持随时手动中断”。
+   - `articheck/gpu_worker.py` 与 `articheck/hosted_gpu.py`：移除 300 秒中途超时杀死限制，默认运行至自然结束或接收到中断信号。
+   - 在运行进度条、时间轴卡片与执行区提供高对比红色描边“中断运行”按钮，`action('cancel')` 不受 busy 阻塞，可实时发送 `/cancel` 并清理 GPU 沙箱。
+4. **六角色时间轴里程碑交互跳转（UF-Item 4）**：
+   - `web/dist/review-activity.mjs`：每个里程碑节点绑定 `data-role-jump`，点击“实验执行/计划编排”平滑滚动并高亮定位至执行计划；点击“文献审阅/代码检查/交叉核查”展开并定位对应活动分组；点击“报告整理”切换并定位到最终报告。
+5. **“用设计说明文字”视觉升级（UF-Item 5）**：
+   - `web/dist/online-workspace.mjs`、`web/dist/review-activity.mjs`：引入成套专业线性 SVG 图标（PDF、ZIP、GitHub、各角色专属图标、GPU、指标、问题、覆盖等），精简文字解释，使用直观的卡片结构与四选一胶囊栏（`.review-mode-strip`）呈现意图。
+6. **模型调用额度与云端执行额度大幅扩容至 100,000（UF-Item 6）**：
+   - `articheck/edgeone_review.py`：`MAX_ATTEMPTS` 从 60 扩容至 `100000`。
+   - `articheck/hosted_store.py` 与 `articheck/hosted_api.py`：云端执行额度 `MAX_COMPUTE_ATTEMPTS` 从 20 扩容至 `100000`。线上 Upstash Redis 计数器已安全重置。
+7. **最终报告四项核心统计卡片点击交互跳转（UF-Item 7）**：
+   - `web/dist/online-workspace.mjs`：将指标、问题建议、观测、覆盖四项卡片赋予 `data-report-jump` 与按钮语义，点击触发平滑滚动与 1.5s 柔和高亮脉冲反馈（`.section-highlight-pulse`）。
+8. **按输入材料动态裁剪未用角色与执行计划（UF-Item 8）**：
+   - `articheck/hosted_api.py` 与 `web/dist/review-activity.mjs`：纯论文审查时自动隐藏代码检查与实验执行角色；无代码时过程详情与最终报告不再渲染多余的“执行计划”空白卡片。
+9. **最终报告顶部信息架构重排（UF-Item 9）**：
+   - `articheck/hosted_review.py`：提取论文标题（`paper_title`）、摘要（`paper_abstract`）与创新贡献列表（`paper_contributions`）。
+   - `web/dist/online-workspace.mjs`（`finalReport`）：顶部严格按“① 用户项目名称（`p.title`） → ② 论文标题与摘要 → ③ 论文核心创新点与贡献 → ④ 审查结论横幅与证据”展示。
+10. **PPT 经典水平时间轴与发展历程动效（UF-Item 10）**：
+    - `web/dist/review-activity.mjs` 与 `web/dist/feedback-redesign.css`：重构为 `.review-timeline-axis`，具备水平主轴轨道（`timeline-track`）、动态填充彩色进度条（`timeline-progress`）、环形里程碑锚点（`timeline-dot`）、垂直分支连接线（`timeline-stem`）与文字说明说明气泡（`timeline-callout`），进行中带呼吸脉冲动效。
+11. **删除冗余跳转卡片与文字标签（UF-Item 11）**：
+    - `web/dist/app.js`：彻底移除侧边栏顶部重复的 `.workspace-context`（“研究工作空间 · 论文与代码项目 >”）与顶栏 `.mode-label`（“在线工作台”）。
+12. **个人中心平衡双卡片排版，消除左侧大片空白（UF-Item 12）**：
+    - `web/dist/account.mjs` 与 `web/dist/feedback-redesign.css`：将个人资料与账户访问重构为内嵌表头的双栏对称卡片网格（`.account-settings .account-card`），彻底解决左侧留白过多问题。
+
 ---
 
 ## 3. 核验方法与实测证据
@@ -70,13 +103,24 @@
 其他 AI 可直接通过以下命令与文件核对本轮结果：
 
 1. **自动化单元测试**：
-   - Python 测试（186 项：182 项通过，4 项本地 Docker 专项跳过）：
+   - Python 测试（186 项全部通过：182 项通过，4 项本地 Docker 专项跳过）：
      ```bash
      /Users/gump/Documents/Codex/2026-10-26/1-articheck-artifact-pytorch-verl-vllm/work/test-venv/bin/python -m unittest discover -s /Users/gump/Documents/Codex/2026-10-26/1-articheck-artifact-pytorch-verl-vllm/outputs/ArtiCheck/tests
      ```
    - 前端测试（112 项全部通过）：
      ```bash
      /Users/gump/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node --test /Users/gump/Documents/Codex/2026-10-26/1-articheck-artifact-pytorch-verl-vllm/outputs/ArtiCheck/tests/frontend/*.test.mjs
+     ```
+2. **第三批 12 项生产环境全量端到端验收证据（`dp7mkzgp3a3y` + RTX 4090）**：
+   - 结构化验收记录：`docs/evidence/third-batch-acceptance.json`（包含 21 项完整断言、`/v1/capabilities` 验证 `limits.compute_attempts: 100000` / `gpu: ready`、评估 ID `e220179fde954eb38978abc8a20768f8`、执行器 `owned_gpu`、外网 HTTPS 下载验证 `download_ok: True`、CUDA 探针阶段退出码 0 以及运行后空间清理确认 `workspace_cleaned: true`）。
+   - 生产截图归档：
+     - `docs/assets/feedback-materials-purewhite.png`（纯白底色、收敛蓝框白卡上传槽、无超时输入框、四模式自明胶囊栏）
+     - `docs/assets/feedback-ppt-timeline.png`（PPT 经典时间轴贯穿轨道、分支里程碑节点与动态进度动效）
+     - `docs/assets/feedback-report-priority.png`（最终报告“项目名 → 论文题录与摘要 → 创新点 → 审查横幅”架构与四项可跳转统计卡片）
+     - `docs/assets/feedback-account-2card.png`（个人中心平衡双卡片对称排版）
+   - 运行自动化验收脚本命令：
+     ```bash
+     /Users/gump/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node /Users/gump/Documents/Codex/2026-10-26/1-articheck-artifact-pytorch-verl-vllm/work/verify_production_third_batch.mjs
      ```
 2. **生产环境真机 GPU 与浏览器验收证据**：
    - 结构化验收记录：`docs/evidence/feedback-gpu-acceptance.json`（包含 23 项断言、`/v1/capabilities` 返回的 RTX 4090 容量、评估 ID `f51badca5a5f4cea86e439cc9e1e5792`、`plan_hardware: "GPU"`、`provider: "owned_gpu"`、阶段 `exit_code: 0`、实测外网 HTTPS 下载 `download_ok: True bytes= 65536`、CUDA 输出 `gpu_device: NVIDIA GeForce RTX 4090` / `cuda_square_sum: 85344.0` 以及运行后工作目录清理确认 `workspace_cleaned: true`）。

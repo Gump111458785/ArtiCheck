@@ -10,6 +10,7 @@ import urllib.request
 from .review_api import ReviewError
 
 TTL = 7 * 86400
+MAX_COMPUTE_ATTEMPTS = 100000
 
 
 class HostedStore:
@@ -17,6 +18,10 @@ class HostedStore:
         self.url = env.get('UPSTASH_REDIS_REST_URL', '').rstrip('/')
         self.token = env.get('UPSTASH_REDIS_REST_TOKEN', '')
         self.namespace = env.get('ARTICHECK_BUDGET_ID', '')
+        try:
+            self.max_compute_attempts = max(1, int(env.get('ARTICHECK_COMPUTE_ATTEMPTS', str(MAX_COMPUTE_ATTEMPTS))))
+        except (TypeError, ValueError):
+            self.max_compute_attempts = MAX_COMPUTE_ATTEMPTS
 
     def command(self, *args):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -70,9 +75,10 @@ class HostedStore:
         self.command('DEL', self.key(owner, job) + ':launch:'+str(attempt))
 
     def reserve_compute(self):
-        script = "local n=tonumber(redis.call('GET',KEYS[1]) or '0'); if n>=20 then return -1 end; return redis.call('INCR',KEYS[1])"
-        result = self.command('EVAL', script, '1', 'articheck:compute-budget:' + self.namespace)
-        if type(result) is not int or not 1 <= result <= 20:
+        limit = getattr(self, 'max_compute_attempts', MAX_COMPUTE_ATTEMPTS)
+        script = "local n=tonumber(redis.call('GET',KEYS[1]) or '0'); if n>=tonumber(ARGV[1]) then return -1 end; return redis.call('INCR',KEYS[1])"
+        result = self.command('EVAL', script, '1', 'articheck:compute-budget:' + self.namespace, str(limit))
+        if type(result) is not int or not 1 <= result <= limit:
             raise ReviewError('compute_budget_exhausted', '本轮云端执行额度已用完，仍可查看和导出已有报告。', 429)
         return result
 

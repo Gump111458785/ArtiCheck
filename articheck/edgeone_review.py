@@ -13,7 +13,7 @@ from .review_api import ModelReviewer, ReviewError, now, prepare_context
 
 MAX_CLOUD_BODY = 5_000_000  # Includes base64 and JSON, below the platform's 6 MB limit.
 MAX_PROMPT_BYTES = 200_000
-MAX_ATTEMPTS = 10
+MAX_ATTEMPTS = 100000
 RESERVATION_CNY = 1
 
 # Increment and cap are one atomic operation. Reservations never expire or refund:
@@ -41,7 +41,7 @@ class RedisBudget:
         u = urlparse(self.url)
         return (u.scheme == 'https' and u.hostname and not u.username and
                 not u.password and not u.query and not u.fragment and
-                bool(self.token) and 16 <= len(self.namespace) <= 128 and 1 <= self.max_attempts <= 60)
+                bool(self.token) and 16 <= len(self.namespace) <= 128 and 1 <= self.max_attempts <= 10_000_000)
 
     def reserve(self):
         if not self.configured:

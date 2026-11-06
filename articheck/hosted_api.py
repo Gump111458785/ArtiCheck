@@ -79,7 +79,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                                'max_unpacked_bytes':500*1024**2,'max_pdf_bytes':20*1024**2,
                                'large_upload_transport':'signed_direct_upload','max_seconds': 600,
                                'default_seconds': 300, 'report_retention_days': 7,
-                               'compute_reservation_cny': 1, 'compute_attempts': 20})
+                               'compute_reservation_cny': 1, 'compute_attempts': getattr(store, 'max_compute_attempts', 100000)})
 
     @app.post('/repositories')
     def import_code():
@@ -154,7 +154,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                  '论文与源码已按输入预算解析；仅处理实际提供的材料。','completed')
         # Material parsing and the durable idempotency claim precede reservation.
         try:
-            activity('核对公开来源',['literature_reader'],'正在识别可核对的公开出处；无有效标识时仅核对导入材料。')
+            activity('核对公开来源',['literature_reader' if context.get('paper') else 'code_inspector'],'正在识别可核对的公开出处；无有效标识时仅核对导入材料。')
             lookup(context,budget,store)
             while len(json.dumps(text_materials(context),ensure_ascii=False).encode())>175_000 and context.get('web_sources'):
                 sources=context['web_sources']
@@ -165,9 +165,10 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                 else:sources.pop()
                 context['source_lookup']['context_truncated']=True
             attempt = budget.reserve()
-            activity('联合审阅与计划编排',
-                     [role for role,present in [('literature_reader',context.get('paper')),('code_inspector',context.get('code')),('planner',True)] if present],
-                     '主审模型正在核对图表、实现与实验条件，并生成结构化建议和执行计划。')
+            has_code = bool(context.get('code'))
+            activity('联合审阅与计划编排' if has_code else '论文审阅与指标核查',
+                     [role for role,present in [('literature_reader',context.get('paper')),('code_inspector',has_code),('planner',has_code and context.get('task')!='self_review')] if present],
+                     '主审模型正在核对图表、实现与实验条件，并生成结构化建议和执行计划。' if has_code else '主审模型正在深度核对论文图表、指标出处与论证一致性。')
             value = assess(reviewer, context, scope, request_timeout=max(5,min(80,108-(time.monotonic()-started))))
         except Exception as exc:
             activity('主审请求未完成',['reporter'],'保留已取得的活动记录，不自动重试。','failed')
@@ -176,7 +177,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             if isinstance(exc, ReviewError):
                 raise
             raise ReviewError('provider_failed', '模型请求失败，调用额度已预留；未自动重试。', 502) from exc
-        activity('主审结果已返回',['planner'],'图表与代码核查结果、执行计划已完成结构化校验。','completed')
+        return_roles = [role for role,present in [('literature_reader',context.get('paper')),('code_inspector',context.get('code')),('planner',bool(context.get('code') and value['review']['plan']['stages']))] if present] or ['literature_reader']
+        activity('主审结果已返回',return_roles,'图表与代码核查结果、执行计划已完成结构化校验。' if context.get('code') else '论文图表与材料核查结果已完成结构化校验。','completed')
         remaining=108-(time.monotonic()-started)
         if context['paper'] and value['review']['paper_type'] in {'empirical','diagnostic','survey'} and (value['review']['findings'] or value['review']['metrics']):
             if remaining>=8:

@@ -35,15 +35,16 @@ class OwnedGPUExecutor:
         raw,identity=decode_material(body.get('code'),'.zip',MAX_CODE_BYTES)
         if identity['sha256']!=assessment['materials']['code']:raise ReviewError('material_changed','代码已变化，请重新审查。',409)
         job=uuid.uuid4().hex;plan={**assessment['review']['plan'],'metrics':assessment['review']['metrics']}
-        lifetime=plan['max_seconds']+90;stage=None
+        stage_lifetime=min(max(int(plan.get('max_seconds') or 300)+90,300),600)
+        job_lifetime=max(int(plan.get('max_seconds') or 0)+90,86400);stage=None
         try:
-            stage=Sandbox.create(api_key=self.env['E2B_API_KEY'],secure=True,timeout=lifetime,retries=0,
+            stage=Sandbox.create(api_key=self.env['E2B_API_KEY'],secure=True,timeout=stage_lifetime,retries=0,
                 api_headers={'Idempotency-Key':'articheck-gpu-source-'+assessment['id']+'-'+assessment['execution']['attempt_id']},
                 metadata={'project':'articheck','purpose':'gpu-source-transfer'},
                 network={'allow_public_traffic':False,'deny_out':['0.0.0.0/0']})
             stage.files.write('/home/user/gpu-source.zip',raw,user='root')
-            url=stage.download_url('/home/user/gpu-source.zip',user='root',use_signature_expiration=min(180,lifetime))
-            record={'id':job,'status':'queued','created_at':time.time(),'deadline':time.time()+lifetime,
+            url=stage.download_url('/home/user/gpu-source.zip',user='root',use_signature_expiration=min(300,stage_lifetime))
+            record={'id':job,'status':'queued','created_at':time.time(),'deadline':time.time()+job_lifetime,
                     'plan':plan,'source_url':url,'source_bytes':len(raw),'source_sha256':identity['sha256'],
                     'staging_id':stage.sandbox_id,'environment':h['capacity'],'result':None}
             script="if redis.call('EXISTS',KEYS[1])==1 then return 0 end; redis.call('SET',KEYS[1],ARGV[1],'EX',ARGV[3]); redis.call('RPUSH',KEYS[2],ARGV[2]); return 1"

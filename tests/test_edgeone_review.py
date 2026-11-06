@@ -160,4 +160,4 @@ class LedgerTests(unittest.TestCase):
             self.assertIn("redis.call('INCR'", command[1])
             self.assertNotIn('EXPIRE', command[1])
             self.assertNotIn('secret', request.full_url)
-            self.assertEqual(command[-1], '10')
+            self.assertEqual(command[-1], '100000')
