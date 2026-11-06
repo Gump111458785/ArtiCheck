@@ -69,7 +69,7 @@ class CloudTests(unittest.TestCase):
         # Only the test fixture changes destination. The deployed class locks it to DeepSeek.
         self.reviewer.base_url = f'http://127.0.0.1:{self.server.server_port}'
         self.budget = Budget()
-        self.app = create_app({'ARTICHECK_REVIEW_TOKEN': TOKEN}, reviewer=self.reviewer, budget=self.budget)
+        self.app = create_app({'ARTICHECK_REVIEW_TOKEN': TOKEN,'ARTICHECK_AUTH_MODE':'legacy'}, reviewer=self.reviewer, budget=self.budget)
         self.client = self.app.test_client()
         Provider.requests = []
 
@@ -107,7 +107,7 @@ class CloudTests(unittest.TestCase):
     def test_parse_failures_and_excessive_context_do_not_consume_budget(self):
         self.assertEqual(self.client.post('/reviews', json={}, headers=HEADERS).status_code, 400)
         context = {'files': [], 'paper_excerpts': [{'text': '字'*100000}]}
-        app = create_app({'ARTICHECK_REVIEW_TOKEN': TOKEN}, reviewer=self.reviewer,
+        app = create_app({'ARTICHECK_REVIEW_TOKEN': TOKEN,'ARTICHECK_AUTH_MODE':'legacy'}, reviewer=self.reviewer,
                          budget=self.budget, prepare=lambda _: (context, ''))
         self.assertEqual(app.test_client().post('/reviews', json={}, headers=HEADERS).status_code, 413)
         self.assertEqual(self.budget.attempts, 0)
@@ -127,13 +127,13 @@ class CloudTests(unittest.TestCase):
         self.assertEqual(Provider.requests, [])
 
     def test_missing_durable_store_stays_disabled(self):
-        app = create_app({'ARTICHECK_REVIEW_TOKEN': TOKEN}, reviewer=self.reviewer)
+        app = create_app({'ARTICHECK_REVIEW_TOKEN': TOKEN,'ARTICHECK_AUTH_MODE':'legacy'}, reviewer=self.reviewer)
         client = app.test_client()
         self.assertFalse(client.get('/health').json['configured'])
         self.assertEqual(client.post('/reviews', json=materials(), headers=HEADERS).status_code, 503)
 
     def test_public_origin_survives_internal_proxy_host(self):
-        app = create_app({'ARTICHECK_REVIEW_TOKEN': TOKEN, 'ARTICHECK_PUBLIC_ORIGIN': 'https://review.example'},
+        app = create_app({'ARTICHECK_REVIEW_TOKEN': TOKEN,'ARTICHECK_AUTH_MODE':'legacy', 'ARTICHECK_PUBLIC_ORIGIN': 'https://review.example'},
                          reviewer=self.reviewer, budget=self.budget)
         client = app.test_client()
         h = {**HEADERS, 'Origin': 'https://review.example'}

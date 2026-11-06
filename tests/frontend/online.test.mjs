@@ -67,3 +67,28 @@ test('large local materials bypass JSON and reuse the completed direct upload',a
   assert.doesNotMatch(JSON.stringify(p.online_upload),/signature|upload_url/);
  }finally{globalThis.fetch=original;}
 });
+
+test('verdict, default-open activity hierarchy, and GPU execution labels render accurately',async()=>{
+ const {reportVerdict}=await import('../../web/dist/report-verdict.mjs');
+ const {activityView}=await import('../../web/dist/review-activity.mjs');
+ const {OnlineWorkspace}=await import('../../web/dist/online-workspace.mjs');
+ const {executionNames}=await import('../../web/dist/online-core.mjs');
+ assert.equal(executionNames.queued,'等待 GPU 执行器');
+ const failedReport={status:'completed',materials:{paper:'a',code:'b'},
+  review:{paper_type:'empirical',task:'reproduction',summary:'summary',classification_reason:'reason',
+   criteria:[],findings:[{severity:'high',title:'issue',detail:'d',suggestion:'s'}],
+   metrics:[{id:'M1',metric:'acc',value:90,unit:'%',page:1,quote:'90%',author_method:true}],
+   coverage:{gaps:[],note:'',paper_pages_in_context:1,code_files_in_context:1,total_code_files:1},
+   plan:{hardware:'GPU',max_seconds:180,purpose:'CUDA check',blocked_reason:'',stages:[{id:'S1',title:'CUDA probe',command:'python test.py',file:'test.py'}]}},
+  execution:{status:'queued',provider:'owned_gpu',environment:{cpu_count:8,memory_mb:16384,gpu:true,gpu_name:'NVIDIA GeForce RTX 4090'},
+   stages:[],metrics:[],events:[{role:'planner',kind:'plan_scheduled',time:1700000000}]}};
+ assert.equal(reportVerdict(failedReport).state,'pending');
+ const completedMismatch={...failedReport,execution:{...failedReport.execution,status:'completed',metrics:[{id:'M1',metric:'acc',expected:90,observed:70,unit:'%',status:'outside_tolerance'}]}};
+ assert.equal(reportVerdict(completedMismatch).state,'failed');
+ const activityHtml=activityView(failedReport,v=>String(v??''));
+ assert.match(activityHtml,/<details class="review-activity-log" open>/);
+ const ws=new OnlineWorkspace({projects:[],save:async()=>{},h:{render(){}},esc:v=>String(v??'')});
+ const execHtml=ws.execution(failedReport,false);
+ assert.match(execHtml,/自有 GPU 隔离执行/);
+ assert.match(execHtml,/NVIDIA GeForce RTX 4090/);
+});

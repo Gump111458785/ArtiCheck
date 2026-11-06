@@ -368,6 +368,10 @@ if __name__ == "__main__":
 
 class GeneratedContractTests(unittest.TestCase):
     def test_generated_contract_matches_the_served_contract(self):
+        import sys
+        root = Path(__file__).resolve().parents[1]
+        if str(root) not in sys.path:
+            sys.path.insert(0, str(root))
         from scripts.build_workbench import contract
-        source = Path(__file__).resolve().parents[1]/'web/dist/openapi.json'
+        source = root/'web/dist/openapi.json'
         self.assertEqual(contract(), json.loads(source.read_text()))

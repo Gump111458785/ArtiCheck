@@ -9,7 +9,9 @@ from unittest.mock import patch
 
 from flask import Flask, jsonify
 
-from articheck.hosted_api import register
+from articheck.hosted_api import register as register_api
+from articheck.hosted_gpu import OwnedGPUExecutor, HybridExecutor
+from articheck.gpu_worker import GPUWorker, validate_source_url
 from articheck.hosted_review import prepare_assessment as prepare_visual_assessment, validate_assessment, assess
 from articheck.hosted_runner import run_plan
 from articheck.hosted_store import HostedStore
@@ -17,6 +19,10 @@ from articheck.hosted_github import repository
 from articheck.hosted_sources import public_identifier,lookup
 from articheck.hosted_audit import cross_audit
 from articheck.review_api import DIMENSIONS, ReviewError
+
+def register(app,env,*args,**kwargs):
+    # These tests isolate workflow semantics using the explicitly configured legacy client.
+    return register_api(app,{**env,'ARTICHECK_AUTH_MODE':'legacy'},*args,**kwargs)
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKEN = 'test-site-code-not-provider-secret'
@@ -419,3 +425,92 @@ class HostedReviewTests(unittest.TestCase):
             return {**execution,'status':'completed'}
         executor.poll=delayed_poll
         self.assertEqual(client.get(path,headers=HEADERS).json['execution']['status'],'cancelled')
+
+    def test_owned_gpu_executor_hybrid_routing_and_worker_lifecycle(self):
+        class FakeRedisStore(MemoryStore):
+            def __init__(self):
+                super().__init__()
+                self.kv = {}
+                self.queues = {}
+            def command(self, op, *args):
+                if op == 'GET':
+                    return self.kv.get(args[0])
+                if op == 'SET':
+                    self.kv[args[0]] = args[1]
+                    return 'OK'
+                if op == 'LPOP':
+                    q = self.queues.setdefault(args[0], [])
+                    return q.pop(0) if q else None
+                if op == 'EVAL' and 'RPUSH' in args[0]:
+                    job_key, queue_key, record_json, job_id = args[2], args[3], args[4], args[5]
+                    if job_key in self.kv:
+                        return 0
+                    self.kv[job_key] = record_json
+                    self.queues.setdefault(queue_key, []).append(job_id)
+                    return 1
+                raise AssertionError('Unexpected Redis op: ' + str((op, args)))
+
+        import hashlib
+        ctx, _ = prepare_assessment(materials())
+        raw_out = output(ctx)
+        raw_out['plan']['hardware'] = 'GPU'
+        # Without GPU capacity in execution_environment, hardware falls back to CPU
+        cpu_validated = validate_assessment(copy.deepcopy(raw_out), ctx)
+        self.assertEqual(cpu_validated['plan']['hardware'], 'CPU')
+        # With GPU capacity enabled, hardware is preserved as GPU
+        ctx['execution_environment'] = {'provider': 'owned_gpu', 'cpu_count': 8, 'memory_mb': 16384, 'gpu': True, 'gpu_name': 'NVIDIA GeForce RTX 4090'}
+        gpu_validated = validate_assessment(copy.deepcopy(raw_out), ctx)
+        self.assertEqual(gpu_validated['plan']['hardware'], 'GPU')
+
+        store = FakeRedisStore()
+        env = {'ARTICHECK_BUDGET_ID': 'test-budget', 'ARTICHECK_GPU_ENABLED': '1', 'E2B_API_KEY': 'e2b-test-key'}
+        zip_bytes = (ROOT / 'web/dist/samples/toy-artifact.zip').read_bytes()
+        code_sha = hashlib.sha256(zip_bytes).hexdigest()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            worker = GPUWorker(env, store=store,
+                               fetcher=lambda url, size, sha: (validate_source_url(url), zip_bytes)[1],
+                               runtime='/usr', run_as=None, work_root=tmp)
+            worker.capacity = {'provider': 'owned_gpu', 'cpu_count': 8, 'memory_mb': 16384,
+                               'gpu': True, 'gpu_name': 'NVIDIA GeForce RTX 4090', 'gpu_memory_mb': 24564}
+            worker.send_heartbeat(force=True)
+            hybrid = HybridExecutor(env, store)
+            self.assertTrue(hybrid.configured)
+            self.assertTrue(hybrid.capacity['gpu'])
+            self.assertEqual(hybrid.capacity['gpu_name'], 'NVIDIA GeForce RTX 4090')
+
+            class FakeStageSandbox:
+                sandbox_id = 'sbx-stage-1'
+                def __init__(self):
+                    self.files = self
+                def write(self, path, data, user='root'):
+                    self.written = data
+                def download_url(self, path, user='root', use_signature_expiration=120):
+                    return 'https://8080-sbx-stage-1.e2b.app/gpu-source.zip'
+                def kill(self):
+                    pass
+                @staticmethod
+                def kill(sandbox_id, api_key=None):
+                    pass
+
+            assessment = {'id': 'f' * 32, 'materials': {'code': code_sha},
+                          'review': gpu_validated, 'execution': {'attempt_id': 'a1'}}
+            with patch('e2b.Sandbox.create', return_value=FakeStageSandbox()), \
+                 patch('e2b.Sandbox.kill', return_value=None):
+                launched = hybrid.launch(assessment, {'code': materials()['code']})
+                self.assertEqual(launched['status'], 'queued')
+                self.assertEqual(launched['provider'], 'owned_gpu')
+                # Replace bwrap execution with direct local shell in test tmpdir
+                def local_stage(work_dir, log_path, command, deadline, job_id):
+                    import subprocess
+                    with log_path.open('wb') as log:
+                        proc = subprocess.run(['/bin/bash', '-c', command], cwd=work_dir, stdout=log, stderr=subprocess.STDOUT, timeout=10)
+                    return proc.returncode, False, False
+                worker.run_stage_command = local_stage
+                processed = worker.poll_once()
+                self.assertEqual(processed['status'], 'completed')
+                self.assertIsNone(processed['source_url'])
+                polled = hybrid.poll(launched)
+                self.assertEqual(polled['status'], 'completed')
+                self.assertTrue(polled['execution_performed'])
+                self.assertEqual(polled['stages'][0]['status'], 'completed')

@@ -102,7 +102,7 @@ def create_app(env=None, *, reviewer=None, budget=None, prepare=None):
     register(app, env, reviewer, budget)
 
     def configured():
-        return bool(reviewer.configured and budget.configured and len(env.get('ARTICHECK_REVIEW_TOKEN', '')) >= 24)
+        return bool(reviewer.configured and budget.configured)
 
     @app.after_request
     def private_response(response):
@@ -127,20 +127,9 @@ def create_app(env=None, *, reviewer=None, budget=None, prepare=None):
 
     @app.post('/reviews')
     def review():
-        token = env.get('ARTICHECK_REVIEW_TOKEN', '')
         if not configured():
-            raise ReviewError('provider_not_configured', 'Server credentials, access token or durable budget are not configured', 503)
-        if not hmac.compare_digest(request.headers.get('Authorization', '').encode(), ('Bearer ' + token).encode()):
-            raise ReviewError('unauthorized', 'Enter the site review access code, not a provider API key', 401)
-        if request.headers.get('X-ArtiCheck-Client') != 'review-api':
-            raise ReviewError('invalid_client', 'Expected the review-api client header', 403)
-        origin = request.headers.get('Origin')
-        if origin:
-            # The platform can replace both scheme and Host before forwarding.
-            # Use the public origin fixed by the operator, never arbitrary forwarded headers.
-            expected = env.get('ARTICHECK_PUBLIC_ORIGIN') or request.host_url
-            if origin.rstrip('/') != expected.rstrip('/'):
-                raise ReviewError('origin_forbidden', 'Use the same-origin workbench', 403)
+            raise ReviewError('provider_not_configured','模型与费用计数尚未配置。',503)
+        app.extensions['articheck_authorize'](session=False)
         if not request.is_json:
             raise ReviewError('invalid_request', 'Expected application/json', 415)
         body = request.get_json(silent=True)

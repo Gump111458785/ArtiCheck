@@ -94,9 +94,8 @@ nonpaper 仅用于简历、说明书、普通通知等非学术文档，不能�
 默认自动模式下，实验或诊断论文按复现评估组织，综述按论文自查组织。只有能从已提供的论文链接或网页
 确认作者代码线索时才填写 repository_hint；不要把基线仓库、非官方复现或记忆中的地址冒充作者版本。
 在所提供代码片段和 README 中寻找依赖、数据下载、预处理、训练、评估命令、硬件需求和输出字段。
-只在明确有可执行代码时生成 CPU 阶段计划；完整训练明显需要 GPU/大资源时不可伪装为 CPU 完整复现。
-计划默认先自动尝试获取公开数据和安装依赖。私有数据、账号、付费下载不能猜测或使用主机凭据。
-计划运行在隔离 Linux CPU 实例，Python3，无 Docker，无供应商密钥，不可调用模型 API。
+只在明确有可执行代码时生成阶段计划；根据 execution_environment 的真实资源选择 CPU 或 GPU。若 gpu=false，不得生成需要 GPU 的可执行计划。完整长时训练不能以小型替代实验冒充完成。
+计划运行在隔离 Linux 环境，无供应商密钥，不可调用模型 API。CPU 环境允许配置的公开依赖源；owned_gpu 环境有预装 PyTorch 及 CUDA，网络隔离、运行时不可下载依赖或数据，只能使用已有材料与预装包。plan.hardware 填 CPU 或 GPU；仅真实需要 CUDA 的步骤选 GPU。
 GitHub ZIP 的统一外层目录会被剥除。命令在剥除外层后的仓库根目录运行，引用文件可用仓库相对路径。
 命令可写小型检查脚本，但不得把论文报告值硬编码为观测结果，不得生成虚假的训练/评估输出。
 阶段总时间受 max_seconds 限制。不要为运行不了的论文制造 toy 替代结果。
@@ -110,7 +109,7 @@ JSON 结构：
  "protocol":"划分、设定等", "page":1,"quote":"表格中的逐字原文","author_method":true,"precision":"printed"}],
  "web_checks":[{"claim":"待核对描述","status":"supported|contradicted|unresolved","url":"实际提供的网址","note":"核对依据与局限"}],
  "coverage":{"gaps":["未覆盖图表/页面及原因"],"note":"覆盖边界，不得声称全篇已验证"},
- "plan":{"purpose":"实际运行验证什么", "blocked_reason":"没有可执行计划的原因，可为空",
+ "plan":{"hardware":"CPU 或 GPU", "purpose":"实际运行验证什么", "blocked_reason":"没有可执行计划的原因，可为空",
  "stages":[{"id":"S1","title":"步骤","command":"shell 命令，相对代码仓库根目录", "file":"对应真实源文件路径","depends_on":[],"experiment":"实验名"}],
  "needs":[{"name":"数据/权重/资源","source":"实际可见获取线索","required":true}],
  "metric_patterns":[{"metric_id":"M1","stage_id":"S1","pattern":"匹配该阶段真实 stdout 指标的 Python 正则，第一组为数值", "tolerance":0.01,"aggregation":"last|mean"}]}}
@@ -314,7 +313,8 @@ def validate_assessment(value, context):
               'coverage': {**context['coverage'], 'gaps': list(dict.fromkeys(gaps + rejected + citation_gaps)), 'note': text(coverage, 'note')},
               'plan': {'purpose': text(plan, 'purpose'), 'blocked_reason': optional_text(plan, 'blocked_reason'),
                        'stages': stages, 'needs': needs, 'metric_patterns': patterns,
-                       'max_seconds': context['max_seconds'], 'policy': 'frozen_api_plan', 'hardware': 'CPU'}}
+                       'max_seconds': context['max_seconds'], 'policy': 'frozen_api_plan',
+                       'hardware': 'GPU' if str(plan.get('hardware','CPU')).upper()=='GPU' and context['execution_environment'].get('gpu') else 'CPU'}}
     result['plan_sha256'] = digest({'plan':result['plan'],'metrics':result['metrics']})
     required_resources=[n for n in needs if n['required'] and re.search(r'(GPU|CUDA|显卡|显存|内存|RAM)',n['name'],re.I)]
     if context['code'] and not stages and result['plan']['blocked_reason'] and required_resources:

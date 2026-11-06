@@ -9,7 +9,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = ('__init__.py', 'review_api.py', 'edgeone_review.py',
            'hosted_api.py', 'hosted_auth.py', 'hosted_review.py', 'hosted_store.py', 'hosted_github.py',
-           'hosted_sandbox.py', 'hosted_runner.py', 'hosted_uploads.py',
+           'hosted_sandbox.py', 'hosted_gpu.py', 'hosted_runner.py', 'hosted_uploads.py',
            'hosted_images.py', 'hosted_sources.py', 'hosted_audit.py', 'reproduction/pdf_render.py',
            'reproduction/paper_text.py', 'reproduction/pdf_extract.py', 'reproduction/protocol.py')
 
@@ -55,7 +55,7 @@ def build(output):
         shutil.copy2(ROOT / 'articheck' / name, dest)
     (package / 'reproduction/__init__.py').write_text('')
     # The cloud adapter uses the same origin, no API credentials in this file.
-    (output / 'deployment.json').write_text(json.dumps({'review_api_mode': 'synchronous'}))
+    (output / 'deployment.json').write_text(json.dumps({'review_api_mode': 'synchronous','login_required':True}))
     # Explicit archive root avoids hidden staging-folder filtering by upload tools.
     with zipfile.ZipFile(output.with_suffix('.zip'), 'w', zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(output.rglob('*')):

@@ -1,6 +1,6 @@
 # 在线网站验收
 
-验收日期：2026-11-05（北京时间）。地址：[ArtiCheck 在线审查](https://articheck-workbench.edgeone.dev/#api-review)。当前发布编号：`dpbj900aeimi`。早期 CPU 流程记录来自 `dp2ulgg7gl1p`；100 MB 扩容另有下方的真实上传、仓库引用和执行记录。
+验收日期：2026-11-06（北京时间）。地址：[ArtiCheck 在线审查](https://articheck-workbench.edgeone.dev/#api-review)。当前发布编号：`dpcx8t5a48yd`。早期 CPU 流程记录来自 `dp2ulgg7gl1p` 与 `dpbj900aeimi`；100 MB 扩容与自有 RTX 4090 GPU 执行另有下方的真实上传、仓库引用和隔离执行记录。
 
 这份记录验证真实模型 API、网页操作与隔离 CPU 执行。ArtiCheck 后训练权重未参与；材料类型与图表识别的样本结果不能作为总体准确率或完整论文复现成绩。
 
@@ -86,3 +86,15 @@ GitHub 源码包与本地代码 ZIP 的压缩包上限统一为 100 MiB（104,85
 - 最终生产页面在 1440 / 1280 桌面宽度下检查，0 FAIL、0 浏览器错误。保留的提示为 28px 工作台标题与 12px 活动元信息；正文、操作与分层主标题保持各自层级。GPU 按用户本轮选择仅保留配置入口，未注册或启用新的 GPU 服务。
 
 证据：[真实提交与执行](evidence/collaboration-production.json)、[实例容量](evidence/cpu-memory-acceptance.json)、[注册登录与指标浏览](evidence/account-workspace-browser.json)、[最终权限、资源与界面验收](evidence/final-ui-acceptance.json)。[使用说明与核心模块](ACCOUNTS_AND_COLLABORATION.md)。
+
+## 8. 邀请制登录、一页式报告与自有 RTX 4090 GPU 验收（2026-11-06）
+
+当前发布：`dpcx8t5a48yd`。本轮集中实施五批用户反馈，接入用户自有 GPU 服务器（`10.30.41.183`，NVIDIA GeForce RTX 4090，24 GB 显存），并在生产环境完成端到端验收：
+
+- **独立受邀登录与关闭公开注册**：未登录访问 `/#home` 自动跳转至 `/login.html`；公开注册接口 `POST /v1/auth/register` 返回 `403 invitation_only`；登录页与审查页均不再要求额外网站访问码；密码框右侧采用眼睛 / 眼睛斜线 SVG 图标切换显隐；管理员在个人中心可创建、停用、启用和重置受邀账户。
+- **自有 RTX 4090 GPU 隔离执行**：`10.30.41.183` 部署 `articheck-gpu-worker.service`（仅持有限定作用域的 Redis 队列凭据，不含模型、GitHub 或 E2B 密钥），通过 `bwrap`（`--unshare-all`、`--uid 65534`、`--cap-drop ALL`、网络隔离、只读绑定 `/opt/articheck-runtime` PyTorch + CUDA 运行时）运行 GPU 阶段。生产环境 `/v1/capabilities` 返回 `gpu.status="ready"`、`gpu_name="NVIDIA GeForce RTX 4090"`；浏览器提交包含 PyTorch CUDA 张量运算的 `cuda-probe-artifact.zip` 后，模型生成 `hardware="GPU"` 计划并自动派发至自有 GPU 执行器，阶段退出码为 0，实测输出与预期一致。
+- **审查工作流与一页式最终报告**：新建审查支持项目命名；上传材料完成初步识别后弹出四选一审查需求窗口（自动识别 / 论文自查 / 复现评估 / 代码审查）；开始审查后隐藏完整上传区并在左侧栏展示实时进度；最终报告采用单页结构（顶部通过/未通过/待核查结论横幅、八项条件、问题建议、四列对齐的指标比较表、图表出处与覆盖边界），执行计划、阶段日志与默认展开的分层角色活动统一收纳至“过程详情”标签页。
+- **导航与视觉改版**：侧边栏保留“自托管 API”、移除“API 与集成”、新增“帮助”（内置教学样例入口移入其中），“云端资源”移至侧边栏底部；开始页公开 `LIBLINEAR / news20` 案例采用深海蓝高对比档案卡片，四层验收状态清晰区分。
+- **自动化测试**：Python 单元测试 186 项（182 项通过，4 项 Docker 测试按环境跳过），前端测试 112 项全部通过，生产浏览器验收 0 控制台错误。
+
+证据：[GPU 与改版生产验收记录](evidence/feedback-gpu-acceptance.json) · [界面图集](UI_GALLERY.md#邀请制登录实验审查案卷与自有-rtx-4090-gpu-执行2026-11-06) · [反馈实施对照表](USER_FEEDBACK.md#集中实施与验收邀请制登录实验审查案卷视觉审查流程与自有-gpu2026-11-06)。

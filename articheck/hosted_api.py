@@ -9,7 +9,7 @@ import copy
 from .hosted_github import import_repository, repository, resolve_repository
 from .hosted_uploads import HostedUploads
 from .hosted_review import assess, material_identity, prepare_assessment, digest
-from .hosted_sandbox import E2BExecutor
+from .hosted_gpu import HybridExecutor
 from .hosted_store import HostedStore
 from .hosted_images import text_materials
 from .hosted_sources import lookup
@@ -20,24 +20,25 @@ from .review_api import ReviewError, now
 def register(app, env, reviewer, budget, *, store=None, executor=None):
     from flask import jsonify, request
     store = store or HostedStore(env)
-    executor = executor or E2BExecutor(env)
+    executor = executor or HybridExecutor(env,store)
     uploads = HostedUploads(env,store)
     from .hosted_auth import Accounts
     accounts = Accounts(app,env,store)
 
     def authorize(*, session=True):
-        token = env.get('ARTICHECK_REVIEW_TOKEN', '')
-        if len(token) < 24 or not hmac.compare_digest(request.headers.get('Authorization', '').encode(), ('Bearer ' + token).encode()):
-            raise ReviewError('unauthorized', '请填写网站访问码，不是模型供应商密钥。', 401)
-        if request.headers.get('X-ArtiCheck-Client') != 'review-api':
-            raise ReviewError('invalid_client', '请从网站提交审查。', 403)
-        origin = request.headers.get('Origin')
-        if origin and origin.rstrip('/') != (env.get('ARTICHECK_PUBLIC_ORIGIN') or request.host_url).rstrip('/'):
-            raise ReviewError('origin_forbidden', '请从同一网站提交材料。', 403)
-        owner = request.headers.get('X-ArtiCheck-Session', '')
-        if session and not re.fullmatch(r'[a-f0-9]{64}', owner):
-            raise ReviewError('invalid_session', '当前浏览器身份无效，请刷新页面。', 401)
-        return accounts.owner() or owner
+        if env.get('ARTICHECK_AUTH_MODE')=='legacy':
+            token=env.get('ARTICHECK_REVIEW_TOKEN','')
+            if len(token)<24 or not hmac.compare_digest(request.headers.get('Authorization','').encode(),('Bearer '+token).encode()):
+                raise ReviewError('unauthorized','请登录后提交审查。',401)
+            accounts.guard()
+            owner=request.headers.get('X-ArtiCheck-Session','')
+            if session and not re.fullmatch(r'[a-f0-9]{64}',owner):raise ReviewError('invalid_session','会话无效。',401)
+            return accounts.owner() or owner
+        accounts.require()
+        return accounts.owner()
+
+    app.extensions['articheck_accounts']=accounts
+    app.extensions['articheck_authorize']=authorize
 
     def body():
         value = request.get_json(silent=True)
@@ -67,12 +68,13 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
 
     @app.get('/capabilities')
     def capabilities():
+        if env.get('ARTICHECK_AUTH_MODE')!='legacy':authorize()
         return jsonify(version=2, service='articheck-online', model=reviewer.model,
                        review_configured=reviewer.configured and budget.configured,
                        sandbox_configured=executor.configured, auth_required=True,
-                       accounts={'registration':True,'session_days':30,'method':'username_password'},
+                       accounts={'registration':False,'invitation_only':True,'session_days':30,'method':'username_password'},
                        compute={'capacity':getattr(executor,'capacity',{'provider':'e2b','cpu_count':2,'memory_mb':512,'gpu':False}),
-                                'gpu':{'status':'not_configured','setup_url':'https://modal.com/signup'}},
+                                'gpu':{'status':'ready' if getattr(executor,'capacity',{}).get('gpu') else 'not_configured','provider':'owned_server'}},
                        limits={'max_body_bytes': 5_000_000, 'max_zip_bytes':100*1024**2,
                                'max_unpacked_bytes':500*1024**2,'max_pdf_bytes':20*1024**2,
                                'large_upload_transport':'signed_direct_upload','max_seconds': 600,
@@ -210,7 +212,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             value['execution'] = {**execution, 'status': 'expired', 'notice': '未能确认实例启动结果，保留未验收状态。'}
             store.replace(owner, previous, value)
             return jsonify(store.get(owner, job))
-        if execution and execution['status'] == 'running':
+        if execution and execution['status'] in {'queued', 'running', 'cancelling'}:
             try:
                 value['execution'] = executor.poll(execution)
             except ReviewError:
@@ -287,13 +289,17 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         value = store.get(owner, job)
         execution = value.get('execution')
         previous = copy.deepcopy(value)
-        if execution and execution['status'] in {'running', 'cancelling'}:
+        if execution and execution['status'] in {'queued', 'running', 'cancelling'}:
             value['execution'] = {**execution, 'status': 'cancelling'}
             if not store.replace(owner, previous, value):
                 return jsonify(store.get(owner, job))
             try:
                 snapshot = executor.poll(execution)
-                executor.stop(execution)
+                stopped = executor.stop(execution)
+                if stopped is False:
+                    value['execution'] = {**snapshot, 'status': 'cancelling', 'notice': '已请求 GPU 执行器停止，等待进程退出确认。'}
+                    store.save(owner, value)
+                    return jsonify(value)
             except Exception as exc:
                 raise ReviewError('cancel_pending', '暂时无法确认停止，请点击重试停止；实例仍受最长时限限制。', 502) from exc
             value['execution'] = {**snapshot, 'status': 'cancelled', 'notice': '用户停止执行，保留已产生的证据。'}

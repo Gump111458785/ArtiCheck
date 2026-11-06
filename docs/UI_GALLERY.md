@@ -36,6 +36,22 @@
 
 [使用说明与核心模块](ACCOUNTS_AND_COLLABORATION.md)。
 
+## 邀请制登录、实验审查案卷与自有 RTX 4090 GPU 执行（2026-11-06）
+
+以下截图来自正式生产部署（`dpcx8t5a48yd`）：采用“实验审查案卷”高对比配色、独立受邀登录页（眼睛 SVG 密码显隐图标、无公开注册与访问码）、深海蓝公开案例卡片、材料识别后的审查需求弹窗、一页式最终报告（顶部通过/未通过/待核查结论横幅 + 对齐指标比较表）、自有 RTX 4090 GPU 隔离执行过程详情，以及管理员受邀账户后台。
+
+[![独立受邀登录页](assets/feedback-login.png)](assets/feedback-login.png)
+
+[![实验审查案卷开始页与公开复现案例](assets/feedback-home.png)](assets/feedback-home.png)
+
+[![材料初步识别后的审查需求选择弹窗](assets/feedback-task-choice.png)](assets/feedback-task-choice.png)
+
+[![一页式最终报告](assets/feedback-onepage-report.png)](assets/feedback-onepage-report.png)
+
+[![自有 RTX 4090 GPU 执行与默认展开的分层活动记录](assets/feedback-gpu-execution.png)](assets/feedback-gpu-execution.png)
+
+[![管理员受邀账户管理](assets/feedback-admin-accounts.png)](assets/feedback-admin-accounts.png)
+
 ## 开始：选择新建、继续项目或查看案例
 
 新建论文评估进入现有的 PDF / 代码材料表单；最近项目来自当前浏览器，内置样例不计入个人项目数量。公开 LIBLINEAR 案例拥有独立入口。

@@ -230,3 +230,49 @@
 ## 100 MB 仓库与 ZIP 扩容（2026-11-05）
 
 用户反馈原 GitHub 源码包阈值过小。本轮将 GitHub 压缩源码与本地 ZIP 的上限统一为 100 MiB；GitHub 大仓库返回固定提交引用，本地大文件通过短期签名直传，避免 EdgeOne 单次请求限制。已验证 88 MB ResNet 仓库读取与审查，以及恰好 100 MiB 文件的网页上传、指纹校验和 CPU 执行。[验收记录](ONLINE_ACCEPTANCE.md#6-100-mb-大文件扩容)。
+
+## 集中实施与验收：邀请制登录、实验审查案卷视觉、审查流程与自有 GPU（2026-11-06）
+
+以下五批反馈（2026-11-05 记录）已完成代码实施、自动化回归测试与 EdgeOne 生产环境（`dpcx8t5a48yd`）及自有 GPU 服务器（`10.30.41.183`）实测验收。原始反馈背景保留，状态更新如下。
+
+### 1. 密码可见性图标、邀请制登录、视觉与自有 GPU
+
+| 项目 | 用户要求与修改位置 | 当前状态与验收依据 |
+|---|---|---|
+| 密码可见性 | `web/dist/ui-icons.mjs`、`web/dist/login.mjs`、`web/dist/account.mjs`：将“显示 / 隐藏”文字替换为眼睛 / 眼睛斜线 SVG 图标，保留 `aria-label`、`aria-pressed` 与键盘操作 | **已完成**：独立登录页与个人中心密码框均已验证切换可见状态 |
+| 独立登录页 | `web/dist/login.html`、`web/dist/login.mjs`、`web/dist/login.css`、`web/dist/app.js`：未登录访问工作台先跳转至 `/login.html`，登录成功后返回原页面；配套服务端会话校验 | **已完成**：未登录访问 `/#home` 自动跳转 `/login.html`，登录后进入工作台 |
+| 邀请制账户 | `articheck/hosted_auth.py`、`scripts/manage_accounts.py`、`web/dist/account.mjs`：关闭公开注册页面与接口（`POST /v1/auth/register` 返回 `403 invitation_only`）；管理员在个人中心或 CLI 统一创建、停用、启用和重置指定用户密码 | **已完成**：已初始化管理员与受邀验收账户，公开注册已关闭，管理员后台可管理受邀账户 |
+| 移除网站访问码 | `articheck/hosted_api.py`、`articheck/hosted_auth.py`、`web/dist/online-workspace.mjs`：用受邀账户会话替代额外网站访问码，移除表单与对应校验；上传、审查、执行与报告读取统一按受邀会话授权，保留全站预算上限 | **已完成**：界面与接口不再要求额外访问码，跨账户报告隔离与费用预算上限保持有效 |
+| 配色与设计 skill | `web/dist/feedback-redesign.css`、`web/dist/index.html`、`docs/FEEDBACK_REDESIGN_PLAN.md`：使用 `frontend-design` 建立“实验审查案卷”高对比学术工作台配色（`#f3f6fa` 纸面背景、`#172b3d` 墨色文字、`#1f5f94` 主操作色、`#a6293b` 未通过醒目红、`#17664b` 验收通过色） | **已完成**：全站配色、排版层级与桌面/窄屏布局已更新并截图归档 |
+| 自有 GPU | `articheck/hosted_gpu.py`、`articheck/gpu_worker.py`、`articheck/hosted_review.py`、`articheck/hosted_api.py`：接入 `10.30.41.183`（NVIDIA GeForce RTX 4090，24 GB 显存），通过私有 Redis 队列与 systemd 守护进程 `articheck-gpu-worker.service` 拉取任务，在 `bwrap` 无特权命名空间（`--unshare-all`、`--cap-drop ALL`、禁网、只读挂载 CUDA 运行时）中隔离执行需要 GPU 的阶段 | **已完成**：`/v1/capabilities` 实时返回 RTX 4090 容量，生产网页提交 CUDA 任务已在 RTX 4090 上真实完成执行且全阶段退出码为 0 |
+| 动态协作 | `web/dist/review-activity.mjs`、`web/dist/online-workspace.mjs`：增强真实阶段变化与运行反馈；“查看 n 条活动记录”默认展开（`open=true`），按阶段分组且不补造角色事件 | **已完成**：活动记录默认展开，刷新不再折叠 |
+| API 与集成 | `web/dist/navigation.mjs`：从侧边栏移除“API 与集成”（`contracts`）入口，保留工作台内部依赖的后端接口 | **已完成**：侧边栏已移除该入口 |
+| 自托管 API | `web/dist/navigation.mjs`、`web/dist/api-review.mjs`：保留“自托管 API”（`http-api`）入口及连接自部署 ArtiCheck 审阅后端的功能 | **已完成**：侧边栏保留并可正常切换 |
+
+### 2. 审查流程与一页式报告
+
+| 项目 | 修改位置 | 当前状态与验收依据 |
+|---|---|---|
+| 云端资源位置 | `web/dist/navigation.mjs`、`web/dist/app.js`：将“云端资源”按钮移至左侧栏底部辅助区（`#sidebar-resource`），弹窗实时展示 CPU（2 vCPU / 4 GB）与自有 GPU（RTX 4090 / 24 GB）状态 | **已完成**：不再与项目选择和新建审查混排 |
+| 源码读取反馈 | `web/dist/online-workspace.mjs`：GitHub 源码读取增加旋转指示器与实时每秒计时（`data-repo-elapsed`），明确区分读取中、已读取固定提交与读取失败重试，不捏造百分比 | **已完成**：动态等待计时与状态显示已上线 |
+| 审查需求弹窗 | `web/dist/online-workspace.mjs`（`chooseTask`）：移除常驻任务单选框；在材料上传并初步识别（页数 / 代码文件数）后、正式调用模型审查前弹出四选一需求窗口，每项附用途与适用范围说明 | **已完成**：符合“材料初步识别后、正式审查前选择”时机 |
+| 项目命名 | `web/dist/online-workspace.mjs`（`new`、`createProject`）：新建审查先弹出项目命名窗口，名称同步用于项目选择器、左侧栏与最终报告 | **已完成**：支持自定义项目名创建与展示 |
+| 审查中材料区 | `web/dist/online-workspace.mjs`（`render`、`sidebar`）：开始审查及查看报告/过程时隐藏完整上传表单，文件名与材料摘要收拢至左侧栏当前审查卡片 | **已完成**：主体区域专注审查进度与结果 |
+| 左侧栏反馈与完成提醒 | `web/dist/online-workspace.mjs`（`sidebar`、`notifyFinished`）：审查或执行进行时左侧栏显示动态状态与快捷入口；完成后弹出提醒并自动切换至最终报告，任务完成与论文结论通过分别表达 | **已完成**：已完成浏览器与单测核验 |
+| 角色状态区分 | `web/dist/review-activity.mjs`、`web/dist/feedback-redesign.css`：六角色卡片通过底色、边框、图标标记（`✓` / `!` / 动画点）与文字标签明确区分“已执行 / 进行中 / 需关注 / 未执行” | **已完成**：不再仅靠相近色圆点区分 |
+| 结束后材料文案 | `web/dist/online-workspace.mjs`：已有报告后原“准备材料”标签自动改为“材料管理” | **已完成**：状态文案随阶段切换 |
+| 活动记录层级 | `web/dist/review-activity.mjs`（`activityGroups`）：默认展开活动记录，并按“材料审阅与计划 / 执行准备 / 各执行阶段 / 实验核查与汇总”分组缩进展示父子层级 | **已完成**：阶段组与子事件层级清晰 |
+| 执行计划主流程 | `web/dist/online-workspace.mjs`：开启自动执行时审查返回后自动衔接 CPU / GPU 执行并进入主进度视图；条件不足时在主流程明确展示阻塞原因与补充操作 | **已完成**：无需用户去底部手动寻找执行入口 |
+| 指标数值对齐 | `web/dist/online-workspace.mjs`（`observations`）、`web/dist/feedback-redesign.css`：采用固定四列宽度（`.metric-comparison`）与 `tabular-nums` 右对齐数值列，指标、论文值、观测值、比较结果逐列严格对应，“未观测”与数值 0 明确区分 | **已完成**：列标题与数值对齐已修正 |
+| 结果优先 | `web/dist/report-verdict.mjs`、`web/dist/online-workspace.mjs`（`finalReport`）：报告顶部显著展示“通过 / 未通过 / 待进一步核查”结论横幅；未通过采用醒目红字（`#a6293b`），未执行或无观测单独注明为待核查，不冒充通过 | **已完成**：顶部结论横幅与状态配色已上线 |
+| 一页式最终报告 | `web/dist/online-workspace.mjs`（`finalReport`）：将顶部结论、总体判断、八项条件、问题建议、目标与观测指标比较表、图表出处与覆盖边界整合为一页式最终报告 | **已完成**：无需跨多个标签页拼凑结果 |
+| 过程详情合并 | `web/dist/online-workspace.mjs`：将六角色活动记录、执行计划、各阶段命令与实际 stdout 日志统一合并至专门的“过程详情”（`process`）标签页 | **已完成**：结果与过程清晰分离 |
+
+### 3. 帮助模块与公开复现案例卡片
+
+| 项目 | 修改位置 | 当前状态与验收依据 |
+|---|---|---|
+| 帮助模块与内置样例入口 | `web/dist/navigation.mjs`、`web/dist/app.js`（`helpView`）、`web/dist/home.mjs`：侧边栏新增“帮助”（`help`）模块，将“先用内置样例熟悉流程”移入帮助页，从开始页主操作区移出 | **已完成**：开始页更聚焦，内置样例在帮助页可正常打开 |
+| 公开复现案例卡片 | `web/dist/home.mjs`、`web/dist/feedback-redesign.css`（`.start-case`）：开始页 `LIBLINEAR / news20` 公开复现案例采用深海蓝高对比档案卡片，突出案例名称、15 次运行 / 60 个阶段关键数据与四层验收状态区分（通过项与未满足项以不同徽章和对比度呈现） | **已完成**：视觉区分显著，保留真实案例数据与原始验收边界 |
+
+[在线验收与 GPU 实测记录](ONLINE_ACCEPTANCE.md#8-邀请制登录一页式报告与自有-rtx-4090-gpu-验收2026-11-06) · [界面图集](UI_GALLERY.md) · [改版设计方案](FEEDBACK_REDESIGN_PLAN.md)。

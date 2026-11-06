@@ -1,6 +1,6 @@
 """Username/password accounts with durable Redis records and opaque cookie sessions.
 
-Accounts identify reports; they do not bypass the separately budgeted review access code.
+Accounts are invitation-only. Administrators provision credentials; review budgets remain independent.
 No passwords, raw session tokens, model keys or uploaded materials enter responses.
 """
 import hashlib
@@ -63,6 +63,7 @@ class Accounts:
         if not session or session.get('expires_at',0)<=time.time():return None
         user = self.read('user',session['user_id'])
         if not user or user.get('epoch')!=session.get('epoch'):return None
+        if self.env.get('ARTICHECK_AUTH_MODE')!='legacy' and (not user.get('invited') or user.get('disabled')):return None
         return user
 
     def owner(self):
@@ -77,7 +78,7 @@ class Accounts:
 
     @staticmethod
     def public(user):
-        return {key:user[key] for key in ('id','username','name','created_at')}
+        return {**{key:user[key] for key in ('id','username','name','created_at')},'role':user.get('role','user')}
 
     def session_response(self, user):
         from flask import jsonify
@@ -126,6 +127,22 @@ class Accounts:
         if not user:raise ReviewError('login_required','请先登录账户。',401)
         return user
 
+    def require_admin(self):
+        user=self.require()
+        if user.get('role')!='admin':raise ReviewError('admin_required','此操作仅限管理员。',403)
+        return user
+
+    def create_user(self, username, password, name, *, role='user'):
+        username=self.username(username);password=self.password(password);name=self.name(name)
+        if role not in {'admin','user'}:raise ValueError('Invalid role')
+        user={'id':uuid.uuid4().hex,'username':username,'name':name,'created_at':now(),
+              'epoch':uuid.uuid4().hex,'password':password_hash(password),'report_owner':secrets.token_hex(32),
+              'role':role,'invited':True,'disabled':False}
+        script="if redis.call('EXISTS',KEYS[1])==1 then return 0 end; redis.call('SET',KEYS[1],ARGV[1]); redis.call('SET',KEYS[2],ARGV[2]); redis.call('SADD',KEYS[3],ARGV[1]); return 1"
+        result=self.store.command('EVAL',script,'3',self.key('username',username),self.key('user',user['id']),self.prefix+'users',user['id'],json.dumps(user,ensure_ascii=False))
+        if result!=1:raise ReviewError('username_taken','该用户名已被使用。',409)
+        return user
+
     def register(self, app):
         from flask import jsonify,request
 
@@ -139,17 +156,38 @@ class Accounts:
 
         @app.post('/auth/register')
         def account_register():
-            self.guard();body=self.fields()
-            username=self.username(body.get('username'));password=self.password(body.get('password'));name=self.name(body.get('name'))
-            self.limit('register',request.remote_addr or 'unknown',5,3600)
-            user={'id':uuid.uuid4().hex,'username':username,'name':name,'created_at':now(),
-                  'epoch':uuid.uuid4().hex,'password':password_hash(password),
-                  'report_owner':secrets.token_hex(32)}
-            # The unique name and account record are created together, without a race.
-            script="if redis.call('EXISTS',KEYS[1])==1 then return 0 end; redis.call('SET',KEYS[1],ARGV[1]); redis.call('SET',KEYS[2],ARGV[2]); return 1"
-            created=self.store.command('EVAL',script,'2',self.key('username',username),self.key('user',user['id']),user['id'],json.dumps(user,ensure_ascii=False))
-            if created!=1:raise ReviewError('username_taken','该用户名已被使用，请换一个。',409)
-            return self.session_response(user),201
+            self.guard()
+            raise ReviewError('invitation_only','本网站采用邀请制，请向管理员领取账户。',403)
+
+        @app.get('/auth/admin/users')
+        def account_users():
+            self.require_admin()
+            ids=self.store.command('SMEMBERS',self.prefix+'users') or []
+            users=[self.read('user',uid) for uid in ids[:200]]
+            return jsonify(users=[{**self.public(u),'disabled':bool(u.get('disabled'))} for u in users if u])
+
+        @app.post('/auth/admin/users')
+        def account_create_invite():
+            self.require_admin();body=self.fields()
+            user=self.create_user(body.get('username'),body.get('password'),body.get('name'))
+            return jsonify(user=self.public(user)),201
+
+        @app.post('/auth/admin/users/<uid>')
+        def account_manage_invite(uid):
+            admin=self.require_admin();body=self.fields()
+            if not re.fullmatch(r'[a-f0-9]{32}',uid):raise ReviewError('not_found','账户不存在。',404)
+            target=self.read('user',uid)
+            if not target:raise ReviewError('not_found','账户不存在。',404)
+            if body.get('action')=='reset_password':
+                update={'password':password_hash(self.password(body.get('password'))),'epoch':uuid.uuid4().hex}
+            elif body.get('action') in {'disable','enable'}:
+                if uid==admin['id'] and body['action']=='disable':raise ReviewError('invalid_request','不能停用当前管理员账户。')
+                update={'disabled':body['action']=='disable','invited':True,'epoch':uuid.uuid4().hex}
+            else:raise ReviewError('invalid_request','请选择重置密码、启用或停用。')
+            script="local raw=redis.call('GET',KEYS[1]); if not raw then return false end; local u=cjson.decode(raw); local p=cjson.decode(ARGV[1]); for k,v in pairs(p) do u[k]=v end; local updated=cjson.encode(u); redis.call('SET',KEYS[1],updated); return updated"
+            updated=self.store.command('EVAL',script,'1',self.key('user',uid),json.dumps(update))
+            if uid==admin['id']:return self.session_response(json.loads(updated))
+            return jsonify(user={**self.public(json.loads(updated)),'disabled':bool(update.get('disabled',target.get('disabled')))})
 
         @app.post('/auth/login')
         def account_login():
@@ -162,7 +200,7 @@ class Accounts:
             # An unknown username takes the same password work as a known username.
             expected=user['password'] if user else {'salt':'0'*32,'digest':'0'*64}
             actual=password_hash(password,expected['salt'])
-            if not hmac.compare_digest(actual['digest'],expected['digest']):
+            if not hmac.compare_digest(actual['digest'],expected['digest']) or not user or (self.env.get('ARTICHECK_AUTH_MODE')!='legacy' and (not user.get('invited') or user.get('disabled'))):
                 raise ReviewError('invalid_credentials','用户名或密码不正确。',401)
             return self.session_response(user)
 
@@ -184,7 +222,7 @@ class Accounts:
 
         @app.post('/auth/password')
         def account_password():
-            user=self.require();body=self.fields()
+            user=self.require_admin();body=self.fields()
             self.limit('password',user['id'],10,900)
             old=self.password(body.get('current_password'));new=self.password(body.get('new_password'))
             if not hmac.compare_digest(password_hash(old,user['password']['salt'])['digest'],user['password']['digest']):

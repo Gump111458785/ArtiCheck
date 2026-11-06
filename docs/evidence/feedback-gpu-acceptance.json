@@ -1,0 +1,74 @@
+{
+  "verified_at": "2026-11-06T08:46:09.963Z",
+  "base_url": "https://articheck-workbench.edgeone.dev",
+  "checks": [
+    "Unauthenticated workbench redirects to independent /login.html",
+    "Login page has no registration or site access code",
+    "Public registration endpoint returns 403 invitation_only",
+    "Eye SVG icon toggles password visibility",
+    "API integrations removed from sidebar while self-hosted API retained",
+    "Teaching sample moved into Help module",
+    "Capabilities report owned RTX 4090 GPU ready",
+    "Sidebar Cloud Resources modal displays RTX 4090 GPU",
+    "Named review project created",
+    "Task choice modal opens after material recognition with 4 options",
+    "Real assessment and execution completed",
+    "Execution ran on owned_gpu provider",
+    "Owned GPU execution completed with status=completed",
+    "All GPU stages exited with 0",
+    "Upload area hidden on final report view",
+    "Process tab displays NVIDIA GeForce RTX 4090 instance",
+    "Administrator sees invited account management"
+  ],
+  "console_errors": 0,
+  "capabilities_gpu": {
+    "provider": "owned_server",
+    "status": "ready"
+  },
+  "capacity": {
+    "cpu_count": 8,
+    "gpu": true,
+    "gpu_memory_mb": 24111,
+    "gpu_name": "NVIDIA GeForce RTX 4090",
+    "memory_mb": 16384,
+    "provider": "owned_gpu",
+    "single_file_limit_mib": 128
+  },
+  "assessment_id": "d64bc0d8df7f48e38fba3eb1a4d84263",
+  "plan_hardware": "GPU",
+  "execution": {
+    "provider": "owned_gpu",
+    "status": "completed",
+    "environment": {
+      "cpu_count": 8,
+      "gpu": true,
+      "gpu_memory_mb": 24111,
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "memory_mb": 16384,
+      "provider": "owned_gpu"
+    },
+    "runtime": {
+      "architecture": "x86_64",
+      "child_cpu_seconds": 5.062,
+      "disk_free_after_bytes": 16828563456,
+      "disk_free_before_bytes": 16828567552,
+      "disk_total_bytes": 16828575744,
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "python": "3.8.10",
+      "release": "5.4.0-216-generic",
+      "system": "Linux"
+    },
+    "elapsed_seconds": 9.414,
+    "stages": [
+      {
+        "id": "S1",
+        "title": "运行 CUDA 探针脚本",
+        "command": "python run_cuda_check.py",
+        "status": "completed",
+        "exit_code": 0,
+        "output": "gpu_device: NVIDIA GeForce RTX 4090\ncuda_square_sum: 85344.0\n"
+      }
+    ],
+    "metrics": []
+  }
+}

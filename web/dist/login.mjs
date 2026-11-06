@@ -1,0 +1,7 @@
+import {passwordButton,bindPasswordToggles} from './ui-icons.mjs';
+document.querySelector('#password-control').innerHTML=passwordButton('password');bindPasswordToggles();
+const next=new URLSearchParams(location.search).get('next')||'/#home';
+function destination(){try{const u=new URL(next,location.origin);if(u.origin===location.origin&&['/','/index.html'].includes(u.pathname))return u.pathname+u.search+u.hash;}catch{}return '/#home';}
+async function auth(path,body){const r=await fetch('/v1/auth/'+path,{method:body?'POST':'GET',credentials:'same-origin',headers:{'X-ArtiCheck-Client':'review-api',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(15000)});const v=await r.json();if(!r.ok)throw Error(v.error?.message||'登录未完成，请重试。');return v;}
+auth('me').then(v=>{if(v.user)location.replace(destination());}).catch(()=>{});
+document.querySelector('#login-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.target,button=form.querySelector('[type=submit]'),error=document.querySelector('#login-error');if(!form.reportValidity()||button.disabled)return;button.disabled=true;button.textContent='正在登录…';error.textContent='';try{await auth('login',Object.fromEntries(new FormData(form)));location.replace(destination());}catch(e){error.textContent=e.name==='TimeoutError'?'登录响应较慢，请稍后再试。':e.message;button.disabled=false;button.textContent='登录';form.elements.password.value='';form.elements.password.focus();}});
