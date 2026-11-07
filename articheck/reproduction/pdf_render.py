@@ -22,10 +22,11 @@ def main():
         width,height=page.get_size()
         if min(width,height)<=0:
             raise ValueError('Invalid page dimensions')
-        bitmap=page.render(scale=1600/max(width,height))
+        target_px=1600 if len(selected)<=2 else 1100
+        bitmap=page.render(scale=target_px/max(width,height))
         image=bitmap.to_pil().convert('RGB')
         dest=output/f'page-{number}.jpg'
-        image.save(dest,format='JPEG',quality=82,optimize=False)
+        image.save(dest,format='JPEG',quality=82 if len(selected)<=2 else 74,optimize=False)
         total+=dest.stat().st_size
         if total>12_000_000:
             raise ValueError('Image context exceeds 12 MB')

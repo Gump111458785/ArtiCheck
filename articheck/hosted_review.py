@@ -143,12 +143,15 @@ def validate_assessment(value, context):
             matches=[path for path in known_files if path.endswith('/'+value)]
             if len(matches)==1:
                 return matches[0]
-        raise ReviewError('invalid_citation', '模型引用了材料中不存在的代码文件：'+str(value)[:160], 502)
+        # An unverifiable citation must not sink the whole review: drop it and disclose the gap.
+        citation_gaps.append('模型引用了材料中不存在的代码文件“'+str(value)[:160]+'”，该出处已移除，相关条目需人工核对。')
+        return None
 
     def citation(row):
         page, file = row.get('page'), file_path(row.get('file'))
         if page is not None and (type(page) is not int or page not in pages):
-            raise ReviewError('invalid_citation', '模型引用了未提供的论文页面。', 502)
+            citation_gaps.append('模型引用了未提供的论文页面“'+str(page)[:20]+'”，该页码已移除，相关条目需人工核对。')
+            page = None
         return {'page': page, 'file': file}
 
     if value.get('paper_type') not in PAPER_TYPES or value.get('task') not in TASKS - {'auto'}:
@@ -245,15 +248,25 @@ def validate_assessment(value, context):
     plan = value.get('plan')
     if not isinstance(plan, dict) or not isinstance(plan.get('stages'), list) or len(plan['stages']) > 8:
         raise ReviewError('invalid_model_output', '执行计划格式无效。', 502)
-    stages = []
-    for i, row in enumerate(plan['stages'], 1):
-        if not isinstance(row, dict) or row.get('file') is None:
-            raise ReviewError('invalid_model_output', '执行阶段没有对应的源文件。', 502)
-        dependencies=row.get('depends_on',[f'S{i-1}'] if i>1 else [])
-        if not isinstance(dependencies,list) or any(d not in {s['id'] for s in stages} for d in dependencies):
-            raise ReviewError('invalid_model_output','执行阶段依赖关系无效。',502)
+    stages = []; renamed = {}
+    # Paper-only input has no executable source: ignore any proposed stages instead of
+    # failing the whole review on a speculative file name.
+    for position, row in enumerate(plan['stages'] if context['code'] else [], 1):
+        if not isinstance(row, dict) or not isinstance(row.get('file'), str):
+            citation_gaps.append('一项执行阶段缺少对应源文件，已从执行计划中移除。')
+            continue
+        source_file=file_path(row['file'])
+        if source_file is None:
+            continue
+        i=len(stages)+1
+        dependencies=row.get('depends_on',[f'S{position-1}'] if position>1 else [])
+        if not isinstance(dependencies,list):
+            dependencies=[f'S{position-1}'] if position>1 else []
+        # Dependencies use the model's positional IDs; map them onto retained stages.
+        dependencies=[renamed[d] for d in dependencies if isinstance(d,str) and d in renamed]
+        renamed[f'S{position}']=f'S{i}'
         stages.append({'id': f'S{i}', 'title': text(row, 'title', 200),
-                       'command': text(row, 'command', 12000), 'file': file_path(row['file']),
+                       'command': text(row, 'command', 12000), 'file': source_file,
                        'depends_on':list(dict.fromkeys(dependencies)),'experiment':optional_text(row,'experiment',200)})
     patterns = []
     for row in plan.get('metric_patterns', [])[:200]:
@@ -270,7 +283,7 @@ def validate_assessment(value, context):
         tolerance = row.get('tolerance')
         if compiled.groups < 1 or type(tolerance) not in (int, float) or not 0 <= tolerance < 1e6:
             continue
-        stage=row.get('stage_id') or (stages[0]['id'] if len(stages)==1 else None)
+        stage=renamed.get(row.get('stage_id')) if row.get('stage_id') else (stages[0]['id'] if len(stages)==1 else None)
         if stage not in {s['id'] for s in stages}:
             rejected.append('一项指标未绑定明确的输出阶段，未与不同实验的同名输出混合比较。')
             continue
@@ -359,15 +372,27 @@ def validate_assessment(value, context):
 def assess(reviewer, context, scope, *, request_timeout=60):
     if not reviewer.configured:
         raise ReviewError('provider_not_configured', '模型服务尚未配置。', 503)
-    user={'role':'user','content':json.dumps({'scope':scope,'materials':text_materials(context)},ensure_ascii=False)}
+    text_content=json.dumps({'scope':scope,'materials':text_materials(context)},ensure_ascii=False)
+    user={'role':'user','content':text_content}
     if context.get('paper_images'):
-        blocks=[{'type':'text','text':user['content']}]
+        blocks=[{'type':'text','text':text_content}]
         for image in context['paper_images']:
             blocks += [{'type':'text','text':f"PDF 第 {image['page']} 页，图像 SHA256 {image['sha256']}"},
                        {'type':'image_url','image_url':{'url':image['image_url'],'detail':'original'}}]
-        user['content']=blocks
-    result = reviewer.post({'model': reviewer.model, 'temperature': 0, 'max_tokens': 24000, '_http_timeout':request_timeout,
-                           'messages': [{'role': 'system', 'content': SYSTEM}, user]})
+        user={'role':'user','content':blocks}
+    try:
+        first_timeout=min(48,request_timeout-22) if context.get('paper_images') and request_timeout>=52 else request_timeout
+        result = reviewer.post({'model': reviewer.model, 'temperature': 0, 'max_tokens': 16000, '_http_timeout':first_timeout,
+                               'messages': [{'role': 'system', 'content': SYSTEM}, user]})
+    except Exception as exc:
+        if isinstance(exc, ReviewError) and exc.code in {'budget_not_configured','budget_unavailable','budget_exhausted','provider_not_configured'}:
+            raise
+        if not context.get('paper_images'):
+            raise
+        # If multimodal vision call timed out or failed upstream, degrade gracefully to full extracted text.
+        context['coverage']['vision_error']='页面图像通道响应超时或异常，本次已自动降级为全文提取文字审查。'
+        result = reviewer.post({'model': reviewer.model, 'temperature': 0, 'max_tokens': 16000, '_http_timeout':max(15,min(45,request_timeout)),
+                               'messages': [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': text_content}]})
     try:
         choice = result['choices'][0]
         if choice.get('finish_reason') == 'length':

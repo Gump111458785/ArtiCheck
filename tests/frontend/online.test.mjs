@@ -143,4 +143,27 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  assert.match(finalHtml,/data-report-jump="observations"/);
  assert.match(finalHtml,/data-report-jump="coverage"/);
  assert.doesNotMatch(finalHtml,/查看计划与执行条件/);
+
+ // Fourth-batch UI requirements:
+ // 1. Materials UI removes scope restriction checkbox, auto-execute checkbox, and details.online-local; places local button next to submit
+ assert.doesNotMatch(matHtml,/data-online-field="online_restrict"/);
+ assert.doesNotMatch(matHtml,/data-online-field="online_auto_execute"/);
+ assert.doesNotMatch(matHtml,/<details class="online-local">/);
+ assert.match(matHtml,/class="btn online-local-btn" data-online="local"/);
+ assert.match(activityHtml,/class="live-heading"/);
+ assert.match(activityHtml,/class="live-dots"/);
+
+ // 2. Report tab hidden before review completes, terminal button present in toolbar, endedCard shown on cancelled/failed
+ const wsRender=new OnlineWorkspace({projects:[{id:'p1',title:'Test Proj',paper:{name:'a.pdf',pages:[1]},online_report:{id:'j1',format:'articheck.online_assessment.v2',source:'model_api_review',scientific_validation:false,status:'cancelled',error:'user_cancelled',review:null,activity:[{title:'审查已手动中止',roles:['reporter'],status:'failed',time:1700000003}]}}],save:async()=>{},h:{render(){},icon:()=>'',account:()=>null},esc:v=>String(v??'')});
+ wsRender.selected='p1';
+ wsRender.tab='process';
+ const cancelledView=wsRender.render();
+ assert.match(cancelledView,/data-online="terminal"/);
+ assert.doesNotMatch(cancelledView,/data-online-tab="report"/);
+ assert.match(cancelledView,/review-ended cancelled/);
+ assert.match(cancelledView,/审查已中止/);
+
+ wsRender.i.projects[0].online_report=paperOnlyReport;
+ const completedView=wsRender.render();
+ assert.match(completedView,/data-online-tab="report"/);
 });

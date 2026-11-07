@@ -1,0 +1,49 @@
+{
+  "verified_at": "2026-11-07T08:10:16.648Z",
+  "base_url": "https://articheck-workbench.edgeone.dev",
+  "checks": [
+    "Login via /v1/auth/login succeeded",
+    "Item 1: .page is flush against .topbar with zero blank gap",
+    "Item 1: .page has 0px border-radius",
+    "Item 1: .page has no duplicate outer border",
+    "Item 1: .content has 0px padding",
+    "Item 1: Active sidebar nav item indicates position via border-left",
+    "Item 2: /v1/auth/profile persisted avatar=preset:atom",
+    "Item 2: Topbar and Account Center render updated preset avatar",
+    "Item 3: Scope restriction UI removed while API field is preserved",
+    "Item 4: Local execution button placed next to submit button",
+    "Item 5: Auto-execute checkbox removed (defaults to true)",
+    "Item 8: Final report tab is hidden before review finishes",
+    "Item 9: Terminal button present in online review toolbar",
+    "Item 6: \"正在协作审查\" heading renders with shimmer & bouncing dots animation",
+    "Item 8: Final report tab remains hidden while review is running",
+    "Item 7A: Cancel button is available during reviewing",
+    "Item 7A: Clicking cancel during review aborts cleanly, shows cancelled card, and hides report tab",
+    "Item 8: Final report tab appears once review is completed",
+    "Item 7B: Uploaded 1512.03385v1.pdf completed automatic review without 502/invalid_citation failure",
+    "Item 9: Clicking terminal button switches to process view and opens activity/terminal log"
+  ],
+  "total_checks": 20,
+  "avatar_persisted": "preset:atom",
+  "cancel_test": {
+    "hasCancelledCard": true,
+    "headingText": "审查已中止",
+    "stillBusy": false,
+    "hasReportTabAfterCancel": false
+  },
+  "pdf_assessment": {
+    "id": "632202b0327742e1a15f9592a1c8871d",
+    "status": "completed",
+    "paper_type": "empirical",
+    "task": "self_review",
+    "metrics_count": 35,
+    "findings_count": 3,
+    "coverage_gaps": [
+      "未提供作者训练代码，无法核对实现细节与超参",
+      "Table 10/11 逐类 AP 文本提取错位，未逐类核对",
+      "Fig.1/4/6/7 曲线数值仅视觉观察，未提取精确值",
+      "未执行任何训练或评估，所有指标为论文报告值",
+      "部分论文页面未提供图像，相关纯图片图表保留未核验状态。"
+    ]
+  }
+}

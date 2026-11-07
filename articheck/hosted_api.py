@@ -143,19 +143,28 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             return jsonify(existing)
         # Observable workflow facts only; no model reasoning or fabricated agent turns.
         pending['activity'] = []
+        def cancelled():
+            # A user stop is durable: later progress or results never overwrite it.
+            try:return store.get(owner,job).get('status')=='cancelled'
+            except Exception:return False
         def activity(title, roles, detail='', status='running'):
             for event in pending['activity']:
                 if event['status']=='running':event['status']='failed' if status in {'failed','skipped'} else 'completed'
             pending['activity'].append({'title':title,'roles':roles,'detail':detail,
                                         'status':status,'time':time.time()})
+            if cancelled():return
             try:store.save(owner,pending)
             except ReviewError:pass  # Progress telemetry must not change the assessment.
         activity('材料解析完成',[role for role,present in [('literature_reader',context.get('paper')),('code_inspector',context.get('code'))] if present],
                  '论文与源码已按输入预算解析；仅处理实际提供的材料。','completed')
         # Material parsing and the durable idempotency claim precede reservation.
         try:
+            if cancelled():
+                return jsonify(store.get(owner, job))
             activity('核对公开来源',['literature_reader' if context.get('paper') else 'code_inspector'],'正在识别可核对的公开出处；无有效标识时仅核对导入材料。')
             lookup(context,budget,store)
+            if cancelled():
+                return jsonify(store.get(owner, job))
             while len(json.dumps(text_materials(context),ensure_ascii=False).encode())>175_000 and context.get('web_sources'):
                 sources=context['web_sources']
                 if any(s.get('content') for s in sources):
@@ -171,12 +180,17 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                      '主审模型正在核对图表、实现与实验条件，并生成结构化建议和执行计划。' if has_code else '主审模型正在深度核对论文图表、指标出处与论证一致性。')
             value = assess(reviewer, context, scope, request_timeout=max(5,min(80,108-(time.monotonic()-started))))
         except Exception as exc:
+            if cancelled():
+                return jsonify(store.get(owner, job))
             activity('主审请求未完成',['reporter'],'保留已取得的活动记录，不自动重试。','failed')
-            pending.update(status='failed', error=exc.code if isinstance(exc, ReviewError) else 'provider_failed')
+            pending.update(status='failed', error=exc.code if isinstance(exc, ReviewError) else 'provider_failed',
+                           error_message=str(exc)[:300] if isinstance(exc, ReviewError) else f'模型请求未完成（{type(exc).__name__}），请稍后重试。')
             store.save(owner, pending)
             if isinstance(exc, ReviewError):
                 raise
             raise ReviewError('provider_failed', '模型请求失败，调用额度已预留；未自动重试。', 502) from exc
+        if cancelled():
+            return jsonify(store.get(owner, job))
         return_roles = [role for role,present in [('literature_reader',context.get('paper')),('code_inspector',context.get('code')),('planner',bool(context.get('code') and value['review']['plan']['stages']))] if present] or ['literature_reader']
         activity('主审结果已返回',return_roles,'图表与代码核查结果、执行计划已完成结构化校验。' if context.get('code') else '论文图表与材料核查结果已完成结构化校验。','completed')
         remaining=108-(time.monotonic()-started)
@@ -197,6 +211,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         value['activity']=pending['activity']
         value.update(id=job, status='completed', input_sha256=identity)
         value['budget'] = {'model_reserved_attempts': attempt, 'model_max_attempts': getattr(budget,'max_attempts',10)}
+        if cancelled():
+            return jsonify(store.get(owner, job))
         store.save(owner, value)
         return jsonify(value)
 
@@ -288,9 +304,28 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     @app.post('/assessments/<job>/cancel')
     def cancel(job):
         owner = authorize()
-        value = store.get(owner, job)
-        execution = value.get('execution')
+        try:
+            value = store.get(owner, job)
+        except ReviewError as exc:
+            if exc.code != 'not_found':
+                raise
+            # The request may not be claimed yet (still parsing); nothing to stop server-side.
+            return jsonify({'id': job, 'status': 'cancelled', 'review': None, 'execution': None,
+                            'format': 'articheck-online-assessment-v2', 'source': 'model_api_review',
+                            'execution_performed': False, 'scientific_validation': False,
+                            'notice': '审查已按请求中止。', 'activity': []})
         previous = copy.deepcopy(value)
+        if value.get('status') == 'reviewing':
+            for event in value.get('activity') or []:
+                if event.get('status') == 'running':
+                    event['status'] = 'failed'
+            value['activity'] = (value.get('activity') or []) + [{'title': '审查已手动中止', 'roles': ['reporter'],
+                                 'detail': '用户主动中止；已取得的活动记录保留，可重新审查。', 'status': 'failed', 'time': time.time()}]
+            value.update(status='cancelled', error='user_cancelled', notice='用户已主动中止本次审查。')
+            if not store.replace(owner, previous, value):
+                return jsonify(store.get(owner, job))
+            return jsonify(value)
+        execution = value.get('execution')
         if execution and execution['status'] in {'queued', 'running', 'cancelling'}:
             value['execution'] = {**execution, 'status': 'cancelling'}
             if not store.replace(owner, previous, value):

@@ -28,7 +28,10 @@ class RedisMemory(MemoryStore):
                 if count==1:self.expiry[keys[0]]=time.time()+int(values[0])
                 return count
             if 'u.name=ARGV[1]' in script:
-                user=json.loads(self.redis[keys[0]]);user['name']=values[0];self.redis[keys[0]]=json.dumps(user);return self.redis[keys[0]]
+                user=json.loads(self.redis[keys[0]]);user['name']=values[0]
+                if len(values)>2 and values[1]=='set':user['avatar']=values[2]
+                if len(values)>2 and values[1]=='clear':user.pop('avatar',None)
+                self.redis[keys[0]]=json.dumps(user);return self.redis[keys[0]]
             if 'u.epoch~=ARGV[1]' in script:
                 user=json.loads(self.redis[keys[0]])
                 if user['epoch']!=values[0]:return 0
@@ -65,6 +68,16 @@ class HostedAccountsTests(unittest.TestCase):
         self.assertEqual(self.post('profile',{'name':'新名称'}).json['user']['name'],'新名称')
         self.post('logout');self.assertIsNone(self.client.get('/auth/me',headers=self.headers).json['user'])
         self.assertEqual(self.post('login',self.data).status_code,200)
+    def test_avatar_accepts_presets_and_small_inline_images_only(self):
+        self.invite()
+        self.assertEqual(self.post('profile',{'name':'甲','avatar':'preset:atom'}).json['user']['avatar'],'preset:atom')
+        # Name-only updates keep the avatar; an empty string clears it.
+        self.assertEqual(self.post('profile',{'name':'乙'}).json['user']['avatar'],'preset:atom')
+        img='data:image/png;base64,'+'A'*400
+        self.assertEqual(self.post('profile',{'name':'乙','avatar':img}).json['user']['avatar'],img)
+        for bad in ['https://evil.example/a.png','data:image/svg+xml;base64,PHN2Zz4=','data:image/png;base64,'+'A'*230000]:
+            self.assertEqual(self.post('profile',{'name':'乙','avatar':bad}).status_code,400)
+        self.assertNotIn('avatar',self.post('profile',{'name':'乙','avatar':''}).json['user'])
     def test_public_signup_is_closed_and_access_code_does_not_replace_login(self):
         self.assertEqual(self.post('register',self.data).status_code,403);self.assertEqual(self.store.redis,{})
         for path in ['/capabilities','/assessments/'+'a'*32]:self.assertEqual(self.client.get(path,headers=HEADERS).status_code,401)

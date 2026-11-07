@@ -20,7 +20,7 @@ export function validateInput(p,{token='',consent=false}={}){
 }
 export function checkAssessment(value){
  if(!value||value.format!=='articheck-online-assessment-v2'||!/^[a-f0-9]{32}$/.test(value.id)||value.source!=='model_api_review'||value.scientific_validation!==false)throw Error('审查报告结构或来源无效。');
- if(!value.review&&['reviewing','failed'].includes(value.status))return value;
+ if(!value.review&&['reviewing','failed','cancelled'].includes(value.status))return value;
  if(!value.review||!Array.isArray(value.review.criteria)||value.review.criteria.length!==8||!Array.isArray(value.review.findings)||!Array.isArray(value.review.metrics)||!Array.isArray(value.review.plan?.stages))throw Error('审查报告内容不完整。');
  return value;
 }

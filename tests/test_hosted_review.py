@@ -426,6 +426,36 @@ class HostedReviewTests(unittest.TestCase):
         executor.poll=delayed_poll
         self.assertEqual(client.get(path,headers=HEADERS).json['execution']['status'],'cancelled')
 
+    def test_reviewing_assessment_can_be_cancelled_and_a_late_result_never_overwrites_it(self):
+        app=Flask(__name__);store=MemoryStore();executor=Executor();budget=Budget()
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), budget, store=store, executor=executor)
+        client=app.test_client();job='e'*32
+        # Unclaimed request: cancel succeeds without touching the store.
+        early=client.post('/assessments/'+job+'/cancel',json={},headers=HEADERS)
+        self.assertEqual(early.status_code,200);self.assertEqual(early.json['status'],'cancelled')
+        real_assess=__import__('articheck.hosted_api',fromlist=['assess']).assess
+        def cancel_mid_review(*args,**kwargs):
+            stopped=client.post('/assessments/'+job+'/cancel',json={},headers=HEADERS).json
+            self.assertEqual(stopped['status'],'cancelled')
+            self.assertEqual(stopped['activity'][-1]['title'],'审查已手动中止')
+            return real_assess(*args,**kwargs)
+        with patch('articheck.hosted_api.assess',side_effect=cancel_mid_review):
+            late=client.post('/assessments',json={**materials(),'request_id':job},headers=HEADERS)
+        self.assertEqual(late.json['status'],'cancelled')
+        self.assertEqual(client.get('/assessments/'+job,headers=HEADERS).json['status'],'cancelled')
+        self.assertEqual(executor.launches,0)
+
+    def test_unverifiable_citations_and_paper_only_stages_degrade_instead_of_failing(self):
+        context,_=prepare_assessment({'paper':materials()['paper']})
+        answer=output(context)
+        answer['criteria'][1]['page']=999
+        answer['criteria'][0]['file']='train.py'
+        answer['plan']['stages']=[{'title':'训练','command':'python train.py','file':'train.py'}]
+        review=validate_assessment(answer,context)
+        self.assertIsNone(review['criteria'][0]['file'])
+        self.assertEqual(review['plan']['stages'],[])
+        self.assertTrue(any('论文页面' in g for g in review['coverage']['gaps']))
+
     def test_owned_gpu_executor_hybrid_routing_and_worker_lifecycle(self):
         class FakeRedisStore(MemoryStore):
             def __init__(self):

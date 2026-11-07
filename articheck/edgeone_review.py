@@ -112,7 +112,23 @@ def create_app(env=None, *, reviewer=None, budget=None, prepare=None):
 
     @app.errorhandler(ReviewError)
     def known_error(exc):
-        return jsonify(error={'code': exc.code, 'message': str(exc)}), exc.status
+        status = exc.status
+        # EdgeOne replaces function 5xx bodies with its own HTML page, which hides the
+        # actual reason from the workbench. Keep v1 /reviews semantics; v2 routes return
+        # 424 with the original status in a header so the JSON reason reaches the user.
+        if status >= 500 and not request.path.startswith('/reviews'):
+            response = jsonify(error={'code': exc.code, 'message': str(exc), 'upstream_status': status})
+            response.headers['X-ArtiCheck-Upstream-Status'] = str(status)
+            return response, 424
+        return jsonify(error={'code': exc.code, 'message': str(exc)}), status
+
+    @app.errorhandler(Exception)
+    def unexpected_error(exc):
+        from werkzeug.exceptions import HTTPException
+        if isinstance(exc, HTTPException):
+            return jsonify(error={'code': 'http_error', 'message': exc.description or exc.name}), exc.code
+        app.logger.exception('Unhandled workbench error')
+        return jsonify(error={'code': 'internal_error', 'message': '服务处理未完成，请重试；已有材料与记录保留。', 'upstream_status': 500}), 424
 
     @app.errorhandler(413)
     def oversized(_):

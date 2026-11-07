@@ -585,6 +585,364 @@ select:not([multiple]):disabled{background-color:var(--raised);color:var(--muted
 .help-workspace li p{margin-top:6px}
 .help-sample{background:#ffffff;border:1px solid var(--line);padding:24px;border-radius:10px}
 .help-sample .btn,.help-workspace section>.btn{margin-top:20px}
+
+/* ==========================================================================
+   12. Fourth-Batch Feedback Redesign (2026-11-07)
+   ========================================================================== */
+
+/* Item 1: Flush top/side layout separated by a single 1px line; active/hover position shown via border color */
+.content{
+  padding:0!important;
+}
+.topbar{
+  border-bottom:1px solid var(--line)!important;
+}
+.page{
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  min-height:calc(100vh - 48px)!important;
+  margin:0!important;
+}
+@media(max-width:1100px){
+  .content{padding:0!important}
+}
+@media(max-width:700px){
+  .page{border:0!important;border-radius:0!important}
+}
+
+.redesigned-sidebar .nav-item,
+.nav-role{
+  border:1px solid transparent;
+  border-left:3px solid transparent;
+  transition:border-color .16s ease,background-color .16s ease,color .16s ease;
+}
+.redesigned-sidebar .nav-item:hover,
+.nav-role:hover{
+  border-color:#dbeafe;
+  border-left-color:#60a5fa;
+  background:#f8fafc;
+}
+.redesigned-sidebar .nav-item.active,
+.nav-role.selected{
+  background:#eff6ff;
+  color:#1e40af;
+  border-color:#93c5fd;
+  border-left:3px solid #2563eb;
+  font-weight:600;
+}
+
+.online-form,
+.online-rail,
+.review-activity,
+.online-summary,
+.online-criterion,
+.online-findings article,
+.online-stage,
+.account-card,
+.account-overview,
+.account-counts>div,
+.report-paper-card,
+.online-coverage,
+.card{
+  transition:border-color .18s ease,box-shadow .18s ease;
+}
+.online-form:hover,.online-form:focus-within,
+.online-rail:hover,.online-rail:focus-within,
+.review-activity:hover,.review-activity:focus-within,
+.online-summary:hover,.online-summary:focus-within,
+.online-criterion:hover,.online-criterion:focus-within,
+.online-findings article:hover,.online-findings article:focus-within,
+.online-stage:hover,.online-stage:focus-within,
+.account-card:hover,.account-card:focus-within,
+.account-overview:hover,.account-overview:focus-within,
+.account-counts>div:hover,
+.report-paper-card:hover,
+.online-coverage:hover,
+.card:hover,.card:focus-within{
+  border-color:#3b82f6!important;
+  box-shadow:0 0 0 1px rgba(59,130,246,.16),0 4px 14px rgba(37,99,235,.06);
+}
+
+/* Item 2: Account avatar picker & custom avatar display */
+.account-avatar{
+  position:relative;
+  overflow:hidden;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:none;
+}
+.account-avatar.preset{
+  color:#ffffff!important;
+}
+.account-avatar.preset svg{
+  width:16px;
+  height:16px;
+  stroke:#ffffff;
+  stroke-width:1.9;
+}
+.account-avatar.large.preset svg{
+  width:28px;
+  height:28px;
+}
+.account-avatar.has-img{
+  padding:0!important;
+  background:#f1f5f9;
+}
+.account-avatar.has-img img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.account-avatar-box{
+  position:relative;
+  display:inline-flex;
+}
+.account-avatar-trigger{
+  position:relative;
+  padding:0;
+  border:2px solid transparent;
+  border-radius:999px;
+  background:transparent;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  transition:border-color .16s ease,transform .16s ease;
+}
+.account-avatar-trigger:hover{
+  border-color:#2563eb;
+  transform:translateY(-1px);
+}
+.account-avatar-edit{
+  position:absolute;
+  inset:0;
+  border-radius:999px;
+  background:rgba(15,23,42,.62);
+  color:#ffffff;
+  font-size:11px;
+  font-weight:600;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  opacity:0;
+  transition:opacity .16s ease;
+}
+.account-avatar-trigger:hover .account-avatar-edit,
+.account-avatar-trigger:focus-visible .account-avatar-edit{
+  opacity:1;
+}
+.account-change-avatar-btn{
+  margin-top:8px;
+  font-size:12px;
+  padding:4px 10px;
+}
+.avatar-picker-modal{
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+}
+.avatar-picker-current{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:14px 16px;
+  background:#f8fafc;
+  border:1px solid var(--line);
+  border-radius:10px;
+}
+.avatar-picker-current p{
+  font-size:13px;
+  color:var(--muted);
+  margin-top:4px;
+}
+.avatar-preset-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.avatar-preset-option{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  background:#ffffff;
+  border:1px solid var(--line);
+  border-radius:10px;
+  font-size:13px;
+  font-weight:500;
+  color:var(--ink);
+  transition:border-color .15s ease,background-color .15s ease;
+}
+.avatar-preset-option:hover{
+  border-color:#60a5fa;
+  background:#f8fafc;
+}
+.avatar-preset-option.selected{
+  border-color:#2563eb;
+  background:#eff6ff;
+  color:#1e40af;
+  font-weight:600;
+}
+.avatar-picker-actions{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.avatar-picker-actions label.btn{
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+}
+
+/* Item 4: Local computer execution button next to automatic review submit */
+.online-submit{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.online-local-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  background:#f8fafc;
+  color:#1e293b;
+  border:1px solid #cbd5e1;
+  font-weight:600;
+  transition:border-color .16s ease,background-color .16s ease,color .16s ease;
+}
+.online-local-btn svg{
+  width:16px;
+  height:16px;
+  stroke:#2563eb;
+}
+.online-local-btn:hover:not(:disabled){
+  background:#eff6ff;
+  border-color:#3b82f6;
+  color:#1d4ed8;
+}
+
+/* Item 6: Animated "正在协作审查" live heading */
+.live-heading{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.live-heading-text{
+  background:linear-gradient(90deg,#0f172a 0%,#1d4ed8 42%,#0ea5e9 58%,#0f172a 100%);
+  background-size:220% 100%;
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+  animation:headingShimmer 2.8s linear infinite;
+}
+.live-dots{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  margin-left:2px;
+}
+.live-dots i{
+  width:5px;
+  height:5px;
+  border-radius:999px;
+  background:#2563eb;
+  display:inline-block;
+  animation:liveDotBounce 1.3s ease-in-out infinite;
+}
+.live-dots i:nth-child(2){animation-delay:.2s}
+.live-dots i:nth-child(3){animation-delay:.4s}
+@keyframes headingShimmer{
+  0%{background-position:100% 50%}
+  100%{background-position:-120% 50%}
+}
+@keyframes liveDotBounce{
+  0%,80%,100%{transform:translateY(0);opacity:.35}
+  40%{transform:translateY(-4px);opacity:1}
+}
+
+/* Item 7: Review ended (failed / cancelled) card */
+.review-ended{
+  display:flex;
+  align-items:flex-start;
+  gap:16px;
+  padding:22px 24px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:#ffffff;
+  margin-top:16px;
+}
+.review-ended.cancelled{
+  border-left:4px solid #f59e0b;
+  background:#fffbeb;
+}
+.review-ended.failed{
+  border-left:4px solid #e11d48;
+  background:#fff1f2;
+}
+.review-ended-icon{
+  width:36px;
+  height:36px;
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex:none;
+  background:rgba(15,23,42,.06);
+}
+.review-ended.cancelled .review-ended-icon{color:#b45309;background:#fef3c7}
+.review-ended.failed .review-ended-icon{color:#be123c;background:#ffe4e6}
+.review-ended h2{font-size:17px;font-weight:600;color:var(--ink)}
+.review-ended p{margin-top:6px;font-size:14px;color:var(--muted);line-height:1.7}
+.review-ended-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:14px;
+}
+
+/* Item 9: Terminal button in online review toolbar */
+.online-terminal-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  background:#0f172a;
+  color:#f8fafc;
+  border:1px solid #1e293b;
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:13px;
+  font-weight:600;
+  padding:7px 13px;
+  border-radius:8px;
+  transition:background-color .15s ease,border-color .15s ease,transform .15s ease;
+}
+.online-terminal-btn svg{
+  width:16px;
+  height:16px;
+  stroke:#38bdf8;
+}
+.online-terminal-btn:hover:not(:disabled){
+  background:#1e293b;
+  border-color:#38bdf8;
+}
+.online-terminal-btn.live{
+  border-color:#10b981;
+  box-shadow:0 0 0 2px rgba(16,185,129,.18);
+}
+.terminal-live-dot{
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background:#10b981;
+  display:inline-block;
+  animation:liveDotBounce 1.2s ease-in-out infinite;
+}
+
 @media(prefers-reduced-motion:reduce){
-  .review-timeline-axis .timeline-track-fill,.timeline-node.running .timeline-dot,.section-highlight-pulse{animation:none}
+  .review-timeline-axis .timeline-track-fill,.timeline-node.running .timeline-dot,.section-highlight-pulse,.live-heading-text,.live-dots i,.terminal-live-dot{animation:none}
+  .live-heading-text{-webkit-text-fill-color:currentColor}
 }

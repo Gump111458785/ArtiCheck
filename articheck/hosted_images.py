@@ -16,7 +16,7 @@ def render_paper(pdf, pages):
     # documents, prioritize chart/table pages and state any omitted images.
     ordered=[1]+[p['page'] for p in pages if re.search(r'(table|figure|fig\.|表|图)\s*\d',p['text'],re.I)]
     ordered+= [p['page'] for p in pages]
-    selected=list(dict.fromkeys(ordered))[:24]
+    selected=list(dict.fromkeys(ordered))[:4]
     with tempfile.TemporaryDirectory(prefix='articheck-vision-') as folder:
         folder=Path(folder);source=folder/'paper.pdf';source.write_bytes(pdf)
         env={'PATH':os.defpath,'LANG':'C.UTF-8','PYTHONDONTWRITEBYTECODE':'1'}

@@ -78,7 +78,20 @@ class Accounts:
 
     @staticmethod
     def public(user):
-        return {**{key:user[key] for key in ('id','username','name','created_at')},'role':user.get('role','user')}
+        value = {**{key:user[key] for key in ('id','username','name','created_at')},'role':user.get('role','user')}
+        if user.get('avatar'):value['avatar']=user['avatar']
+        return value
+
+    @staticmethod
+    def avatar(value):
+        """Accept a preset id or a small inline raster image; never a remote URL."""
+        if value is None:return None
+        if value=='':return ''
+        if isinstance(value,str) and re.fullmatch(r'preset:[a-z0-9_-]{1,24}',value):return value
+        if (isinstance(value,str) and len(value)<=220_000 and
+                re.fullmatch(r'data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}',value)):
+            return value
+        raise ReviewError('invalid_avatar','头像需为 PNG / JPEG / WebP 图片，压缩后不超过 160 KB。',400)
 
     def session_response(self, user):
         from flask import jsonify
@@ -213,10 +226,13 @@ class Accounts:
 
         @app.post('/auth/profile')
         def account_profile():
-            user=self.require();name=self.name(self.fields().get('name'))
-            # Updating a name must never restore a password from a concurrent stale read.
-            script="local raw=redis.call('GET',KEYS[1]); if not raw then return false end; local u=cjson.decode(raw); u.name=ARGV[1]; local updated=cjson.encode(u); redis.call('SET',KEYS[1],updated); return updated"
-            updated=self.store.command('EVAL',script,'1',self.key('user',user['id']),name)
+            user=self.require();fields=self.fields()
+            name=self.name(fields.get('name',user['name']))
+            avatar=self.avatar(fields.get('avatar'))
+            mode='keep' if avatar is None else 'clear' if avatar=='' else 'set'
+            # Updating a profile must never restore a password from a concurrent stale read.
+            script="local raw=redis.call('GET',KEYS[1]); if not raw then return false end; local u=cjson.decode(raw); u.name=ARGV[1]; if ARGV[2]=='set' then u.avatar=ARGV[3] elseif ARGV[2]=='clear' then u.avatar=nil end; local updated=cjson.encode(u); redis.call('SET',KEYS[1],updated); return updated"
+            updated=self.store.command('EVAL',script,'1',self.key('user',user['id']),name,mode,avatar or '')
             if not updated:raise ReviewError('login_required','账户已变更，请重新登录。',401)
             return jsonify(user=self.public(json.loads(updated)))
 
