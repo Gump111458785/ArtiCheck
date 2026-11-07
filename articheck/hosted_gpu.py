@@ -69,7 +69,7 @@ class OwnedGPUExecutor:
         if time.time()>record['deadline'] and state not in {'completed','failed','cancelled'}:
             self.store.command('SET',self.key(record['id'])+':cancel','1','EX','900')
             state='expired'
-        if state!='queued':self.cleanup(record)
+        if state in {'completed','failed','expired'}:self.cleanup(record)
         # Whitelist process-generated fields; source URLs remain in the private queue.
         fields=('stages','metrics','events','runtime','elapsed_seconds','execution_performed','needs_user','question','acceptance','failure_category')
         return {**execution,**{key:result[key] for key in fields if key in result},'status':state,
@@ -78,8 +78,20 @@ class OwnedGPUExecutor:
         record=self.record(execution)
         if record['status'] not in {'completed','failed','cancelled'}:
             self.store.command('SET',self.key(record['id'])+':cancel','1','EX','900')
-            return False  # Only the worker can acknowledge process termination.
-        self.cleanup(record);return True
+            try:
+                self.store.command('LREM',self.prefix+'queue','0',record['id'])
+            except Exception:
+                pass
+            record['status']='cancelled'
+            record['source_url']=None
+            record['notice']='用户停止执行，保留已产生的证据。'
+            if isinstance(record.get('result'),dict):
+                record['result']['status']='cancelled'
+                for stage in record['result'].get('stages',[]):
+                    if stage.get('status')=='running':
+                        stage.update(status='skipped',reason='任务已按请求停止。')
+            self.store.command('SET',self.key(record['id']),json.dumps(record,ensure_ascii=False),'EX','604800')
+        return True
     def cleanup(self,record):
         if record.get('staging_id'):
             from e2b import Sandbox

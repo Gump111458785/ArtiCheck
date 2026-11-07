@@ -4,6 +4,7 @@ Polls the private Redis queue using only scoped storage credentials, downloads
 short-lived source archives over HTTPS, verifies SHA256, and runs each stage
 inside an isolated user/network/PID/mount namespace with read-only CUDA runtime.
 """
+import ast
 import hashlib
 import io
 import json
@@ -28,6 +29,144 @@ import zipfile
 MAX_CODE_BYTES = 100 * 1024**2
 RUNTIME_DIR = '/opt/articheck-runtime'
 ALLOWED_ARCHIVE_SUFFIXES = ('.e2b.app', '.e2b.dev')
+
+IMPORT_TO_PYPI = {
+    'cv2': 'opencv-python-headless',
+    'sklearn': 'scikit-learn',
+    'skimage': 'scikit-image',
+    'PIL': 'Pillow',
+    'yaml': 'PyYAML',
+    'bs4': 'beautifulsoup4',
+    'attr': 'attrs',
+    'dotenv': 'python-dotenv',
+    'fitz': 'PyMuPDF',
+    'dateutil': 'python-dateutil',
+    'serial': 'pyserial',
+    'Crypto': 'pycryptodome',
+    'crypto': 'pycryptodome',
+    'jwt': 'PyJWT',
+    'git': 'GitPython',
+    'Bio': 'biopython',
+    'OpenGL': 'PyOpenGL',
+    'hydra': 'hydra-core',
+    'rouge_score': 'rouge-score',
+    'pytorch_lightning': 'pytorch-lightning',
+    'pynvml': 'nvidia-ml-py',
+    'charset_normalizer': 'charset-normalizer',
+}
+
+STDLIB_MODULES = set(getattr(sys, 'stdlib_module_names', ())) | {
+    '__builtin__', '__future__', 'abc', 'argparse', 'array', 'ast', 'asyncio', 'atexit',
+    'base64', 'bdb', 'binascii', 'bisect', 'builtins', 'bz2', 'calendar', 'cgi', 'cgitb',
+    'chunk', 'cmath', 'cmd', 'code', 'codecs', 'codeop', 'collections', 'colorsys',
+    'compileall', 'concurrent', 'configparser', 'ConfigParser', 'contextlib', 'contextvars',
+    'copy', 'copyreg', 'cProfile', 'crypt', 'csv', 'ctypes', 'curses', 'dataclasses',
+    'datetime', 'dbm', 'decimal', 'difflib', 'dis', 'distutils', 'doctest', 'email',
+    'encodings', 'ensurepip', 'enum', 'errno', 'faulthandler', 'fcntl', 'filecmp',
+    'fileinput', 'fnmatch', 'formatter', 'fractions', 'ftplib', 'functools', 'gc',
+    'getopt', 'getpass', 'gettext', 'glob', 'grp', 'gzip', 'hashlib', 'heapq', 'hmac',
+    'html', 'http', 'imaplib', 'imghdr', 'imp', 'importlib', 'inspect', 'io', 'ipaddress',
+    'itertools', 'json', 'keyword', 'lib2to3', 'linecache', 'locale', 'logging', 'lzma',
+    'mailbox', 'mailcap', 'marshal', 'math', 'mimetypes', 'mmap', 'modulefinder',
+    'multiprocessing', 'netrc', 'nis', 'nntplib', 'numbers', 'operator', 'optparse', 'os',
+    'ossaudiodev', 'parser', 'pathlib', 'pdb', 'pickle', 'pickletools', 'pipes', 'pkgutil',
+    'platform', 'plistlib', 'poplib', 'posix', 'posixpath', 'pprint', 'profile', 'pstats',
+    'pty', 'pwd', 'py_compile', 'pyclbr', 'pydoc', 'queue', 'Queue', 'quopri', 'random',
+    're', 'readline', 'reprlib', 'resource', 'rlcompleter', 'runpy', 'sched', 'secrets',
+    'select', 'selectors', 'shelve', 'shlex', 'shutil', 'signal', 'site', 'smtpd',
+    'smtplib', 'sndhdr', 'socket', 'socketserver', 'SocketServer', 'spwd', 'sqlite3',
+    'ssl', 'stat', 'statistics', 'string', 'stringprep', 'struct', 'subprocess', 'sunau',
+    'symbol', 'symtable', 'sys', 'sysconfig', 'syslog', 'tabnanny', 'tarfile', 'telnetlib',
+    'tempfile', 'termios', 'test', 'textwrap', 'threading', 'time', 'timeit', 'tkinter',
+    'token', 'tokenize', 'trace', 'traceback', 'tracemalloc', 'tty', 'turtle', 'types',
+    'typing', 'unicodedata', 'unittest', 'urllib', 'urllib2', 'urlparse', 'uu', 'uuid',
+    'venv', 'warnings', 'wave', 'weakref', 'webbrowser', 'winreg', 'winsound', 'wsgiref',
+    'xdrlib', 'xml', 'xmlrpc', 'zipapp', 'zipfile', 'zipimport', 'zlib',
+    'cPickle', 'StringIO', 'cStringIO', 'httplib', 'future_builtins', 'commands', 'sets',
+    'md5', 'sha', 'thread', 'dummy_thread', 'repr', 'UserDict', 'UserList', 'UserString',
+    'whichdb', 'anydbm', 'dbhash', 'bsddb', 'gdbm', 'dumbdbm', 'pkg_resources',
+    'typing_extensions', 'pip', 'setuptools', 'wheel',
+}
+
+PREINSTALLED_RUNTIME_MODULES = {
+    'torch', 'torchvision', 'torchaudio', 'numpy', 'scipy', 'PIL', 'requests',
+    'urllib3', 'certifi', 'idna', 'charset_normalizer', 'packaging', 'filelock',
+    'jinja2', 'markupsafe', 'networkx', 'sympy', 'mpmath', 'fsspec',
+}
+
+SKIP_DIRS = {'.git', '.hg', '.svn', '__pycache__', '.pydeps', '.cache', 'venv', '.venv', 'env', 'node_modules', 'build', 'dist'}
+SAFE_PKG_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$')
+
+
+def infer_project_dependencies(work_dir):
+    """Analyze Python source imports and dependency files without blindly trusting strict pins."""
+    root = Path(work_dir)
+    if not root.exists():
+        return {}
+    local_modules = set()
+    py_files = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith('.')]
+        rel_dir = Path(dirpath).relative_to(root)
+        if rel_dir.parts:
+            local_modules.add(rel_dir.parts[0].split('.')[0])
+        for d in dirnames:
+            local_modules.add(d.split('.')[0])
+        for fname in filenames:
+            if fname.endswith('.py'):
+                stem = fname[:-3]
+                if stem != '__init__':
+                    local_modules.add(stem)
+                py_files.append(Path(dirpath) / fname)
+
+    imported = set()
+    for py_path in py_files[:600]:
+        try:
+            if py_path.stat().st_size > 512 * 1024:
+                continue
+            source = py_path.read_text(errors='replace')
+        except OSError:
+            continue
+        try:
+            tree = ast.parse(source)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        top = (alias.name or '').split('.')[0].strip()
+                        if top:
+                            imported.add(top)
+                elif isinstance(node, ast.ImportFrom) and (node.level or 0) == 0 and node.module:
+                    top = node.module.split('.')[0].strip()
+                    if top:
+                        imported.add(top)
+        except SyntaxError:
+            for match in re.finditer(r'^\s*(?:import|from)\s+([A-Za-z_][A-Za-z0-9_]*)', source, re.M):
+                imported.add(match.group(1))
+
+    resolved = {}
+    for mod in sorted(imported):
+        if mod in STDLIB_MODULES or mod in local_modules or mod.startswith('_'):
+            continue
+        pkg = IMPORT_TO_PYPI.get(mod, mod)
+        if SAFE_PKG_RE.match(pkg):
+            resolved[mod] = pkg
+    return resolved
+
+
+def parse_missing_modules_from_log(log_text):
+    """Extract missing module names from ModuleNotFoundError / ImportError tracebacks."""
+    missing = {}
+    for pattern in (
+        r"ModuleNotFoundError:\s+No module named ['\"]([A-Za-z0-9_.-]+)['\"]",
+        r"ImportError:\s+No module named ['\"]?([A-Za-z0-9_.-]+)['\"]?",
+    ):
+        for match in re.finditer(pattern, log_text or ''):
+            raw_mod = match.group(1).split('.')[0].strip()
+            if raw_mod and raw_mod not in STDLIB_MODULES and not raw_mod.startswith('_'):
+                pkg = IMPORT_TO_PYPI.get(raw_mod, raw_mod)
+                if SAFE_PKG_RE.match(pkg):
+                    missing[raw_mod] = pkg
+    return missing
 
 
 class WorkerStore:
@@ -225,6 +364,12 @@ class GPUWorker:
         return self.prefix + 'job:' + job_id
 
     def save_record(self, record):
+        if record.get('status') == 'running' and self.is_cancelled(record['id']):
+            record['status'] = 'cancelled'
+            record['source_url'] = None
+            record['notice'] = '用户停止执行，保留已产生的证据。'
+            if isinstance(record.get('result'), dict):
+                record['result']['status'] = 'cancelled'
         self.store.command('SET', self.job_key(record['id']), json.dumps(record, ensure_ascii=False), 'EX', '604800')
 
     def is_cancelled(self, job_id):
@@ -334,13 +479,34 @@ class GPUWorker:
                         os.chown(os.path.join(parent, f), account.pw_uid, account.pw_gid)
 
             disk = shutil.disk_usage(work_dir)
+            inferred_deps = infer_project_dependencies(work_dir)
+            auto_candidates = sorted({pkg for mod, pkg in inferred_deps.items() if mod not in PREINSTALLED_RUNTIME_MODULES})
+            provisioned_pkgs = []
+            if auto_candidates and not self.is_cancelled(job_id):
+                prep_log = results_dir / '_auto_deps.log'
+                probe_json = json.dumps({m: p for m, p in inferred_deps.items() if m not in PREINSTALLED_RUNTIME_MODULES})
+                prep_cmd = (
+                    f"python -c 'import importlib.util, json, subprocess, sys; "
+                    f"mapping = json.loads({ json.dumps(probe_json) }); "
+                    f"missing = sorted({{pkg for mod, pkg in mapping.items() if importlib.util.find_spec(mod) is None}}); "
+                    f"print(\"[ArtiCheck Auto-Env] Inferred imports:\", list(mapping.keys()), \"-> Missing packages:\", missing); "
+                    f"sys.exit(subprocess.call([sys.executable, \"-m\", \"pip\", \"install\", \"--user\", \"--no-input\", \"--prefer-binary\", *missing]) if missing else 0)'"
+                )
+                try:
+                    p_code, _, _ = self.run_stage_command(work_dir, prep_log, prep_cmd, min(deadline, time.monotonic() + 180), job_id)
+                    if p_code == 0:
+                        provisioned_pkgs = auto_candidates
+                except Exception:
+                    pass
             report['runtime'] = {'python': platform.python_version(), 'system': platform.system(),
                                  'release': platform.release(), 'architecture': platform.machine(),
                                  'gpu_name': self.capacity.get('gpu_name'),
-                                 'disk_total_bytes': disk.total, 'disk_free_before_bytes': disk.free}
+                                 'disk_total_bytes': disk.total, 'disk_free_before_bytes': disk.free,
+                                 'inferred_dependencies': sorted(set(inferred_deps.values())),
+                                 'auto_provisioned_packages': provisioned_pkgs}
             event('planner', 'plan_scheduled', policy='frozen_api_plan', stages=len(plan['stages']), hardware='GPU')
             record.update(status='running', source_url=None,
-                          notice='自有 GPU 执行器已接单，正在隔离环境中运行阶段计划。',
+                          notice='自有 GPU 执行器已接单，已在隔离环境中完成源码依赖分析与自动配库。',
                           result=report)
             self.save_record(record)
 
@@ -374,6 +540,30 @@ class GPUWorker:
                 with log_path.open('rb') as stream:
                     raw_log = stream.read(24000)
                 log_text = raw_log.decode(errors='replace')
+                if code != 0 and not timed_out and not stage_cancelled and not self.is_cancelled(job_id) and time.monotonic() < deadline:
+                    missing_mods = parse_missing_modules_from_log(log_text)
+                    req_conflict = bool(re.search(r'pip install.*-r\s+\S*requirements', stage['command'])) and bool(
+                        re.search(r'(ResolutionImpossible|No matching distribution| Conflict|Cannot install|subprocess-exited-with-error)', log_text, re.I))
+                    heal_pkgs = sorted(set(missing_mods.values()))
+                    if not heal_pkgs and req_conflict and inferred_deps:
+                        heal_pkgs = sorted(set(inferred_deps.values()))
+                    if heal_pkgs:
+                        heal_log = results_dir / (stage['id'] + '_autoheal.log')
+                        pkg_args = ' '.join(heal_pkgs)
+                        retry_cmd = stage['command']
+                        if req_conflict and not missing_mods:
+                            retry_cmd = f"python -m pip install --user --no-input --prefer-binary {pkg_args}"
+                        else:
+                            retry_cmd = f"python -m pip install --user --no-input --prefer-binary {pkg_args} && ({stage['command']})"
+                        code2, timed_out2, stage_cancelled2 = self.run_stage_command(
+                            work_dir, heal_log, retry_cmd, deadline, job_id)
+                        with heal_log.open('rb') as stream2:
+                            raw_log2 = stream2.read(24000)
+                        heal_text = raw_log2.decode(errors='replace')
+                        log_text = (log_text.rstrip() + f"\n\n[ArtiCheck 自动补齐依赖: {', '.join(heal_pkgs)}]\n" + heal_text)[-24000:]
+                        code, timed_out, stage_cancelled = code2, timed_out2, stage_cancelled2
+                        provisioned_pkgs = sorted(set(provisioned_pkgs) | set(heal_pkgs))
+                        report['runtime']['auto_provisioned_packages'] = provisioned_pkgs
                 all_logs.append(log_text)
                 stage_logs[stage['id']] = log_text
                 if stage_cancelled:

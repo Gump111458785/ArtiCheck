@@ -1,0 +1,42 @@
+{
+  "verified_at": "2026-11-07T14:06:46.492Z",
+  "production_url": "https://articheck-workbench.edgeone.dev",
+  "total_checks": 24,
+  "checks": [
+    "Login via /v1/auth/login succeeded",
+    "Item 1: Topbar breadcrumb text (\"研究工作空间 > ArtiCheck · 开始\") is completely removed",
+    "Item 1: Topbar bottom horizontal border line is removed (0px)",
+    "Item 2: Abrupt standalone \"更换头像\" button below name is removed",
+    "Item 2: Avatar circle trigger itself remains interactive",
+    "Item 2: Direct custom name edit button is present in .account-overview",
+    "Item 2: Inline custom name editing saves and updates display name",
+    "Item 2: Project rename button updates current project name",
+    "Item 4: Redundant .review-mode-strip cards removed from materials form",
+    "Item 3: Pasting GitHub subpath URL never triggers \"本次操作未完成 请填写 GitHub 仓库首页地址。\" error",
+    "Item 3: GitHub subpath URL automatically normalizes to repository home URL",
+    "Item 7: .online-repo-state displays project/repo name after \"源码已读取\"",
+    "Item 7: Right-hand status rail displays project/repo name after \"源码已读取\"",
+    "Item 4: Clicking \"开始自动审查\" opens task selection modal without redundant inline mode cards",
+    "Item 6: Exactly 1 visible cancel button during active review (found 1)",
+    "Item 5: Multi-card <details class=\"online-stage\"> replaced by single unified .online-terminal-box",
+    "Item 5: Multi-card <details class=\"online-stage\"> replaced by single unified .online-terminal-box",
+    "Item 5: Multi-card <details class=\"online-stage\"> replaced by single unified .online-terminal-box",
+    "Item 5: Multi-card <details class=\"online-stage\"> replaced by single unified .online-terminal-box",
+    "Item 6: Clicking stop immediately cancels execution and stays \"已停止\" across polls (got \"已停止\")",
+    "Item 6: Cancel button disappears cleanly once execution is stopped",
+    "Item 5: Unified dynamic terminal box (.online-terminal-box) rendered on production",
+    "Item 8: GPU worker analyzed source imports and inferred dependencies (numpy, pandas, theano)",
+    "Item 8: GPU worker cleaned up temporary environment and libraries after execution (workspace_cleaned=true)"
+  ],
+  "exec_evidence": {
+    "status": "failed",
+    "provider": "owned_gpu",
+    "inferredDeps": [
+      "numpy",
+      "pandas",
+      "theano"
+    ],
+    "workspaceCleaned": true,
+    "footnoteHasCleaned": true
+  }
+}

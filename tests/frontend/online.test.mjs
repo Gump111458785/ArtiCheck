@@ -166,4 +166,22 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  wsRender.i.projects[0].online_report=paperOnlyReport;
  const completedView=wsRender.render();
  assert.match(completedView,/data-online-tab="report"/);
+
+ // Fifth-batch UI requirements:
+ const {normalizeGitHubUrl}=await import('../../web/dist/online-workspace.mjs');
+ const {AccountWorkspace}=await import('../../web/dist/account.mjs');
+ assert.equal(normalizeGitHubUrl('https://github.com/yoonkim/CNN_sentence/tree/master/data'),'https://github.com/yoonkim/CNN_sentence');
+ assert.equal(normalizeGitHubUrl('yoonkim/CNN_sentence'),'https://github.com/yoonkim/CNN_sentence');
+ assert.equal(normalizeGitHubUrl('https://not-github.example.com/a/b'),null);
+ assert.doesNotMatch(matHtml,/class="review-mode-strip"/);
+ assert.match(execHtml,/class="online-terminal-box online-stage-list"/);
+ assert.match(execHtml,/class="terminal-topbar"/);
+ assert.match(execHtml,/class="terminal-stream-body"/);
+ const matWithCode=ws.materials({title:'CNN Sentence Proj',paper:null,repository:{name:'CNN_sentence.zip',repo_name:'yoonkim/CNN_sentence',commit:'1234567890abcdef',files:[{path:'a.py'}],sha256:'a'.repeat(64)}});
+ assert.match(matWithCode,/源码已读取 · yoonkim\/CNN_sentence/);
+ const acct=new AccountWorkspace({esc:v=>String(v??''),icon:()=>'',projects:()=>[]});
+ acct.user={id:'u1',username:'tester',name:'测试研究员',role:'member'};
+ const centerHtml=acct.center();
+ assert.doesNotMatch(centerHtml,/account-change-avatar-btn/);
+ assert.match(centerHtml,/data-account="edit-name"/);
 });

@@ -552,3 +552,27 @@ class HostedReviewTests(unittest.TestCase):
                 self.assertEqual(polled['status'], 'completed')
                 self.assertTrue(polled['execution_performed'])
                 self.assertEqual(polled['stages'][0]['status'], 'completed')
+
+                # Fifth-batch: cancelling a queued GPU job immediately sets status='cancelled' and does not revert on poll
+                launched2 = hybrid.launch(assessment, {'code': materials()['code']})
+                self.assertEqual(launched2['status'], 'queued')
+                stopped_ok = hybrid.stop(launched2)
+                self.assertTrue(stopped_ok)
+                polled_cancelled = hybrid.poll(launched2)
+                self.assertEqual(polled_cancelled['status'], 'cancelled')
+
+                # Fifth-batch: AST/regex import dependency analysis and ModuleNotFoundError parser
+                from articheck.gpu_worker import infer_project_dependencies, parse_missing_modules_from_log
+                dep_dir = Path(tmp) / 'dep_check'
+                dep_dir.mkdir(parents=True, exist_ok=True)
+                (dep_dir / 'local_helper.py').write_text('def helper(): return 1\n')
+                (dep_dir / 'train.py').write_text('import os, sys, json\nimport local_helper\nimport cv2\nfrom sklearn.metrics import f1_score\nimport yaml\n')
+                inferred = infer_project_dependencies(dep_dir)
+                self.assertEqual(inferred.get('cv2'), 'opencv-python-headless')
+                self.assertEqual(inferred.get('sklearn'), 'scikit-learn')
+                self.assertEqual(inferred.get('yaml'), 'PyYAML')
+                self.assertNotIn('os', inferred)
+                self.assertNotIn('local_helper', inferred)
+                parsed_missing = parse_missing_modules_from_log("Traceback:\nModuleNotFoundError: No module named 'bs4'\nImportError: No module named skimage.io\n")
+                self.assertEqual(parsed_missing.get('bs4'), 'beautifulsoup4')
+                self.assertEqual(parsed_missing.get('skimage'), 'scikit-image')

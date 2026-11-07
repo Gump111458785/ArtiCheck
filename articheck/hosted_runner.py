@@ -4,6 +4,7 @@ Artifact commands run as the unprivileged `user`, with a bounded wall clock,
 process count, file size and address space. Results are root-owned. Uploaded code
 can still print arbitrary numbers: an observed stdout is not scientific truth.
 """
+import ast
 import json
 import math
 import os
@@ -18,6 +19,136 @@ import sys
 import time
 import shutil
 import statistics
+
+IMPORT_TO_PYPI = {
+    'cv2': 'opencv-python-headless',
+    'sklearn': 'scikit-learn',
+    'skimage': 'scikit-image',
+    'PIL': 'Pillow',
+    'yaml': 'PyYAML',
+    'bs4': 'beautifulsoup4',
+    'attr': 'attrs',
+    'dotenv': 'python-dotenv',
+    'fitz': 'PyMuPDF',
+    'dateutil': 'python-dateutil',
+    'serial': 'pyserial',
+    'Crypto': 'pycryptodome',
+    'crypto': 'pycryptodome',
+    'jwt': 'PyJWT',
+    'git': 'GitPython',
+    'Bio': 'biopython',
+    'OpenGL': 'PyOpenGL',
+    'hydra': 'hydra-core',
+    'rouge_score': 'rouge-score',
+    'pytorch_lightning': 'pytorch-lightning',
+    'pynvml': 'nvidia-ml-py',
+    'charset_normalizer': 'charset-normalizer',
+}
+
+STDLIB_MODULES = set(getattr(sys, 'stdlib_module_names', ())) | {
+    '__builtin__', '__future__', 'abc', 'argparse', 'array', 'ast', 'asyncio', 'atexit',
+    'base64', 'bdb', 'binascii', 'bisect', 'builtins', 'bz2', 'calendar', 'cgi', 'cgitb',
+    'chunk', 'cmath', 'cmd', 'code', 'codecs', 'codeop', 'collections', 'colorsys',
+    'compileall', 'concurrent', 'configparser', 'ConfigParser', 'contextlib', 'contextvars',
+    'copy', 'copyreg', 'cProfile', 'crypt', 'csv', 'ctypes', 'curses', 'dataclasses',
+    'datetime', 'dbm', 'decimal', 'difflib', 'dis', 'distutils', 'doctest', 'email',
+    'encodings', 'ensurepip', 'enum', 'errno', 'faulthandler', 'fcntl', 'filecmp',
+    'fileinput', 'fnmatch', 'formatter', 'fractions', 'ftplib', 'functools', 'gc',
+    'getopt', 'getpass', 'gettext', 'glob', 'grp', 'gzip', 'hashlib', 'heapq', 'hmac',
+    'html', 'http', 'imaplib', 'imghdr', 'imp', 'importlib', 'inspect', 'io', 'ipaddress',
+    'itertools', 'json', 'keyword', 'lib2to3', 'linecache', 'locale', 'logging', 'lzma',
+    'mailbox', 'mailcap', 'marshal', 'math', 'mimetypes', 'mmap', 'modulefinder',
+    'multiprocessing', 'netrc', 'nis', 'nntplib', 'numbers', 'operator', 'optparse', 'os',
+    'ossaudiodev', 'parser', 'pathlib', 'pdb', 'pickle', 'pickletools', 'pipes', 'pkgutil',
+    'platform', 'plistlib', 'poplib', 'posix', 'posixpath', 'pprint', 'profile', 'pstats',
+    'pty', 'pwd', 'py_compile', 'pyclbr', 'pydoc', 'queue', 'Queue', 'quopri', 'random',
+    're', 'readline', 'reprlib', 'resource', 'rlcompleter', 'runpy', 'sched', 'secrets',
+    'select', 'selectors', 'shelve', 'shlex', 'shutil', 'signal', 'site', 'smtpd',
+    'smtplib', 'sndhdr', 'socket', 'socketserver', 'SocketServer', 'spwd', 'sqlite3',
+    'ssl', 'stat', 'statistics', 'string', 'stringprep', 'struct', 'subprocess', 'sunau',
+    'symbol', 'symtable', 'sys', 'sysconfig', 'syslog', 'tabnanny', 'tarfile', 'telnetlib',
+    'tempfile', 'termios', 'test', 'textwrap', 'threading', 'time', 'timeit', 'tkinter',
+    'token', 'tokenize', 'trace', 'traceback', 'tracemalloc', 'tty', 'turtle', 'types',
+    'typing', 'unicodedata', 'unittest', 'urllib', 'urllib2', 'urlparse', 'uu', 'uuid',
+    'venv', 'warnings', 'wave', 'weakref', 'webbrowser', 'winreg', 'winsound', 'wsgiref',
+    'xdrlib', 'xml', 'xmlrpc', 'zipapp', 'zipfile', 'zipimport', 'zlib',
+    'cPickle', 'StringIO', 'cStringIO', 'httplib', 'future_builtins', 'commands', 'sets',
+    'md5', 'sha', 'thread', 'dummy_thread', 'repr', 'UserDict', 'UserList', 'UserString',
+    'whichdb', 'anydbm', 'dbhash', 'bsddb', 'gdbm', 'dumbdbm', 'pkg_resources',
+    'typing_extensions', 'pip', 'setuptools', 'wheel',
+}
+
+SKIP_DIRS = {'.git', '.hg', '.svn', '__pycache__', '.pydeps', '.cache', 'venv', '.venv', 'env', 'node_modules', 'build', 'dist'}
+SAFE_PKG_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$')
+
+
+def infer_project_dependencies(work_dir):
+    root = Path(work_dir)
+    if not root.exists():
+        return {}
+    local_modules = set()
+    py_files = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith('.')]
+        rel_dir = Path(dirpath).relative_to(root)
+        if rel_dir.parts:
+            local_modules.add(rel_dir.parts[0].split('.')[0])
+        for d in dirnames:
+            local_modules.add(d.split('.')[0])
+        for fname in filenames:
+            if fname.endswith('.py'):
+                stem = fname[:-3]
+                if stem != '__init__':
+                    local_modules.add(stem)
+                py_files.append(Path(dirpath) / fname)
+
+    imported = set()
+    for py_path in py_files[:600]:
+        try:
+            if py_path.stat().st_size > 512 * 1024:
+                continue
+            source = py_path.read_text(errors='replace')
+        except OSError:
+            continue
+        try:
+            tree = ast.parse(source)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        top = (alias.name or '').split('.')[0].strip()
+                        if top:
+                            imported.add(top)
+                elif isinstance(node, ast.ImportFrom) and (node.level or 0) == 0 and node.module:
+                    top = node.module.split('.')[0].strip()
+                    if top:
+                        imported.add(top)
+        except SyntaxError:
+            for match in re.finditer(r'^\s*(?:import|from)\s+([A-Za-z_][A-Za-z0-9_]*)', source, re.M):
+                imported.add(match.group(1))
+
+    resolved = {}
+    for mod in sorted(imported):
+        if mod in STDLIB_MODULES or mod in local_modules or mod.startswith('_'):
+            continue
+        pkg = IMPORT_TO_PYPI.get(mod, mod)
+        if SAFE_PKG_RE.match(pkg):
+            resolved[mod] = pkg
+    return resolved
+
+
+def parse_missing_modules_from_log(log_text):
+    missing = {}
+    for pattern in (
+        r"ModuleNotFoundError:\s+No module named ['\"]([A-Za-z0-9_.-]+)['\"]",
+        r"ImportError:\s+No module named ['\"]?([A-Za-z0-9_.-]+)['\"]?",
+    ):
+        for match in re.finditer(pattern, log_text or ''):
+            raw_mod = match.group(1).split('.')[0].strip()
+            if raw_mod and raw_mod not in STDLIB_MODULES and not raw_mod.startswith('_'):
+                pkg = IMPORT_TO_PYPI.get(raw_mod, raw_mod)
+                if SAFE_PKG_RE.match(pkg):
+                    missing[raw_mod] = pkg
+    return missing
 
 
 def atomic(path, value):
@@ -37,6 +168,18 @@ def limits(address_space_mb=3072):
 
 def run_plan(plan, root, results, *, run_as='articheck'):
     root = Path(root); results = Path(results)
+    pydeps_dir = root / '.pydeps'
+    cache_dir = root / '.cache'
+    pydeps_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    if run_as and os.getuid() == 0:
+        try:
+            acct = pwd.getpwnam(run_as)
+            for d in (pydeps_dir, cache_dir):
+                os.chown(d, acct.pw_uid, acct.pw_gid)
+        except Exception:
+            pass
+    inferred_deps = infer_project_dependencies(root)
     started = time.time(); deadline = time.monotonic() + plan['max_seconds']
     report = {'status': 'running', 'started_at': started, 'stages': [], 'metrics': [],
               'execution_performed': False, 'scientific_validation': False,
@@ -44,7 +187,9 @@ def run_plan(plan, root, results, *, run_as='articheck'):
     disk=shutil.disk_usage(root)
     report['runtime']={'python':platform.python_version(),'system':platform.system(),
                        'release':platform.release(),'architecture':platform.machine(),
-                       'disk_total_bytes':disk.total,'disk_free_before_bytes':disk.free}
+                       'disk_total_bytes':disk.total,'disk_free_before_bytes':disk.free,
+                       'inferred_dependencies':sorted(set(inferred_deps.values())),
+                       'auto_provisioned_packages':[]}
     status_path = results / 'status.json'
 
     def event(role, kind, **data):
@@ -54,6 +199,17 @@ def run_plan(plan, root, results, *, run_as='articheck'):
     atomic(status_path, report)
     all_logs = [];stage_logs={}
     failed = False
+    stage_env = {
+        'PATH': f'{pydeps_dir}/bin:/home/articheck/venv/bin:/usr/local/bin:/usr/bin:/bin',
+        'HOME': str(root),
+        'PYTHONUSERBASE': str(pydeps_dir),
+        'PIP_USER': '1',
+        'PIP_CACHE_DIR': str(cache_dir / 'pip'),
+        'XDG_CACHE_HOME': str(cache_dir),
+        'LANG': 'C.UTF-8',
+        'OMP_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2', 'MKL_NUM_THREADS': '2',
+        'PYTHONUNBUFFERED': '1', 'PIP_DISABLE_PIP_VERSION_CHECK': '1',
+    }
     for stage in plan['stages']:
         row = {k: stage[k] for k in ('id', 'title', 'command', 'file')}
         row['experiment']=stage.get('experiment','')
@@ -81,10 +237,7 @@ def run_plan(plan, root, results, *, run_as='articheck'):
         timed_out = False
         with log_path.open('wb') as log:
             process = subprocess.Popen(command, cwd=root, stdout=log, stderr=subprocess.STDOUT,
-                env={'PATH': '/home/articheck/venv/bin:/usr/local/bin:/usr/bin:/bin', 'HOME': '/home/articheck', 'LANG': 'C.UTF-8',
-                     'OMP_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2', 'MKL_NUM_THREADS': '2',
-                     'PYTHONUNBUFFERED': '1', 'PIP_DISABLE_PIP_VERSION_CHECK': '1'},
-                start_new_session=True, preexec_fn=child_limits)
+                env=stage_env, start_new_session=True, preexec_fn=child_limits)
             report['execution_performed'] = True
             try:
                 code = process.wait(timeout=max(1, deadline - time.monotonic()))
@@ -101,6 +254,33 @@ def run_plan(plan, root, results, *, run_as='articheck'):
         with log_path.open('rb') as stream:
             raw = stream.read(24000)
         log_text = raw.decode(errors='replace')
+        if code != 0 and not timed_out and time.monotonic() < deadline:
+            missing_mods = parse_missing_modules_from_log(log_text)
+            heal_pkgs = sorted(set(missing_mods.values()))
+            if heal_pkgs:
+                heal_log = results / (stage['id'] + '_autoheal.log')
+                pkg_args = ' '.join(heal_pkgs)
+                retry_cmd = ['/bin/bash', '-c', f"python3 -m pip install --user --no-input --prefer-binary {pkg_args} && ({stage['command']})"]
+                timed_out2 = False
+                with heal_log.open('wb') as hlog:
+                    proc2 = subprocess.Popen(retry_cmd, cwd=root, stdout=hlog, stderr=subprocess.STDOUT,
+                        env=stage_env, start_new_session=True, preexec_fn=child_limits)
+                    try:
+                        code2 = proc2.wait(timeout=max(1, deadline - time.monotonic()))
+                    except subprocess.TimeoutExpired:
+                        timed_out2 = True
+                        os.killpg(proc2.pid, signal.SIGKILL)
+                        code2 = proc2.wait()
+                    finally:
+                        try:
+                            os.killpg(proc2.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                with heal_log.open('rb') as stream2:
+                    raw2 = stream2.read(24000)
+                log_text = (log_text.rstrip() + f"\n\n[ArtiCheck 自动补齐依赖: {', '.join(heal_pkgs)}]\n" + raw2.decode(errors='replace'))[-24000:]
+                code, timed_out = code2, timed_out2
+                report['runtime']['auto_provisioned_packages'] = sorted(set(report['runtime']['auto_provisioned_packages']) | set(heal_pkgs))
         all_logs.append(log_text)
         stage_logs[stage['id']]=log_text
         row.update(status='completed' if code == 0 and not timed_out else 'failed', exit_code=code,
@@ -135,6 +315,9 @@ def run_plan(plan, root, results, *, run_as='articheck'):
     report['status'] = 'completed' if all(s['status'] == 'completed' for s in report['stages']) else 'failed'
     report['finished_at'] = time.time()
     report['elapsed_seconds'] = round(report['finished_at'] - started, 3)
+    shutil.rmtree(pydeps_dir, ignore_errors=True)
+    shutil.rmtree(cache_dir, ignore_errors=True)
+    report['runtime']['workspace_cleaned'] = not pydeps_dir.exists() and not cache_dir.exists()
     report['runtime']['disk_free_after_bytes']=shutil.disk_usage(root).free
     usage=resource.getrusage(resource.RUSAGE_CHILDREN)
     report['runtime']['child_cpu_seconds']=round(usage.ru_utime+usage.ru_stime,3)
