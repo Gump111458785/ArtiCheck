@@ -1,0 +1,28 @@
+{
+  "verified_at": "2026-11-08T09:56:12.798Z",
+  "production_url": "https://articheck-workbench.edgeone.dev",
+  "total_checks": 21,
+  "checks": [
+    "Login via /v1/auth/login succeeded",
+    "Item 4: Topbar height tightened (36px <= 52px)",
+    "Item 7: Start page h1 \"ArtiCheck · 开始\" enlarged (36px >= 28px)",
+    "Item 8: Soft-colored 5-case carousel rendered on Start page (5 cases)",
+    "Item 10: Low-value .start-recent (\"继续我的项目\") removed from Start page",
+    "Item 11: Privacy-sensitive #sidebar-resource (\"云端资源 · 16 GB\") button removed from sidebar",
+    "Item 8: Carousel rotates through unsuccessful reproduction cases (ResNet-110 / CIFAR-10)",
+    "Item 9: \"案例与归档\" renders mainstream order-list style cards (.repro-order-card count=2) with status filters",
+    "Item 12: Left sidebar project card (.sidebar-review) has clickable [data-sidebar-jump=\"proj-sixth-completed\"]",
+    "Item 17: Pass/Fail verdict (.review-verdict.editorial-verdict) is placed at the very top of Final Report without card box",
+    "Item 18: Final Report includes core code snippets and explanation (#report-code-section: \"BasicBlock 残差连接核心实现\")",
+    "Item 15: Redundant .process-ready-banner (\"审查报告已就绪 · 查看最终报告\") is deleted",
+    "Item 6: Nothing is shown below the timeline initially when no node is clicked",
+    "Item 6: All 6 timeline nodes (01–06) are clickable",
+    "Item 14: Timeline track fill stays static green (.done) once execution completes",
+    "Item 6: Clicking node 01 opens summarized node report below timeline",
+    "Item 6: Clicking the same node a second time closes the panel below timeline",
+    "Item 1 & 2: Soft-colored terminal box (rgb(248, 250, 252)) displays executed commands and live 3-line log tail",
+    "Item 16: Interruption diagnosis panel clearly pinpoints which stage interrupted and the exact error",
+    "Item 16: Interruption panel provides inline correction/material-supplement controls to continue review",
+    "Item 5: Subsequent stages are immediately skipped when a stage errors (fail-fast)"
+  ]
+}

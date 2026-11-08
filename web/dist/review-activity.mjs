@@ -45,7 +45,7 @@ export function visibleRoles(report){
  });
 }
 
-export function activityView(report,esc,{open=true}={}){
+export function activityView(report,esc,{open=true,showLog=true,activeRole=null}={}){
  const events=activityEvents(report);if(!events.length)return '';
  const active=events.filter(x=>x.status==='running'),last=active.at(-1)||events.at(-1);
  const roles=visibleRoles(report);
@@ -59,19 +59,20 @@ export function activityView(report,esc,{open=true}={}){
  });
  let furthest=-1;
  states.forEach((st,idx)=>{if(st==='completed'||st==='running'||st==='failed')furthest=idx;});
- const progressPct=roles.length<=1?100:furthest<0?8:Math.min(100,Math.round(((furthest+(states[furthest]==='running'?0.5:1))/roles.length)*100));
+ const allDone=states.length>0&&states.every(st=>st==='completed');
+ const progressPct=allDone?100:roles.length<=1?100:furthest<0?8:Math.min(100,Math.round(((furthest+(states[furthest]==='running'?0.5:1))/roles.length)*100));
 
- const reviewingOnly=report.status==='reviewing'&&!['running','starting','queued','cancelling'].includes(report.execution?.status);
- return `<section class="review-activity" aria-label="审查协作进度"><header><div>${running?'<h2 class="live-heading"><span class="live-heading-text">正在协作审查</span><span class="live-dots" aria-hidden="true"><i></i><i></i><i></i></span></h2>':'<h2>审查协作时间轴</h2>'}<p role="status" aria-live="polite">${esc(last.title)}${last.detail?' · '+esc(last.detail):''}</p></div><div class="review-activity-actions">${reviewingOnly?'<span class="online-spinner" aria-hidden="true"></span><button type="button" class="btn danger small online-abort-btn" data-online="cancel">中断运行</button>':running?'<span class="activity-done-pill live"><span class="online-spinner" aria-hidden="true"></span>阶段执行中</span>':`<span class="activity-done-pill">${report.status==='cancelled'?'已手动中止':'过程已记录'}</span>`}</div></header><div class="review-role-lanes review-timeline-axis" style="--timeline-cols:${roles.length};--timeline-progress:${progressPct}%"><div class="timeline-track" aria-hidden="true"><div class="timeline-track-fill" style="width:${progressPct}%"></div></div>${roles.map(([id,label],idx)=>{
+ return `<section class="review-activity ${allDone?'all-completed':''} ${running?'is-running':'is-static'}" aria-label="审查协作进度"><header><div>${running?'<h2 class="live-heading"><span class="live-heading-text">正在协作审查</span><span class="live-dots" aria-hidden="true"><i></i><i></i><i></i></span></h2>':'<h2>审查协作时间轴</h2>'}<p role="status" aria-live="polite">${esc(last.title)}${last.detail?' · '+esc(last.detail):''}</p></div><div class="review-activity-actions">${running?'<span class="activity-done-pill live"><span class="online-spinner" aria-hidden="true"></span>正在运行</span><button type="button" class="btn danger small online-abort-btn" data-online="cancel">临时终止</button>':`<span class="activity-done-pill">${report.status==='cancelled'||report.execution?.status==='cancelled'?'已临时终止':states.includes('failed')?'已报错中断':'过程已记录'}</span>`}</div></header><div class="review-role-lanes review-timeline-axis" style="--timeline-cols:${roles.length};--timeline-progress:${progressPct}%"><div class="timeline-track" aria-hidden="true"><div class="timeline-track-fill ${allDone?'done':''}" style="width:${progressPct}%"></div></div>${roles.map(([id,label],idx)=>{
   const rows=events.filter(x=>(x.roles||[]).includes(id));
   const state=states[idx];
   const lastRow=rows.at(-1);
-  const statusText=state==='running'?'进行中':state==='failed'?'需关注':state==='completed'?'已执行':rows.some(x=>x.status==='skipped')?'本次跳过':report.status==='reviewing'?'等待中':'待执行';
+  const statusText=state==='running'?'进行中':state==='failed'?'已中断':state==='completed'?'已执行':rows.some(x=>x.status==='skipped')?'本次跳过':report.status==='reviewing'?'等待中':'待执行';
   const desc=lastRow?.title||(ROLE_HINTS[id]?.idle||'');
   const jump=ROLE_HINTS[id]?.jump||'查看详情';
-  return `<button type="button" class="review-role-lane timeline-node ${state}" data-role-jump="${id}" title="点击${jump}"><span class="timeline-step-num">0${idx+1}</span><span class="review-role-dot timeline-dot" aria-hidden="true">${state==='completed'?'✓':state==='failed'?'!':ROLE_ICONS[id]||''}</span><span class="timeline-stem" aria-hidden="true"></span><span class="timeline-callout"><strong>${label}</strong><small class="timeline-state-tag">${statusText}</small><span class="timeline-node-desc">${esc(desc)}</span><span class="timeline-jump-hint">${jump} ↘</span></span></button>`;
- }).join('')}</div><details class="review-activity-log" ${open?'open':''}><summary>查看 ${events.length} 条活动记录</summary><div class="activity-groups">${activityGroups(report).map(group=>{
+  const isActive=activeRole===id;
+  return `<button type="button" class="review-role-lane timeline-node ${state} ${isActive?'active-node':''}" data-role-jump="${id}" aria-expanded="${isActive?'true':'false'}" title="点击展开或收起${label}总结（${jump}）"><span class="timeline-step-num">0${idx+1}</span><span class="review-role-dot timeline-dot" aria-hidden="true">${state==='completed'?'✓':state==='failed'?'!':ROLE_ICONS[id]||''}</span><span class="timeline-stem" aria-hidden="true"></span><span class="timeline-callout"><strong>${label}</strong><small class="timeline-state-tag">${statusText}</small><span class="timeline-node-desc">${esc(desc)}</span><span class="timeline-jump-hint">${isActive?'再次点击收起 ▲':jump+' ↘'}</span></span></button>`;
+ }).join('')}</div>${showLog?`<details class="review-activity-log" ${open?'open':''}><summary>查看 ${events.length} 条活动记录</summary><div class="activity-groups">${activityGroups(report).map(group=>{
   const groupRoles=[...new Set(group.events.flatMap(e=>e.roles||[]))].join(',');
   return `<section class="activity-group" data-activity-group="${esc(group.key)}" data-activity-roles="${esc(groupRoles)}"><h3>${esc(group.title)}<span>${group.events.length} 条记录</span></h3><ol>${group.events.map(x=>`<li class="activity-event ${esc(x.status)}" data-event-roles="${esc((x.roles||[]).join(','))}"><time>${x.time?esc(new Date(x.time*1000).toLocaleTimeString('zh-CN',{hour12:false})):''}</time><div><header><strong>${esc(x.title)}</strong><span>${esc({running:'进行中',completed:'已结束',skipped:'已跳过',failed:'未完成'}[x.status]||x.status)}</span></header><small>${(x.roles||[]).map(id=>esc(ROLE_NAMES[id]||id)).join(' / ')}</small>${x.detail?`<p>${esc(x.detail)}</p>`:''}</div></li>`).join('')}</ol></section>`;
- }).join('')}</div></details></section>`;
+ }).join('')}</div></details>`:''}</section>`;
 }

@@ -92,18 +92,21 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  const matHtml=ws.materials({paper:{name:'resnet.pdf',pages:[1,2,3]},repository:null,online_auto_execute:true});
  assert.match(matHtml,/rail-badge ready">已导入 · 3 页/);
  assert.match(matHtml,/rail-badge empty">未提供/);
- assert.match(matHtml,/rail-badge gpu">云端 CPU \/ 自有 GPU/);
+ assert.match(matHtml,/rail-badge info">云端隔离执行/);
+ assert.doesNotMatch(matHtml,/RTX 4090/);
  assert.match(matHtml,/online-upload has-file/);
  const multiStageReport={...failedReport,
   review:{...failedReport.review,plan:{...failedReport.review.plan,stages:[
    {id:'S1',title:'Stage 1',command:'python s1.py',file:'s1.py'},
    {id:'S2',title:'Stage 2',command:'python s2.py',file:'s2.py'}]}},
-  execution:{...failedReport.execution,status:'running',stages:[{id:'S1',status:'running'}]}};
+  execution:{...failedReport.execution,status:'running',stages:[{id:'S1',status:'running',live_tail:['Epoch 1/10 loss=0.42','Epoch 2/10 loss=0.31','Epoch 3/10 acc=91.4%'],output:'Epoch 1/10 loss=0.42\nEpoch 2/10 loss=0.31\nEpoch 3/10 acc=91.4%'}]}};
  const execHtml=ws.execution(multiStageReport,false);
- assert.match(execHtml,/自有 GPU 隔离执行/);
- assert.match(execHtml,/持续运行至完成/);
- assert.match(execHtml,/停止执行/);
- assert.match(execHtml,/NVIDIA GeForce RTX 4090/);
+ assert.match(execHtml,/云端隔离执行/);
+ assert.match(execHtml,/遇到报错自动中断/);
+ assert.match(execHtml,/临时终止/);
+ assert.doesNotMatch(execHtml,/NVIDIA GeForce RTX 4090/);
+ assert.match(execHtml,/terminal-live-tail/);
+ assert.match(execHtml,/Epoch 3\/10 acc=91\.4%/);
  assert.match(execHtml,/online-stage stage-running/);
  assert.match(execHtml,/online-status status-running running/);
  assert.match(execHtml,/online-stage stage-planned/);
@@ -120,6 +123,7 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
    paper_title:'Deep Residual Learning for Image Recognition',
    paper_abstract:'Deeper neural networks are more difficult to train. We present a residual learning framework.',
    paper_contributions:['提出残差学习框架解决深层网络退化问题','在 ImageNet 与 CIFAR-10 上取得突破性精度'],
+   core_code_snippets:[{title:'trainer.py · train 核心定义',file:'trainer.py',start_line:10,end_line:28,code:'def train(train_loader, model):\n    pass',explanation:'定义训练循环与反向传播逻辑。'}],
    criteria:[],findings:[],metrics:[],
    coverage:{gaps:[],note:'',paper_pages_in_context:12,code_files_in_context:0,total_code_files:0},
    plan:{hardware:'CPU',max_seconds:300,purpose:'',blocked_reason:'未提供代码',stages:[]}},
@@ -133,11 +137,14 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  assert.doesNotMatch(paperTimeline,/实验执行/);
 
  const finalHtml=ws.finalReport(paperOnlyReport,{title:'我的 ResNet 审查项目',paper:{name:'1512.03385v1.pdf',pages:[{text:'Deep Residual Learning'}]}});
+ const idxVerdict=finalHtml.indexOf('review-verdict');
  const idxProject=finalHtml.indexOf('我的 ResNet 审查项目');
  const idxPaper=finalHtml.indexOf('Deep Residual Learning for Image Recognition');
  const idxContrib=finalHtml.indexOf('提出残差学习框架解决深层网络退化问题');
- const idxVerdict=finalHtml.indexOf('review-verdict');
- assert.ok(idxProject>=0 && idxProject<idxPaper && idxPaper<idxContrib && idxContrib<idxVerdict);
+ const idxCode=finalHtml.indexOf('核心代码与实现解析');
+ assert.ok(idxVerdict>=0 && idxVerdict<idxProject && idxProject<idxPaper && idxPaper<idxContrib && idxContrib<idxCode);
+ assert.match(finalHtml,/editorial-verdict/);
+ assert.match(finalHtml,/trainer\.py · train 核心定义/);
  assert.match(finalHtml,/data-report-jump="metrics"/);
  assert.match(finalHtml,/data-report-jump="findings"/);
  assert.match(finalHtml,/data-report-jump="observations"/);
@@ -160,12 +167,32 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  const cancelledView=wsRender.render();
  assert.match(cancelledView,/data-online="terminal"/);
  assert.doesNotMatch(cancelledView,/data-online-tab="report"/);
- assert.match(cancelledView,/review-ended cancelled/);
- assert.match(cancelledView,/审查已中止/);
+ assert.match(cancelledView,/review-ended/);
+ assert.match(cancelledView,/审查已临时终止/);
+ assert.match(cancelledView,/data-online="resume-review"/);
 
  wsRender.i.projects[0].online_report=paperOnlyReport;
  const completedView=wsRender.render();
  assert.match(completedView,/data-online-tab="report"/);
+
+ // Sixth-batch UI requirements:
+ // - Sidebar card clickable with data-sidebar-jump
+ // - Process tab hides everything below timeline initially (no activeRoleNode), and clicking a role toggles its summary panel
+ // - Process-ready-banner is removed
+ wsRender.tab='process';
+ wsRender.activeRoleNode=null;
+ const initialProcessView=wsRender.render();
+ assert.doesNotMatch(initialProcessView,/process-ready-banner/);
+ assert.doesNotMatch(initialProcessView,/id="online-role-node-panel"/);
+ wsRender.jumpFromRole('literature_reader');
+ assert.equal(wsRender.activeRoleNode,'literature_reader');
+ const openRoleView=wsRender.render();
+ assert.match(openRoleView,/id="online-role-node-panel"/);
+ assert.match(openRoleView,/01 · 文献审阅节点报告/);
+ wsRender.jumpFromRole('literature_reader');
+ assert.equal(wsRender.activeRoleNode,null);
+ const sidebarHtml=wsRender.sidebar();
+ assert.match(sidebarHtml,/data-sidebar-jump="p1"/);
 
  // Fifth-batch UI requirements:
  const {normalizeGitHubUrl}=await import('../../web/dist/online-workspace.mjs');

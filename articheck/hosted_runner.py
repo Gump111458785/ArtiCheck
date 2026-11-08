@@ -157,6 +157,46 @@ def atomic(path, value):
     tmp.replace(path)
 
 
+def collapse_cr_lines(text):
+    if not text:
+        return ''
+    out = []
+    for raw_line in text.split('\n'):
+        if '\r' in raw_line:
+            segs = [s for s in raw_line.split('\r') if s.strip()]
+            out.append(segs[-1] if segs else '')
+        else:
+            out.append(raw_line)
+    return '\n'.join(out)
+
+
+def extract_live_tail(log_text, max_lines=3):
+    cleaned = collapse_cr_lines(log_text or '')
+    lines = [ln.strip() for ln in cleaned.splitlines() if ln.strip()]
+    return lines[-max_lines:] if lines else []
+
+
+def read_bounded_log(log_path, limit=24000):
+    if not log_path.exists():
+        return '', False
+    try:
+        size = log_path.stat().st_size
+        if size <= limit:
+            raw = log_path.read_bytes()
+            return collapse_cr_lines(raw.decode(errors='replace')), False
+        head_len = limit // 3
+        tail_len = limit - head_len - 64
+        with log_path.open('rb') as stream:
+            head = stream.read(head_len)
+            stream.seek(max(0, size - tail_len))
+            tail = stream.read(tail_len)
+        combined = head.decode(errors='replace') + '\n...[中间进度输出已省略]...\n' + tail.decode(errors='replace')
+        return collapse_cr_lines(combined)[-limit:], True
+    except OSError:
+        return '', False
+
+
+
 def limits(address_space_mb=3072):
     resource.setrlimit(resource.RLIMIT_FSIZE, (128 * 1024**2, 128 * 1024**2))
     if sys.platform.startswith('linux'):
@@ -199,6 +239,8 @@ def run_plan(plan, root, results, *, run_as='articheck'):
     atomic(status_path, report)
     all_logs = [];stage_logs={}
     failed = False
+    fail_fast = plan.get('fail_fast', plan.get('policy') == 'frozen_api_plan')
+    failed_stage_id = None
     stage_env = {
         'PATH': f'{pydeps_dir}/bin:/home/articheck/venv/bin:/usr/local/bin:/usr/bin:/bin',
         'HOME': str(root),
@@ -215,11 +257,17 @@ def run_plan(plan, root, results, *, run_as='articheck'):
         row['experiment']=stage.get('experiment','')
         dependencies=stage.get('depends_on',[report['stages'][-1]['id']] if report['stages'] else [])
         blocked=any(not any(s['id']==d and s['status']=='completed' for s in report['stages']) for d in dependencies)
-        if blocked or deadline <= time.monotonic():
-            row.update(status='skipped', reason='依赖阶段未完成。' if blocked else '时间预算已用尽。')
+        if (fail_fast and failed_stage_id) or blocked or deadline <= time.monotonic():
+            if fail_fast and failed_stage_id:
+                skip_reason = f'前序阶段 {failed_stage_id} 执行报错，已直接中断后续阶段。'
+            elif blocked:
+                skip_reason = '依赖阶段未完成。'
+            else:
+                skip_reason = '时间预算已用尽。'
+            row.update(status='skipped', reason=skip_reason)
             report['stages'].append(row)
             continue
-        row.update(status='running', started_at=time.time())
+        row.update(status='running', started_at=time.time(), live_tail=[])
         report['stages'].append(row)
         event('experiment_runner', 'stage_started', stage=stage['id'])
         atomic(status_path, report)
@@ -240,20 +288,28 @@ def run_plan(plan, root, results, *, run_as='articheck'):
                 env=stage_env, start_new_session=True, preexec_fn=child_limits)
             report['execution_performed'] = True
             try:
-                code = process.wait(timeout=max(1, deadline - time.monotonic()))
-            except subprocess.TimeoutExpired:
-                timed_out = True
-                os.killpg(process.pid, signal.SIGKILL)
-                code = process.wait()
+                while True:
+                    code = process.poll()
+                    if code is not None:
+                        break
+                    if time.monotonic() >= deadline:
+                        timed_out = True
+                        os.killpg(process.pid, signal.SIGKILL)
+                        code = process.wait()
+                        break
+                    partial_log, _ = read_bounded_log(log_path, 24000)
+                    if partial_log:
+                        row['output'] = partial_log
+                        row['live_tail'] = extract_live_tail(partial_log, 3)
+                        atomic(status_path, report)
+                    time.sleep(min(1.0, max(0.05, deadline - time.monotonic())))
             finally:
                 # Kill descendants left in the process group before the next stage.
                 try:
                     os.killpg(process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
-        with log_path.open('rb') as stream:
-            raw = stream.read(24000)
-        log_text = raw.decode(errors='replace')
+        log_text, truncated = read_bounded_log(log_path, 24000)
         if code != 0 and not timed_out and time.monotonic() < deadline:
             missing_mods = parse_missing_modules_from_log(log_text)
             heal_pkgs = sorted(set(missing_mods.values()))
@@ -276,18 +332,20 @@ def run_plan(plan, root, results, *, run_as='articheck'):
                             os.killpg(proc2.pid, signal.SIGKILL)
                         except ProcessLookupError:
                             pass
-                with heal_log.open('rb') as stream2:
-                    raw2 = stream2.read(24000)
-                log_text = (log_text.rstrip() + f"\n\n[ArtiCheck 自动补齐依赖: {', '.join(heal_pkgs)}]\n" + raw2.decode(errors='replace'))[-24000:]
+                heal_text, _ = read_bounded_log(heal_log, 24000)
+                log_text = (log_text.rstrip() + f"\n\n[ArtiCheck 自动补齐依赖: {', '.join(heal_pkgs)}]\n" + heal_text)[-24000:]
                 code, timed_out = code2, timed_out2
                 report['runtime']['auto_provisioned_packages'] = sorted(set(report['runtime']['auto_provisioned_packages']) | set(heal_pkgs))
         all_logs.append(log_text)
         stage_logs[stage['id']]=log_text
         row.update(status='completed' if code == 0 and not timed_out else 'failed', exit_code=code,
                    timed_out=timed_out, finished_at=time.time(), output=log_text,
-                   output_truncated=log_path.stat().st_size > len(raw))
+                   live_tail=extract_live_tail(log_text, 3),
+                   output_truncated=truncated)
         row['child_peak_rss_kib'] = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
         failed = row['status'] == 'failed'
+        if failed and not failed_stage_id:
+            failed_stage_id = stage['id']
         event('experiment_runner', 'stage_finished', stage=stage['id'], exit_code=code, timed_out=timed_out)
         event('cross_auditor', 'stage_checked', stage=stage['id'], status=row['status'])
         atomic(status_path, report)

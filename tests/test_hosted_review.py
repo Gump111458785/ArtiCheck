@@ -576,3 +576,23 @@ class HostedReviewTests(unittest.TestCase):
                 parsed_missing = parse_missing_modules_from_log("Traceback:\nModuleNotFoundError: No module named 'bs4'\nImportError: No module named skimage.io\n")
                 self.assertEqual(parsed_missing.get('bs4'), 'beautifulsoup4')
                 self.assertEqual(parsed_missing.get('skimage'), 'scikit-image')
+
+                # Sixth-batch: collapse_cr_lines, extract_live_tail, core_code_snippets, and fail_fast
+                from articheck.gpu_worker import collapse_cr_lines, extract_live_tail
+                from articheck.hosted_review import extract_core_code_snippets
+                cr_text = "Epoch 1: 10%\rEpoch 1: 50%\rEpoch 1: 100%\nLoss: 0.25\nAccuracy: 94.2%\nDone\n"
+                self.assertIn("Epoch 1: 100%", collapse_cr_lines(cr_text))
+                self.assertNotIn("Epoch 1: 10%", collapse_cr_lines(cr_text))
+                tail_lines = extract_live_tail(cr_text, max_lines=3)
+                self.assertEqual(len(tail_lines), 3)
+                self.assertEqual(tail_lines[-1], "Done")
+                self.assertTrue(gpu_validated['plan'].get('fail_fast'))
+                self.assertTrue(isinstance(gpu_validated.get('core_code_snippets'), list))
+                snippets = extract_core_code_snippets({}, {'code_excerpts': [{'file': 'trainer.py', 'text': 'class ResNet:\n    def forward(self, x):\n        return x\n'}]}, gpu_validated['plan']['stages'], gpu_validated['criteria'], gpu_validated.get('findings') or [])
+                self.assertGreaterEqual(len(snippets), 1)
+                self.assertEqual(snippets[0]['file'], 'trainer.py')
+
+
+if __name__ == '__main__':
+    unittest.main()
+

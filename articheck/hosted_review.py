@@ -116,11 +116,107 @@ JSON 结构：
  "stages":[{"id":"S1","title":"步骤","command":"shell 命令，相对代码仓库根目录", "file":"对应真实源文件路径","depends_on":[],"experiment":"实验名"}],
  "needs":[{"name":"数据/权重/资源","source":"实际可见获取线索","required":true}],
  "metric_patterns":[{"metric_id":"M1","stage_id":"S1","pattern":"匹配该阶段真实 stdout 指标的 Python 正则，第一组为数值", "tolerance":0.01,"aggregation":"last|mean"}]}}
-阶段 ID 用 S1、S2 等；depends_on 仅指向前面的阶段。独立实验不要互相依赖，一项受阻后其他实验可继续。
+阶段 ID 用 S1、S2 等；depends_on 仅指向前面的阶段。执行器默认遇到报错直接中断（fail-fast）。
 指标正则必须绑定确切的输出阶段，不能把不同模型、实验或基线同名输出混在一起。
 criteria 必须恰好包含八个不同维度。page/file 只引用提供的上下文。表格 quote 必须逐字来自该页，
 最多 200 个指标、20 条问题、8 个阶段。超过数量要在 gaps 说明未覆盖项。所有未运行结论保留不确定性。
 """
+
+
+def extract_core_code_snippets(value, context, stages, criteria, findings):
+    excerpts = {p['file']: p.get('text', '') for p in context.get('code_excerpts', []) if isinstance(p, dict) and p.get('file')}
+    if not excerpts:
+        return []
+    priority_files = []
+    for s in stages or []:
+        if s.get('file') in excerpts and s['file'] not in priority_files:
+            priority_files.append(s['file'])
+    for c in criteria or []:
+        if c.get('file') in excerpts and c['file'] not in priority_files:
+            priority_files.append(c['file'])
+    for f in findings or []:
+        if f.get('file') in excerpts and f['file'] not in priority_files:
+            priority_files.append(f['file'])
+    for path in excerpts:
+        if path not in priority_files and not path.lower().endswith(('.md', '.txt', '.rst', '.json', '.yaml', '.yml')):
+            priority_files.append(path)
+    for path in excerpts:
+        if path not in priority_files:
+            priority_files.append(path)
+
+    snippets = []
+    raw_model_snippets = value.get('core_code_snippets')
+    if isinstance(raw_model_snippets, list):
+        for item in raw_model_snippets[:4]:
+            if not isinstance(item, dict):
+                continue
+            fpath = item.get('file')
+            matched_file = fpath if fpath in excerpts else next((k for k in excerpts if isinstance(fpath, str) and k.endswith('/' + fpath)), None)
+            code_str = str(item.get('code') or '').strip()
+            if matched_file and code_str:
+                snippets.append({
+                    'title': str(item.get('title') or '核心实现片段')[:120],
+                    'file': matched_file,
+                    'start_line': int(item['start_line']) if isinstance(item.get('start_line'), int) and item['start_line'] > 0 else 1,
+                    'end_line': int(item['end_line']) if isinstance(item.get('end_line'), int) and item['end_line'] > 0 else min(25, len(code_str.splitlines())),
+                    'code': '\n'.join(code_str.splitlines()[:28])[:2400],
+                    'explanation': str(item.get('explanation') or '该代码段承载了项目的关键模型构建、训练或评估逻辑。')[:500],
+                })
+    if snippets:
+        return snippets[:4]
+
+    stage_by_file = {s['file']: s for s in (stages or []) if s.get('file')}
+    crit_by_file = {c['file']: c for c in (criteria or []) if c.get('file') and c.get('note')}
+    for fpath in priority_files:
+        if len(snippets) >= 3:
+            break
+        src = excerpts.get(fpath, '')
+        lines = src.splitlines()
+        if not lines:
+            continue
+        start_idx = 0
+        block_name = ''
+        for idx, ln in enumerate(lines):
+            m = re.match(r'^\s*(?:async\s+def|def|class)\s+([A-Za-z_][A-Za-z0-9_]*)', ln)
+            if m and m.group(1) not in {'__repr__', '__str__'}:
+                start_idx = idx
+                block_name = m.group(1)
+                break
+            if re.search(r"if\s+__name__\s*==\s*['\"]__main__['\"]", ln):
+                start_idx = idx
+                block_name = '__main__'
+                break
+        end_idx = min(len(lines), start_idx + 22)
+        while end_idx > start_idx + 1 and not lines[end_idx - 1].strip():
+            end_idx -= 1
+        code_block = '\n'.join(lines[start_idx:end_idx]).strip()
+        if not code_block:
+            continue
+        short_name = fpath.split('/')[-1]
+        st = stage_by_file.get(fpath)
+        cr = crit_by_file.get(fpath)
+        if st:
+            title = f"{short_name} · {block_name or st['title']}"
+            explanation = f"对应执行阶段 {st['id']}（{st['title']}），负责核心训练/推理或评估入口逻辑。"
+        elif cr:
+            title = f"{short_name} · {block_name or '核心模块实现'}"
+            explanation = cr['note'][:240]
+        elif block_name:
+            title = f"{short_name} · {block_name} 核心定义"
+            explanation = f"位于 {short_name} 第 {start_idx + 1}–{end_idx} 行，定义模型结构、算法算子或关键数据处理流程。"
+        else:
+            title = f"{short_name} · 核心脚本逻辑"
+            explanation = f"位于 {short_name} 第 {start_idx + 1}–{end_idx} 行，包含项目运行配置与主干执行逻辑。"
+        snippets.append({
+            'title': title[:120],
+            'file': fpath,
+            'start_line': start_idx + 1,
+            'end_line': end_idx,
+            'code': code_block[:2400],
+            'explanation': explanation,
+        })
+    return snippets
+
 
 
 def validate_assessment(value, context):
@@ -346,17 +442,19 @@ def validate_assessment(value, context):
         paper_title = ''
         paper_abstract = ''
         paper_contributions = []
+    core_code_snippets = extract_core_code_snippets(value, context, stages, criteria, clean_findings)
     result = {'summary': text(value, 'summary', 4000), 'paper_title': paper_title,
               'paper_abstract': paper_abstract, 'paper_contributions': paper_contributions,
               'paper_type': value['paper_type'],
               'task':task, 'repository_hint':hint,
               'classification_reason': text(value, 'classification_reason'), 'criteria': criteria,
               'findings': clean_findings, 'metrics': sorted(clean_metrics, key=lambda m: not m['author_method']),
+              'core_code_snippets': core_code_snippets,
               'visual_observations':visual_observations,'web_checks':web_checks,
               'coverage': {**context['coverage'], 'gaps': list(dict.fromkeys(gaps + rejected + citation_gaps)), 'note': text(coverage, 'note')},
               'plan': {'purpose': text(plan, 'purpose'), 'blocked_reason': optional_text(plan, 'blocked_reason'),
                        'stages': stages, 'needs': needs, 'metric_patterns': patterns,
-                       'max_seconds': context['max_seconds'], 'policy': 'frozen_api_plan',
+                       'max_seconds': context['max_seconds'], 'policy': 'frozen_api_plan', 'fail_fast': True,
                        'hardware': 'GPU' if str(plan.get('hardware','CPU')).upper()=='GPU' and context['execution_environment'].get('gpu') else 'CPU'}}
     result['plan_sha256'] = digest({'plan':result['plan'],'metrics':result['metrics']})
     required_resources=[n for n in needs if n['required'] and re.search(r'(GPU|CUDA|显卡|显存|内存|RAM)',n['name'],re.I)]

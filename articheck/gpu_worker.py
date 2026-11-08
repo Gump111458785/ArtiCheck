@@ -169,6 +169,50 @@ def parse_missing_modules_from_log(log_text):
     return missing
 
 
+def collapse_cr_lines(text):
+    """Collapse carriage-return progress bar updates on the same line into the latest frame."""
+    if not text:
+        return ''
+    out = []
+    for raw_line in text.split('\n'):
+        if '\r' in raw_line:
+            parts = [p for p in raw_line.split('\r') if p.strip()]
+            out.append(parts[-1] if parts else '')
+        else:
+            out.append(raw_line)
+    return '\n'.join(out)
+
+
+def extract_live_tail(log_text, max_lines=3):
+    """Return the latest non-empty lines from stage stdout/stderr."""
+    cleaned = collapse_cr_lines(log_text or '')
+    lines = [ln.strip()[:260] for ln in cleaned.splitlines() if ln.strip()]
+    return lines[-max_lines:]
+
+
+def read_bounded_log(log_path, limit=24000):
+    """Read log file preserving both head and tail when large, collapsing CR progress bars."""
+    if not log_path.exists():
+        return '', False
+    size = log_path.stat().st_size
+    if size <= limit * 2:
+        with log_path.open('rb') as stream:
+            raw = stream.read(limit * 2)
+        text = collapse_cr_lines(raw.decode(errors='replace'))
+        if len(text) <= limit:
+            return text, False
+        head = text[:8000].rstrip()
+        tail = text[-(limit - 8050):].lstrip()
+        return f"{head}\n...[中间进度日志已折叠]...\n{tail}", True
+    with log_path.open('rb') as stream:
+        head_raw = stream.read(12000)
+        stream.seek(max(0, size - 48000))
+        tail_raw = stream.read(48000)
+    head_text = collapse_cr_lines(head_raw.decode(errors='replace'))[:8000].rstrip()
+    tail_text = collapse_cr_lines(tail_raw.decode(errors='replace'))[-(limit - 8050):].lstrip()
+    return f"{head_text}\n...[中间进度日志已折叠]...\n{tail_text}", True
+
+
 class WorkerStore:
     def __init__(self, env):
         self.url = env.get('UPSTASH_REDIS_REST_URL', '').rstrip('/')
@@ -391,6 +435,7 @@ class GPUWorker:
 
         timed_out = False
         cancelled = False
+        last_tick = 0.0
         with log_path.open('wb') as log:
             process = subprocess.Popen(args, cwd=work_dir, stdout=log, stderr=subprocess.STDOUT,
                                        env=env, start_new_session=True, preexec_fn=child_setup)
@@ -410,6 +455,14 @@ class GPUWorker:
                         os.killpg(process.pid, signal.SIGKILL)
                         code = process.wait()
                         break
+                    now_mono = time.monotonic()
+                    tick_cb = getattr(self, '_stage_tick', None)
+                    if callable(tick_cb) and now_mono - last_tick >= 1.8:
+                        last_tick = now_mono
+                        try:
+                            tick_cb(log_path)
+                        except Exception:
+                            pass
                     time.sleep(1.0)
             finally:
                 try:
@@ -426,11 +479,11 @@ class GPUWorker:
         if record.get('status') not in {'queued', 'running'}:
             return record
         if self.is_cancelled(job_id):
-            record.update(status='cancelled', source_url=None, notice='已按请求停止 GPU 任务。')
+            record.update(status='cancelled', source_url=None, notice='已按请求停止实验任务。')
             self.save_record(record)
             return record
         if time.time() > record.get('deadline', 0):
-            record.update(status='expired', source_url=None, notice='GPU 队列任务已超过最长时限。')
+            record.update(status='expired', source_url=None, notice='队列任务已超过最长时限。')
             self.save_record(record)
             return record
 
@@ -439,7 +492,7 @@ class GPUWorker:
             archive_bytes = self.fetcher(source_url, record.get('source_bytes'), record.get('source_sha256'))
         except Exception as exc:
             record.update(status='failed', source_url=None,
-                          notice='GPU 执行器未能取回源码归档：' + type(exc).__name__,
+                          notice='执行器未能取回源码归档：' + type(exc).__name__,
                           result={'status': 'failed', 'stages': [], 'metrics': [], 'events': [],
                                   'execution_performed': False, 'scientific_validation': False,
                                   'failure_category': 'transient_service'})
@@ -506,13 +559,15 @@ class GPUWorker:
                                  'auto_provisioned_packages': provisioned_pkgs}
             event('planner', 'plan_scheduled', policy='frozen_api_plan', stages=len(plan['stages']), hardware='GPU')
             record.update(status='running', source_url=None,
-                          notice='自有 GPU 执行器已接单，已在隔离环境中完成源码依赖分析与自动配库。',
+                          notice='云端隔离执行器已接单，已在隔离环境中完成源码依赖分析与自动配库。',
                           result=report)
             self.save_record(record)
 
             all_logs = []
             stage_logs = {}
             cancelled = False
+            failed_stage_id = None
+            fail_fast = plan.get('fail_fast', True)
             for stage in plan['stages']:
                 row = {k: stage[k] for k in ('id', 'title', 'command', 'file')}
                 row['experiment'] = stage.get('experiment', '')
@@ -523,23 +578,38 @@ class GPUWorker:
                     row.update(status='skipped', reason='任务已按请求停止。')
                     report['stages'].append(row)
                     continue
+                if fail_fast and failed_stage_id:
+                    row.update(status='skipped', reason=f'前序阶段 {failed_stage_id} 执行报错，已直接中断后续阶段。')
+                    report['stages'].append(row)
+                    continue
                 if blocked or deadline <= time.monotonic():
                     row.update(status='skipped', reason='依赖阶段未完成。' if blocked else '时间预算已用尽。')
                     report['stages'].append(row)
                     continue
-                row.update(status='running', started_at=time.time())
+                row.update(status='running', started_at=time.time(), live_tail=[])
                 report['stages'].append(row)
                 event('experiment_runner', 'stage_started', stage=stage['id'])
                 record['result'] = report
                 self.save_record(record)
 
                 log_path = results_dir / (stage['id'] + '.log')
-                code, timed_out, stage_cancelled = self.run_stage_command(
-                    work_dir, log_path, stage['command'], deadline, job_id)
+
+                def on_stage_tick(cur_log_path, cur_row=row):
+                    live_text, _ = read_bounded_log(cur_log_path)
+                    if live_text:
+                        cur_row['output'] = live_text
+                        cur_row['live_tail'] = extract_live_tail(live_text)
+                        record['result'] = report
+                        self.save_record(record)
+
+                self._stage_tick = on_stage_tick
+                try:
+                    code, timed_out, stage_cancelled = self.run_stage_command(
+                        work_dir, log_path, stage['command'], deadline, job_id)
+                finally:
+                    self._stage_tick = None
                 report['execution_performed'] = True
-                with log_path.open('rb') as stream:
-                    raw_log = stream.read(24000)
-                log_text = raw_log.decode(errors='replace')
+                log_text, truncated = read_bounded_log(log_path)
                 if code != 0 and not timed_out and not stage_cancelled and not self.is_cancelled(job_id) and time.monotonic() < deadline:
                     missing_mods = parse_missing_modules_from_log(log_text)
                     req_conflict = bool(re.search(r'pip install.*-r\s+\S*requirements', stage['command'])) and bool(
@@ -555,27 +625,33 @@ class GPUWorker:
                             retry_cmd = f"python -m pip install --user --no-input --prefer-binary {pkg_args}"
                         else:
                             retry_cmd = f"python -m pip install --user --no-input --prefer-binary {pkg_args} && ({stage['command']})"
-                        code2, timed_out2, stage_cancelled2 = self.run_stage_command(
-                            work_dir, heal_log, retry_cmd, deadline, job_id)
-                        with heal_log.open('rb') as stream2:
-                            raw_log2 = stream2.read(24000)
-                        heal_text = raw_log2.decode(errors='replace')
+                        self._stage_tick = on_stage_tick
+                        try:
+                            code2, timed_out2, stage_cancelled2 = self.run_stage_command(
+                                work_dir, heal_log, retry_cmd, deadline, job_id)
+                        finally:
+                            self._stage_tick = None
+                        heal_text, heal_trunc = read_bounded_log(heal_log)
                         log_text = (log_text.rstrip() + f"\n\n[ArtiCheck 自动补齐依赖: {', '.join(heal_pkgs)}]\n" + heal_text)[-24000:]
+                        truncated = truncated or heal_trunc
                         code, timed_out, stage_cancelled = code2, timed_out2, stage_cancelled2
                         provisioned_pkgs = sorted(set(provisioned_pkgs) | set(heal_pkgs))
                         report['runtime']['auto_provisioned_packages'] = provisioned_pkgs
                 all_logs.append(log_text)
                 stage_logs[stage['id']] = log_text
+                live_tail = extract_live_tail(log_text)
                 if stage_cancelled:
                     cancelled = True
                     row.update(status='skipped', exit_code=code, timed_out=False,
-                               finished_at=time.time(), output=log_text,
-                               output_truncated=log_path.stat().st_size > len(raw_log),
+                               finished_at=time.time(), output=log_text, live_tail=live_tail,
+                               output_truncated=truncated,
                                reason='任务已按请求停止。')
                 else:
                     row.update(status='completed' if code == 0 and not timed_out else 'failed',
                                exit_code=code, timed_out=timed_out, finished_at=time.time(),
-                               output=log_text, output_truncated=log_path.stat().st_size > len(raw_log))
+                               output=log_text, live_tail=live_tail, output_truncated=truncated)
+                    if row['status'] == 'failed':
+                        failed_stage_id = stage['id']
                 row['child_peak_rss_kib'] = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
                 event('experiment_runner', 'stage_finished', stage=stage['id'], exit_code=code, timed_out=timed_out)
                 event('cross_auditor', 'stage_checked', stage=stage['id'], status=row['status'])
@@ -586,13 +662,13 @@ class GPUWorker:
             failed = any(s['status'] == 'failed' for s in report['stages'])
             if cancelled or self.is_cancelled(job_id):
                 report['status'] = 'cancelled'
-                record['notice'] = 'GPU 执行已停止。'
+                record['notice'] = '实验执行已按请求停止。'
             elif all(s['status'] == 'completed' for s in report['stages']):
                 report['status'] = 'completed'
-                record['notice'] = '自有 GPU 阶段计划已执行完毕。'
+                record['notice'] = '实验阶段计划已执行完毕。'
             else:
                 report['status'] = 'failed'
-                record['notice'] = '部分 GPU 阶段未通过或受阻，请查看实际日志。'
+                record['notice'] = f'阶段 {failed_stage_id or ""} 执行报错中断，请查看问题诊断与实际日志。'.strip()
             report['finished_at'] = time.time()
             report['elapsed_seconds'] = round(report['finished_at'] - started, 3)
             shutil.rmtree(work_dir, ignore_errors=True)
