@@ -133,6 +133,8 @@ def prepare_context(body, *, partial=False):
     context={'paper':paper,'code':archive,'paper_pages':len(pages),'files':files,'paper_excerpts':paper_excerpts,'code_excerpts':excerpts,'parser':parser,
             'coverage':{'paper_pages_in_context':len(paper_excerpts),'code_files_in_context':len(excerpts),'total_code_files':len(files),'file_list_in_context':min(len(files),500),'file_list_truncated':len(files)>500,'paper_text_truncated':len(paper_excerpts)<len(pages) or any(p['truncated'] for p in paper_excerpts),'scope':'Bounded excerpts, not a complete repository audit'}}
     if partial:
+        from .kg_methods import retrieve_methods
+        context['method_chunks']=retrieve_methods(pages, query='architecture design algorithm implementation')
         context['paper_links']=list(dict.fromkeys(link for page in pages for link in page.get('links',[])))[:100]
         context['public_paper_ids']=pages[0].get('public_ids',[]) if pages else []
     return context,str(body.get('scope',''))[:2000]

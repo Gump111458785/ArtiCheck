@@ -2296,3 +2296,8 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .archive-filter-field select{height:30px;min-height:30px;padding-left:8px;background-position:right 8px center}
 .archive-filter-actions{margin-top:8px}
 @media(max-width:1150px){.archive-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.archive-filter-field,.archive-search-field{grid-column:auto}}
+
+.kg-search-progress{top:0;z-index:3;gap:0;width:min(260px,calc(100% - 24px));padding:7px 14px 0;background:#e7f5f2;color:#164f4c;border:1px solid #b6dcd5;border-top:0;border-radius:0 0 8px 8px;box-shadow:0 2px 6px #164f4c14;font-weight:650}
+.kg-search-progress progress{width:calc(100% + 28px);margin:5px -14px 0;height:3px;accent-color:#177d72}
+.kg-delete-actions{border-top:1px solid #dce6f1;margin-top:12px;padding-top:10px}
+.kg-method-missing{padding:8px 10px;background:#f3f7f9;color:#475569;border-radius:6px}

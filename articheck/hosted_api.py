@@ -23,7 +23,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     store = store or HostedStore(env)
     executor = executor or HybridExecutor(env,store)
     uploads = HostedUploads(env,store)
-    kg = KnowledgeGraphService(env, store, reviewer)
+    kg = KnowledgeGraphService(env, store, reviewer, budget)
     from .hosted_auth import Accounts
     accounts = Accounts(app,env,store)
 
@@ -127,6 +127,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             raise
         except Exception as exc:
             raise ReviewError('invalid_material','论文或代码包无法安全解析，请检查文件是否完整、加密或损坏。',422) from exc
+        while context.get('method_chunks') and len(json.dumps(text_materials(context), ensure_ascii=False).encode()) > 175_000:
+            context['method_chunks'].pop()
         if len(json.dumps(text_materials(context), ensure_ascii=False).encode()) > 175_000:
             raise ReviewError('context_too_large', '材料解析后的内容过大，请缩小代码包或论文范围。', 413)
         job = payload.get('request_id') or uuid.uuid4().hex
@@ -478,6 +480,11 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         payload = body()
         return jsonify(kg.update_paper_choice(owner, str(payload.get('paper_id') or ''),
                                              str(payload.get('action') or '')))
+
+    @app.post('/kg/nodes/delete')
+    def delete_kg_node():
+        owner = authorize()
+        return jsonify(kg.delete_node(owner, str(body().get('node_id') or '')))
 
     @app.post('/kg/layout')
     def save_kg_layout():

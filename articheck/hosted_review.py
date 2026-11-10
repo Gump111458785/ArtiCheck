@@ -11,6 +11,7 @@ import re
 import uuid
 
 from .review_api import DIMENSIONS, ReviewError, now, prepare_context
+from .kg_methods import grounded_contributions
 from .hosted_images import render_paper,text_materials
 
 TASKS = {'auto', 'self_review', 'reproduction', 'code_review'}
@@ -128,9 +129,11 @@ GitHub ZIP 的统一外层目录会被剥除。命令在剥除外层后的仓库
 命令可写小型检查脚本，但不得把论文报告值硬编码为观测结果，不得生成虚假的训练/评估输出。
 不要为运行不了的论文制造 toy 替代结果。如有论文，务必准确提取论文题目（paper_title）、摘要（paper_abstract）及 2–5 条核心创新点或主要贡献（paper_contributions）。
 细分贡献只写架构、算法机制或代码实现的具体创新，给出 PDF 逐字出处。指标、分数、对照、数据集、训练设置和具体实验不列为细分贡献。
+method_graph 只使用 materials.method_chunks，概括简短主贡献和细分贡献。每项提供 chunk_id 和逐字 quote，证据不足返回空数组。
 JSON 结构：
 {"summary":"总体判断", "paper_title":"论文题目（无论文则为空字符串）", "paper_abstract":"论文摘要（无论文则为空字符串）",
  "paper_contributions":["论文核心创新点或贡献1","创新点或贡献2"],
+ "method_graph":[{"id":"c1","title":"技术短语","chunk_id":"M1","quote":"方法逐字原文","details":[{"title":"细分技术短语","chunk_id":"M1","quote":"方法逐字原文"}]}],
  "contribution_details":[{"contribution_index":1,"summary":"框架结构或代码实现的创新短语，最多 24 个汉字或 10 个英文词","page":1,"quote":"该细分贡献的 PDF 逐字依据"}],
  "publication_year":null, "publication_venue":"PDF 明示的发表期刊或会议，否则为空", "research_direction":"PDF 明示的主题或关键词，否则为空",
  "paper_type":"empirical|diagnostic|survey|nonpaper|unknown|code_only",
@@ -503,6 +506,7 @@ def validate_assessment(value, context):
     result = {'summary': text(value, 'summary', 4000), 'paper_title': paper_title,
               'paper_abstract': paper_abstract, 'paper_contributions': paper_contributions,
               'contribution_details': contribution_details,
+              'method_graph': grounded_contributions(value.get('method_graph'), context.get('method_chunks', [])),
               'publication_year': year, 'publication_venue': metadata_label('publication_venue'),
               'research_direction': metadata_label('research_direction'), 'paper_type': value['paper_type'],
               'task':task, 'repository_hint':hint,

@@ -9,12 +9,11 @@ import json
 import math
 import uuid
 
-from .hosted_review import subcontribution_phrase
-from .kg_literature import KINDS, LIMITS, OpenAlex, normalize_title
+from .kg_literature import KINDS, LIMITS, OpenAlex, normalize_title, retrieve_public_methods
+from .kg_methods import method_key, synthesize
 from .review_api import ReviewError, now
 
 KG_TTL = 30 * 86400
-COMMON_TERMS = set('the and for that this from with are were paper study method methods approach approaches results show using based their these work we our introduce propose present develop performance model models experiment experiments'.split())
 
 def _tokenize(text):
     import re
@@ -119,7 +118,7 @@ def extract_paper_graph_entry(project_payload, owner_id='anonymous'):
         'abstract': review.get('paper_abstract') or payload.get('paper_abstract') or '',
         'visibility': 'PRIVATE', 'source_type': payload.get('source_type') or 'USER_UPLOAD',
         'review_status': review_status, 'repro_status': reproduction, 'created_at': now(),
-        'contributions': contributions,
+        'contributions': contributions, 'method_graph': review.get('method_graph') or [],
     }
 
 
@@ -237,10 +236,11 @@ def compare_contributions_pair(contrib_a, paper_a, contrib_b, paper_b, verified_
 
 
 class KnowledgeGraphService:
-    def __init__(self, env, store, reviewer=None):
+    def __init__(self, env, store, reviewer=None, budget=None):
         self.env = env
         self.store = store
         self.reviewer = reviewer
+        self.budget = budget
         self._mem_private = {}
         self._mem_layouts = {}
         self._mem_verifications = {}
@@ -314,6 +314,49 @@ class KnowledgeGraphService:
 
     def save_layout(self, owner, payload):
         oh = self._owner_hash(owner)
+        if 'change' in payload:
+            change = payload['change']
+            if not isinstance(change, dict) or not isinstance(change.get('id'), str) or not 1 <= len(change['id']) <= 150:
+                raise ReviewError('invalid_layout', '图谱节点标识无效。')
+            node_id = change['id']
+            if type(change.get('pinned')) is not bool or any(
+                type(change.get(axis)) not in (int, float) or not -100000 <= change[axis] <= 100000 for axis in ('x','y')
+            ):
+                raise ReviewError('invalid_layout', '图谱节点布局无效。')
+            position = {axis: change[axis] for axis in ('x','y')}
+            key = f'articheck:kg:layout:{self.store.namespace}:{oh}'
+            stamp = now()
+            if getattr(self.store, 'url', '') and getattr(self.store, 'token', ''):
+                script = """
+local state=cjson.decode(redis.call('GET',KEYS[1]) or '{}')
+state.positions=state.positions or {}
+local n=0
+for _ in pairs(state.positions) do n=n+1 end
+if n>=500 and not state.positions[ARGV[1]] then return 0 end
+state.positions[ARGV[1]]=cjson.decode(ARGV[2])
+local pins={}
+for _,id in ipairs(state.pinned or {}) do
+    if id~=ARGV[1] then table.insert(pins,id) end
+end
+if ARGV[3]=='1' then table.insert(pins,ARGV[1]) end
+state.pinned=pins
+state.updated_at=ARGV[4]
+redis.call('SET',KEYS[1],cjson.encode(state),'EX',ARGV[5])
+return 1
+"""
+                if self.store.command('EVAL', script, '1', key, node_id, json.dumps(position),
+                                      '1' if change['pinned'] else '0', stamp, str(KG_TTL)) != 1:
+                    raise ReviewError('layout_capacity', '图谱布局节点达到上限。', 409)
+            else:
+                state = self.get_layout(owner)
+                positions = {**state.get('positions', {}), node_id: position}
+                if len(positions) > 500:
+                    raise ReviewError('layout_capacity', '图谱布局节点达到上限。', 409)
+                pinned = [item for item in state.get('pinned', []) if item != node_id]
+                if change['pinned']:
+                    pinned.append(node_id)
+                self._mem_layouts[oh] = {'positions': positions, 'pinned': pinned, 'updated_at': stamp}
+            return {'saved': True}
         positions = payload.get('positions') or {}
         pinned = payload.get('pinned') or []
         if not isinstance(positions, dict) or not isinstance(pinned, list) or len(positions) > 500 or len(pinned) > 500:
@@ -351,7 +394,7 @@ class KnowledgeGraphService:
 
     def literature_state(self, owner):
         key = f'articheck:kg:literature:{self.store.namespace}:{self._owner_hash(owner)}'
-        default = {'papers': {}, 'links': {}, 'matches': {}, 'choices': {}}
+        default = {'papers': {}, 'links': {}, 'matches': {}, 'choices': {}, 'method_links': {}}
         return key, copy.deepcopy(self._redis_get(key, self._mem_literature.get(key, default)))
 
     def update_literature(self, owner, change):
@@ -366,7 +409,7 @@ class KnowledgeGraphService:
                   "redis.call('SET',KEYS[1],ARGV[2],'EX',ARGV[3]); return 1")
         for _ in range(4):
             raw = self.store.command('GET', key)
-            state = json.loads(raw) if raw else {'papers': {}, 'links': {}, 'matches': {}, 'choices': {}}
+            state = json.loads(raw) if raw else {'papers': {}, 'links': {}, 'matches': {}, 'choices': {}, 'method_links': {}}
             change(state)
             if self.store.command('EVAL', script, '1', key, raw or '', json.dumps(state, ensure_ascii=False), str(KG_TTL)) == 1:
                 return
@@ -387,31 +430,116 @@ class KnowledgeGraphService:
             doi=paper.get('doi', ''), kinds=set(kinds), limit=limit,
         )
 
+        anchor = metadata['id']
+        discovered = {item['id']: item for items in groups.values() for item in items
+                      if not state['choices'].get(item['id'], {}).get('removed')}
+        available = {anchor: metadata, **discovered}
+        existing = {
+            wid: [row for row in state['papers'].get(wid, {}).get('contributions', []) if row.get('method_grounded')]
+            for wid in available
+        }
+        for wid, record in available.items():
+            matches = [item for item in own.values()
+                       if state['matches'].get(item['id']) == wid or
+                       normalize_title(item['title']) == normalize_title(record['title'])]
+            if wid == anchor and paper_id in own:
+                matches = [paper]
+            if len(matches) == 1 and matches[0].get('method_graph'):
+                existing[wid] = matches[0]['method_graph']
+        fetch = [item for wid, item in available.items() if not existing[wid]]
+        chunks = retrieve_public_methods(fetch, paper['title'], self.literature)
+        inputs = [{'id': wid, 'title': item['title'], 'chunks': chunks.get(wid, []), 'existing': existing[wid]}
+                  for wid, item in available.items() if chunks.get(wid) or existing[wid]]
+        with_evidence = {row['id'] for row in inputs}
+        pairs = [[anchor, wid] for wid in discovered if anchor in with_evidence and wid in with_evidence]
+        analysis_error = ''
+        try:
+            extracted, relationships = synthesize(self.reviewer, self.budget, inputs, pairs)
+        except (ReviewError, OSError, ValueError, KeyError, IndexError, TypeError) as error:
+            extracted, relationships = {}, []
+            analysis_error = ('本轮模型额度已用完。已保留公开书目。'
+                              if isinstance(error, ReviewError) and error.code == 'budget_exhausted'
+                              else '方法分析暂未完成。已保留公开书目，可重试扩展。')
+
+        for wid, item in available.items():
+            # Never write an uploaded paper's excerpts into the public metadata record.
+            item['contributions'] = extracted.get(wid) or [
+                row for row in state['papers'].get(wid, {}).get('contributions', []) if row.get('method_grounded')
+            ]
+            item['method_status'] = ('grounded' if item['contributions'] else
+                                     'pending' if chunks.get(wid) else 'unavailable')
+
         def save(current):
             if current['choices'].get(paper_id, {}).get('removed'):
                 raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
             identifier = metadata['id']
             current['matches'][paper_id] = identifier
-            current['papers'][identifier] = metadata
+            def save_public(item):
+                wid = item['id']
+                prior = current['papers'].get(wid, {})
+                if not item.get('contributions') and any(row.get('method_grounded') for row in prior.get('contributions', [])):
+                    item = {**item, 'contributions': prior['contributions'], 'method_status': 'grounded'}
+                current['papers'][wid] = item
+
+            save_public(metadata)
             for kind, papers in groups.items():
                 for related in papers:
                     target = related['id']
                     if current['choices'].get(target, {}).get('removed'):
                         continue
-                    current['papers'][target] = related
+                    save_public(related)
                     source, destination = (target, identifier) if kind == 'previous' else (identifier, target)
                     if kind == 'similar':
                         source, destination = sorted((identifier, target))
                     key = f'{kind if kind == "similar" else "citation"}:{source}:{destination}'
                     current['links'][key] = {'source': source, 'target': destination,
                                              'kind': 'similar' if kind == 'similar' else 'citation'}
+            methods = current.setdefault('method_links', {})
+            for relation in relationships:
+                a, b = sorted(((relation['left_paper'], relation['left_id']),
+                               (relation['right_paper'], relation['right_id'])))
+                if any(current['choices'].get(wid, {}).get('removed') for wid, _ in (a, b)):
+                    continue
+                methods[':'.join((*a, *b))] = relation
+            if len(methods) > 300:
+                raise ReviewError('literature_capacity', '图谱的贡献关系已达上限，请先移除部分节点。', 409)
             if len(current['papers']) > 75 or len(current['links']) > 300:
                 raise ReviewError('literature_capacity', '图谱的公开条目或关系已达上限，请先移除部分条目。', 409)
 
         self.update_literature(owner, save)
-        return self.build_graph_response(owner, focus_paper_id=paper_id)
+        return {**self.build_graph_response(owner, focus_paper_id=paper_id), 'method_notice': analysis_error}
+
+    def delete_node(self, owner, node_id):
+        graph = self.build_graph_response(owner)
+        node = next((item for item in graph['nodes'] if item['id'] == node_id), None)
+        if node is None:
+            raise ReviewError('node_not_found', '当前图谱没有这个节点。', 404)
+        owned_ids = {paper['id'] for paper in self.owned_papers(owner)}
+
+        def remove(state):
+            state['choices'].setdefault(node_id, {})['removed'] = True
+            if node['node_type'] == 'Paper':
+                canonical = state['matches'].get(node_id) or next(
+                    (wid for wid, public in state['papers'].items()
+                     if normalize_title(public['title']) == normalize_title(node['full_title'])), node_id)
+                state['choices'].setdefault(canonical, {})['removed'] = True
+                if node_id not in owned_ids:
+                    state['papers'].pop(canonical, None)
+                state['links'] = {key: item for key, item in state['links'].items()
+                                  if canonical not in (item['source'], item['target'])}
+                state['method_links'] = {key: item for key, item in state.get('method_links', {}).items()
+                                         if canonical not in (item['left_paper'], item['right_paper'])}
+            elif node['node_type'] == 'Contribution':
+                state['method_links'] = {key: item for key, item in state.get('method_links', {}).items()
+                                         if (node['canonical_paper'], node['method_id']) not in {
+                                             (item['left_paper'], item['left_id']), (item['right_paper'], item['right_id'])}}
+
+        self.update_literature(owner, remove)
+        return self.build_graph_response(owner)
 
     def update_paper_choice(self, owner, paper_id, action):
+        if action == 'remove':
+            return self.delete_node(owner, paper_id)
         own = {paper['id'] for paper in self.owned_papers(owner)}
 
         def change(state):
@@ -422,15 +550,6 @@ class KnowledgeGraphService:
                 flags['read'] = action == 'read'
             elif action in {'hide', 'show'}:
                 flags['hidden'] = action == 'hide'
-            elif action == 'remove' and paper_id not in own:
-                del state['papers'][paper_id]
-                state['matches'].pop(paper_id, None)
-                flags['removed'] = True
-                state['links'] = {key: link for key, link in state['links'].items()
-                                  if paper_id not in (link['source'], link['target'])}
-                # Tombstones stop a repeated expansion from undoing an explicit removal.
-                if len(state['choices']) > 240:
-                    state['choices'].pop(next(iter(state['choices'])))
             else:
                 raise ReviewError('invalid_paper_action', '请选择可用的论文操作。')
 
@@ -467,25 +586,32 @@ class KnowledgeGraphService:
             public = library['papers'].get(matched, {})
             if matched:
                 aliases.setdefault(matched, paper['id'])
-            contributions = [row for row in paper['contributions'] if row.get('contribution_type') != 'EMPIRICAL']
+            if library['choices'].get(paper['id'], {}).get('removed'):
+                continue
+            contributions = paper.get('method_graph') or [row for row in public.get('contributions', [])
+                                                           if row.get('method_grounded')]
             papers.append({
                 'id': paper['id'], 'title': paper['title'], 'project_id': paper['project_id'],
-                'source_type': 'USER_UPLOAD', 'source_url': public.get('source_url', ''),
-                'review_status': paper['review_status'], 'contributions': contributions or public.get('contributions', []),
+                'source_type': 'USER_UPLOAD', 'source_url': public.get('source_url', ''), 'canonical': matched or paper['id'],
+                'review_status': paper['review_status'], 'contributions': contributions,
                 'abstract': paper['abstract'], 'metadata': self.metadata(paper, public),
+                'method_status': 'grounded' if contributions else public.get('method_status', 'unavailable'),
             })
         for public in library['papers'].values():
-            if public['id'] not in aliases:
-                papers.append({**public, 'source_type': 'PUBLIC_LITERATURE', 'metadata': self.metadata({}, public)})
+            if public['id'] not in aliases and not library['choices'].get(public['id'], {}).get('removed'):
+                contributions = [row for row in public.get('contributions', []) if row.get('method_grounded')]
+                papers.append({**public, 'source_type': 'PUBLIC_LITERATURE', 'metadata': self.metadata({}, public),
+                               'canonical': public['id'], 'contributions': contributions,
+                               'method_status': 'grounded' if contributions else public.get('method_status', 'unavailable')})
         focus_paper_id = aliases.get(focus_paper_id, focus_paper_id)
         if not any(paper['id'] == focus_paper_id for paper in papers):
-            focus_paper_id = own[-1]['id'] if own else (papers[0]['id'] if papers else '')
+            focus_paper_id = next((paper['id'] for paper in reversed(papers) if paper['source_type'] == 'USER_UPLOAD'), papers[0]['id'] if papers else '')
         papers.sort(key=lambda paper: paper['id'] != focus_paper_id)
         layout = self.get_layout(owner)
         positions = layout.get('positions') or {}
         nodes, edges, timeline = [], [], []
         contributions_by_paper = {}
-        comparison_links = []
+        method_nodes = {}
 
         def append_node(node, x, y):
             override = positions.get(node['id']) or {}
@@ -509,37 +635,40 @@ class KnowledgeGraphService:
             item = {'paper_id': paper_id, 'title': paper['title'],
                     'year': paper['metadata']['year']['value'], 'direction': paper['metadata']['direction']['value'],
                     'venue': paper['metadata']['venue']['value'], 'source_type': paper['source_type'],
-                    'visibility': 'PRIVATE', 'read': bool(flags.get('read')), 'hidden': bool(flags.get('hidden')), 'source_url': paper.get('source_url', '')}
+                    'visibility': 'PRIVATE', 'read': bool(flags.get('read', paper['source_type'] == 'USER_UPLOAD')), 'method_status': paper['method_status'], 'hidden': bool(flags.get('hidden')), 'source_url': paper.get('source_url', '')}
             timeline.append(item)
             px, py = append_node({**item, 'id': paper_id, 'node_type': 'Paper', 'layer': 1,
                                   'label': paper['title'], 'full_title': paper['title'],
                                   'abstract': paper.get('abstract', ''), 'metadata': paper['metadata']},
                                  520 + radius * math.cos(angle), 325 + radius * math.sin(angle))
-            parent_nodes = []
             for offset, contribution in enumerate(paper['contributions'][:6]):
-                cid = contribution.get('id') or f'{paper_id}_contribution_{offset+1}'
+                method_id = method_key(contribution)
+                cid = f'{paper_id}_contribution_{method_id}'
+                if library['choices'].get(cid, {}).get('removed'):
+                    continue
                 direction = angle + (offset - (len(paper['contributions'][:6])-1) / 2) * .65
                 parent = {'id': cid, 'paper_id': paper_id, 'paper_title': paper['title'],
                           'parent_id': paper_id, 'node_type': 'Contribution', 'layer': 2,
                           'label': contribution['title'], 'full_title': contribution['title'],
-                          'summary': contribution.get('summary', ''), 'source_url': contribution.get('source_url', '')}
+                          'summary': contribution['title'], 'source_url': contribution.get('source_url', ''),
+                          'quote': contribution['quote'], 'page': contribution['page'], 'section': contribution['section'],
+                          'method_id': method_id, 'canonical_paper': paper['canonical']}
                 cx, cy = append_node(parent, px + 105*math.cos(direction), py + 105*math.sin(direction))
                 add_edge(paper_id, cid, 'HAS_CONTRIBUTION', '主贡献')
-                parent_nodes.append(parent)
+                method_nodes[paper['canonical'], method_id] = parent
                 for detail_index, detail in enumerate(contribution.get('details', [])[:3]):
-                    phrase = subcontribution_phrase(detail.get('summary'))
-                    if not phrase:
+                    did = f'{cid}_detail_{method_key(detail)}'
+                    if library['choices'].get(did, {}).get('removed'):
                         continue
-                    did = f'{cid}_detail_{detail_index+1}'
                     theta = direction + (detail_index - 1) * .63
                     child = {'id': did, 'paper_id': paper_id, 'paper_title': paper['title'],
                              'parent_id': cid, 'node_type': 'Detail', 'layer': 3,
-                             'label': phrase, 'full_title': phrase,
-                             'quote': detail.get('quote', ''), 'page': detail.get('page')}
+                             'label': detail['title'], 'full_title': detail['title'],
+                             'quote': detail['quote'], 'page': detail['page'], 'section': detail['section'],
+                             'source_url': detail.get('source_url', '')}
                     append_node(child, cx + 79*math.cos(theta), cy + 79*math.sin(theta))
                     add_edge(cid, did, 'HAS_DETAIL', '细分贡献')
-                    parent_nodes.append(child)
-            contributions_by_paper[paper_id] = parent_nodes
+            contributions_by_paper[paper_id] = True
 
         for link in library['links'].values():
             source, target = (aliases.get(link[key], link[key]) for key in ('source', 'target'))
@@ -547,22 +676,15 @@ class KnowledgeGraphService:
                 continue
             if link['kind'] == 'citation':
                 add_edge(source, target, 'CITED_BY', '被后续论文引用', '箭头由被引用论文指向引用它的论文。', 'https://openalex.org/' + link['target'])
-            comparison_links.append((source, target))
-        # Each paper pair has at most two contribution links and only when the text supplies an identifiable basis.
-        for source, target in sorted({tuple(sorted(pair)) for pair in comparison_links}):
-            matches = []
-            for left in contributions_by_paper[source]:
-                for right in contributions_by_paper[target]:
-                    a = _tokenize(left.get('quote') or left['label']) - COMMON_TERMS
-                    b = _tokenize(right.get('quote') or right['label']) - COMMON_TERMS
-                    shared = a & b
-                    if len(shared) >= 2 and len(shared) / len(a | b) >= .18:
-                        matches.append((len(shared) / len(a | b), sorted(shared), left, right))
-            for _, shared, left, right in sorted(matches, key=lambda row: -row[0])[:2]:
-                add_edge(left['id'], right['id'], 'SIMILAR_CONTRIBUTION', '贡献相似候选',
-                         '共同术语为 ' + '、'.join(shared[:6]) + '。具体方法与结论仍需核对原文。',
-                         left.get('source_url') or right.get('source_url', ''))
-                edges[-1]['excerpts'] = [left.get('quote') or left['label'], right.get('quote') or right['label']]
+        for relation in library.get('method_links', {}).values():
+            left = method_nodes.get((relation['left_paper'], relation['left_id']))
+            right = method_nodes.get((relation['right_paper'], relation['right_id']))
+            if not left or not right or left['paper_id'] == right['paper_id']:
+                continue
+            add_edge(left['id'], right['id'], 'SIMILAR_CONTRIBUTION', '方法贡献关联',
+                     relation['description'], left['source_url'] or right['source_url'])
+            edges[-1]['excerpts'] = [left['quote'], right['quote']]
+            edges[-1]['evidence'] = [{key: node[key] for key in ('page','section','source_url')} for node in (left,right)]
 
         node_ids = {node['id'] for node in nodes}
         return {

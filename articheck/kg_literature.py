@@ -1,18 +1,27 @@
 """Read bounded, public citation neighborhoods from OpenAlex."""
 from concurrent.futures import ThreadPoolExecutor
 import json
+from pathlib import Path
+import tempfile
+import time
 import re
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.parse import urlencode, urlsplit
+from urllib.request import urlopen, build_opener, HTTPRedirectHandler, Request
 
+from .kg_methods import retrieve_methods
+from .reproduction.paper_text import extract_paper
 from .review_api import ReviewError
 
 WORK_ID = re.compile(r'(?:https://openalex\.org/)?(W[0-9]{1,18})\Z')
-FIELDS = 'id,display_name,doi,publication_year,primary_location,primary_topic,abstract_inverted_index,related_works,authorships,referenced_works'
+FIELDS = 'id,display_name,doi,publication_year,primary_location,primary_topic,best_oa_location,locations,related_works,authorships,referenced_works'
 KINDS = {'previous', 'next', 'similar'}
 LIMITS = {3, 5, 8}
-CONTRIBUTION = re.compile(r'\b(?:we\s+(?:propose|introduce|present|develop|design|derive|prove|show)|this\s+(?:paper|work)\s+(?:introduces|presents|proposes)|our\s+(?:main\s+)?contribution)\b', re.I)
+PDF_HOSTS = {'arxiv.org', 'export.arxiv.org', 'openaccess.thecvf.com', 'aclanthology.org',
+             'proceedings.mlr.press', 'jmlr.org', 'www.jmlr.org', 'proceedings.neurips.cc',
+             'papers.nips.cc', 'pmc.ncbi.nlm.nih.gov'}
+PDF_LIMIT = 12 * 1024**2
+
 
 
 def work_id(value):
@@ -22,6 +31,17 @@ def work_id(value):
 
 def normalize_title(title):
     return ''.join(char for char in title.casefold() if char.isalnum())
+
+
+def author_ids(work):
+    return {item['author']['id'] for item in work.get('authorships', [])
+            if (item.get('author') or {}).get('id')}
+
+
+def matching_edition(work, candidate):
+    authors = author_ids(work)
+    return (normalize_title(work.get('display_name') or '') == normalize_title(candidate.get('display_name') or '')
+            and bool(authors) and len(authors & author_ids(candidate)) >= max(1, len(authors) * .75))
 
 
 def work_metadata(work):
@@ -38,22 +58,91 @@ def work_metadata(work):
         left, right = venue.split(' - ')
         if left == right:
             venue = left
-    words = {}
-    for token, indices in (work.get('abstract_inverted_index') or {}).items():
-        for index in indices:
-            if type(index) is int and 0 <= index < 600:
-                words[index] = str(token)[:80]
-    abstract = ' '.join(words[index] for index in sorted(words))
     url = 'https://openalex.org/' + identifier
-    candidates = [part.strip() for part in re.split(r'(?<=[.!?])\s+', abstract)
-                  if CONTRIBUTION.search(part) and len(part.split()) >= 7]
-    contributions = [
-        {'title': sentence[:260], 'summary': sentence[:420], 'source_url': url}
-        for sentence in dict.fromkeys(candidates[:3])
-    ]
+    urls = []
+    for location in [work.get('best_oa_location'), *(work.get('locations') or [])[:24]]:
+        if not isinstance(location, dict) or not location.get('is_oa'):
+            continue
+        pdf, landing = location.get('pdf_url'), location.get('landing_page_url')
+        if allowed_pdf(pdf):
+            urls.append(pdf)
+        if isinstance(landing, str) and re.fullmatch(r'https://arxiv\.org/abs/(?:[a-z-]+/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?', landing):
+            urls.append(landing.replace('/abs/', '/pdf/', 1))
+    doi = work.get('doi') or ''
+    preprint = re.fullmatch(r'https://doi\.org/10\.48550/arxiv\.(\d{4}\.\d{4,5})(?:v\d+)?', doi, re.I)
+    if preprint:
+        urls.append('https://arxiv.org/pdf/' + preprint[1])
     return {'id': identifier, 'title': title[:350], 'year': year if type(year) is int else None,
             'venue': venue, 'direction': str(topic.get('display_name') or '')[:180],
-            'source_url': url, 'contributions': contributions}
+            'source_url': url, 'pdf_sources': list(dict.fromkeys(urls))[:2], 'authors': sorted(author_ids(work))[:30]}
+
+
+def allowed_pdf(value):
+    if not isinstance(value, str) or len(value) > 1000:
+        return False
+    try:
+        url = urlsplit(value)
+        return (url.scheme == 'https' and url.hostname in PDF_HOSTS and not url.username and not url.password
+                and url.port in {None, 443} and not url.query and not url.fragment
+                and bool(url.path) and (url.path.endswith('.pdf') or url.hostname == 'aclanthology.org'
+                                        or url.hostname in {'arxiv.org','export.arxiv.org'} and url.path.startswith('/pdf/')))
+    except ValueError:
+        return False
+
+
+def fetch_method_chunks(paper, query, deadline):
+    class PublicPDFRedirects(HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            if not allowed_pdf(newurl):
+                raise URLError('Redirect outside public PDF allowlist')
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    for url in paper.get('pdf_sources', []):
+        remaining = deadline - time.monotonic()
+        if remaining < 2 or not allowed_pdf(url):
+            continue
+        try:
+            request = Request(url, headers={'User-Agent': 'ArtiCheck/1.0 public research methods', 'Accept': 'application/pdf'})
+            with build_opener(PublicPDFRedirects()).open(request, timeout=min(6, remaining/2)) as response:
+                data = bytearray()
+                while len(data) <= PDF_LIMIT and deadline - time.monotonic() > 1:
+                    block = response.read1(256 * 1024)
+                    if not block:
+                        break
+                    data.extend(block)
+                else:
+                    continue
+                raw = bytes(data)
+                source = response.geturl()
+            if not allowed_pdf(source) or not raw.startswith(b'%PDF-') or len(raw) > PDF_LIMIT:
+                continue
+            with tempfile.TemporaryDirectory(prefix='articheck-oa-') as directory:
+                path = Path(directory) / 'paper.pdf'
+                path.write_bytes(raw)
+                pages, _ = extract_paper(path, timeout=max(1, min(10, deadline - time.monotonic())))
+            chunks = retrieve_methods(pages, query=query, limit=2)
+            if chunks:
+                return [{**chunk, 'source_url': source} for chunk in chunks]
+        except (OSError, ValueError, URLError):
+            continue
+    return []
+
+
+def retrieve_public_methods(papers, query, provider=None):
+    if not papers:
+        return {}
+    deadline = time.monotonic() + 28
+    def retrieve(paper):
+        if not paper.get('pdf_sources') and provider and paper.get('authors') and deadline - time.monotonic() > 7:
+            try:
+                sources = provider.find_open_editions(paper)
+                paper = {**paper, 'pdf_sources': sources}
+            except (ReviewError, OSError, ValueError):
+                pass
+        return fetch_method_chunks(paper, query, deadline)
+
+    with ThreadPoolExecutor(max_workers=min(8, len(papers))) as pool:
+        return dict(zip((paper['id'] for paper in papers), pool.map(retrieve, papers)))
 
 
 class OpenAlex:
@@ -74,6 +163,18 @@ class OpenAlex:
         except (URLError, TimeoutError, ValueError) as error:
             raise ReviewError('literature_unavailable', '公开书目暂时无法访问，请稍后重试。', 503) from error
 
+    def find_open_editions(self, paper):
+        author_set = set(paper['authors'])
+        hits = self.request(search=paper['title'][:300], per_page=5).get('results', [])
+        sources = []
+        for hit in hits:
+            if (normalize_title(hit.get('display_name') or '') == normalize_title(paper['title'])
+                    and len(author_set & author_ids(hit)) >= max(1, len(author_set) * .75)):
+                metadata = work_metadata(hit)
+                if metadata:
+                    sources.extend(metadata['pdf_sources'])
+        return list(dict.fromkeys(sources))[:2]
+
     def identify(self, *, title, identifier='', doi=''):
         if work_id(identifier):
             return self.request('/' + work_id(identifier))
@@ -90,15 +191,9 @@ class OpenAlex:
         if len(published) == 1:
             candidate = published[0]
 
-            def authors(row):
-                return {item['author']['id'] for item in row.get('authorships', [])
-                        if (item.get('author') or {}).get('id')}
-
-            base = authors(candidate)
-            # Treat a conference version and a same-title preprint as one work only
-            # when the book-keeping IDs agree for most authors.
-            if base and all(row is candidate or len(base & authors(row)) >= max(1, len(base) * .75) for row in exact):
-                return candidate
+            if all(row is candidate or matching_edition(candidate, row) for row in exact):
+                locations = [location for row in exact if row is not candidate for location in row.get('locations', [])]
+                return {**candidate, 'locations': [*(candidate.get('locations') or []), *locations]}
         raise ReviewError('literature_unmatched', '未能唯一匹配公开论文。请核对论文题目或 DOI。', 404)
 
     def neighborhood(self, *, title, identifier='', doi='', kinds, limit):

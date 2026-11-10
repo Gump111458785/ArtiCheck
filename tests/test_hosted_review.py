@@ -135,7 +135,9 @@ class HostedReviewTests(unittest.TestCase):
         nodes = response.json['nodes']
         paper = next(n for n in nodes if n['full_title'] == 'Original paper')
         self.assertIsNone(paper['year'])
-        self.assertEqual({n['node_type'] for n in nodes}, {'Paper', 'Contribution'})
+        self.assertEqual({n['node_type'] for n in nodes}, {'Paper'})
+        self.assertEqual(paper['method_status'], 'unavailable')
+        self.assertTrue(paper['read'])
         self.assertNotIn('accuracy', json.dumps(response.json))
         self.assertEqual(client.get('/kg/graph', headers=other).json['papers'], [])
         for scope in ('GLOBAL', 'COMBINED'):
@@ -184,20 +186,19 @@ class HostedReviewTests(unittest.TestCase):
             register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), Budget(),
                      store=store, executor=Executor())
         job = 'e' * 32
-        contribution = 'Residual shortcut connections stabilize gradient propagation'
-        store.save(OWNER, {'id': job, 'status': 'completed',
-                           'review': {'task': 'self_review', 'paper_title': 'Owned paper',
-                                      'paper_contributions': [contribution],
-                                      'contribution_details': [{'index': 1, 'summary': 'Identity shortcuts',
-                                                                'quote': 'Identity shortcuts preserve gradients', 'page': 2},
-                                                               {'index': 1, 'summary': '对照实验准确率提高 5%', 'quote': 'Comparison experiment', 'page': 4}]}})
+        evidence = {'title': 'Residual shortcut connections', 'local_id': 'c1', 'page': 3,
+                    'quote': 'Residual shortcut connections stabilize gradient propagation', 'section': '3. Residual Learning',
+                    'method_grounded': True, 'details': [{'title': 'Identity shortcuts', 'page': 3,
+                    'quote': 'Identity shortcuts preserve gradients', 'section': '3.1 Shortcut Mapping'}]}
+        store.save(OWNER, {'id': job, 'status': 'completed', 'review': {
+            'task': 'self_review', 'paper_title': 'Owned paper', 'method_graph': [evidence]}})
         client = app.test_client()
         other = {**HEADERS, 'X-ArtiCheck-Session': 'b' * 64}
         graph = client.post('/kg/ingest', json={'assessment_id': job}, headers=HEADERS).json
         root = graph['focus_paper_id']
         public = lambda ident, title, year: {'id': ident, 'title': title, 'year': year, 'venue': 'CVPR',
             'direction': 'Computer vision', 'source_url': 'https://openalex.org/' + ident,
-            'contributions': [{'title': contribution, 'source_url': 'https://openalex.org/' + ident}]}
+            'contributions': [{'title': 'A legacy abstract sentence must never be shown'}]}
         original, past, future = public('W11', 'Owned paper', 2016), public('W22', 'Earlier work', 2014), public('W33', 'Later work', 2017)
         provider.return_value.neighborhood.side_effect = [(original, {'previous': [past], 'next': [future]}),
                                                            (future, {'previous': [original, past]})]
@@ -205,7 +206,13 @@ class HostedReviewTests(unittest.TestCase):
         choice = '/kg/literature/paper'
         payload = {'paper_id': root, 'kinds': ['previous', 'next'], 'limit': 3}
         self.assertEqual(client.post(expand, json=payload, headers=other).status_code, 404)
-        graph = client.post(expand, json=payload, headers=HEADERS).json
+        from articheck.kg_methods import method_key
+        public_evidence = {**evidence, 'title': 'Skip-connected architecture', 'source_url': 'https://arxiv.org/pdf/1611.05431', 'details': []}
+        relation = {'left_paper': 'W11', 'left_id': method_key(evidence),
+                    'right_paper': 'W33', 'right_id': method_key(public_evidence),
+                    'description': '两项架构都使用恒等捷径直接传递输入特征。'}
+        with patch('articheck.kg_service.synthesize', return_value=({'W33': [public_evidence]}, [relation])):
+            graph = client.post(expand, json=payload, headers=HEADERS).json
         by_id = {row['id']: row for row in graph['nodes']}
         self.assertEqual(by_id[root]['metadata']['year']['source'], 'OpenAlex')
         self.assertEqual([n['label'] for n in graph['nodes'] if n['node_type'] == 'Detail'], ['Identity shortcuts'])
@@ -215,12 +222,22 @@ class HostedReviewTests(unittest.TestCase):
         self.assertTrue(any(edge['edge_type'] == 'SIMILAR_CONTRIBUTION'
                             and by_id[edge['source']]['node_type'] != 'Paper'
                             and edge['source_url'] for edge in graph['edges']))
+        self.assertTrue(by_id[root]['read'])
         self.assertFalse(by_id['W33']['read'])
+        self.assertEqual(by_id['W22']['method_status'], 'unavailable')
+        self.assertNotIn('legacy abstract', json.dumps(graph))
+        edge = next(edge for edge in graph['edges'] if edge['edge_type'] == 'SIMILAR_CONTRIBUTION')
+        self.assertEqual(edge['evidence'][0]['section'], '3. Residual Learning')
+        node_id = edge['target']
+        self.assertEqual(client.post('/kg/layout', json={'change': {'id': node_id, 'x': 22, 'y': 44, 'pinned': True}}, headers=HEADERS).status_code, 200)
+        self.assertEqual(client.get('/kg/graph', headers=HEADERS).json['layout']['positions'][node_id]['x'], 22)
+        self.assertEqual(client.post('/kg/nodes/delete', json={'node_id': node_id}, headers=other).status_code, 404)
         for action in ('read', 'hide'):
             graph = client.post(choice, json={'paper_id': 'W33', 'action': action}, headers=HEADERS).json
         hidden = next(row for row in graph['papers'] if row['paper_id'] == 'W33')
         self.assertTrue(hidden['read'] and hidden['hidden'])
-        graph = client.post(expand, json={'paper_id': 'W33', 'kinds': ['previous'], 'limit': 3}, headers=HEADERS).json
+        with patch('articheck.kg_service.synthesize', return_value=({}, [])):
+            graph = client.post(expand, json={'paper_id': 'W33', 'kinds': ['previous'], 'limit': 3}, headers=HEADERS).json
         self.assertEqual(provider.return_value.neighborhood.call_args.kwargs['identifier'], 'W33')
         self.assertEqual({row['paper_id'] for row in graph['papers']}, {root, 'W22', 'W33'})
         self.assertEqual(client.post(choice, json={'paper_id': 'W33', 'action': 'show'}, headers=other).status_code, 404)
@@ -228,7 +245,57 @@ class HostedReviewTests(unittest.TestCase):
         self.assertFalse(next(row for row in graph['papers'] if row['paper_id'] == 'W33')['hidden'])
         graph = client.post(choice, json={'paper_id': 'W22', 'action': 'remove'}, headers=HEADERS).json
         self.assertFalse(any('W22' in (edge['source'], edge['target']) for edge in graph['edges']))
+        deleted = client.post('/kg/nodes/delete', json={'node_id': node_id}, headers=HEADERS).json
+        self.assertFalse(any(node['id'] == node_id for node in deleted['nodes']))
+        self.assertFalse(any(node_id in (edge['source'], edge['target']) for edge in deleted['edges']))
+        self.assertEqual(store.get(OWNER, job)['review']['method_graph'][0], evidence)
         self.assertEqual(client.get('/kg/graph', headers=other).json['papers'], [])
+
+    def test_manual_public_read_status_survives_merging_into_owned_paper(self):
+        from articheck.kg_service import KnowledgeGraphService
+        store = MemoryStore()
+        store.namespace = 'read-merge'
+        graph = KnowledgeGraphService({}, store)
+        graph.update_literature(OWNER, lambda state: state['papers'].update(
+            W99={'id': 'W99', 'title': 'Same title', 'source_url': 'https://openalex.org/W99'}))
+        graph.update_paper_choice(OWNER, 'W99', 'unread')
+        result = graph.ingest_project(OWNER, {'project_id': 'project', 'report': {
+            'id': 'a'*32, 'review': {'paper_title': 'Same title'}}})
+        self.assertEqual(len(result['papers']), 1)
+        self.assertEqual(result['papers'][0]['source_type'], 'USER_UPLOAD')
+        self.assertFalse(result['papers'][0]['read'])
+        deleted = graph.delete_node(OWNER, result['focus_paper_id'])
+        self.assertEqual(deleted['nodes'], [])
+        self.assertEqual(len(graph.owned_papers(OWNER)), 1)
+
+    def test_method_retrieval_and_grounded_model_output(self):
+        from articheck.kg_methods import retrieve_methods, synthesize
+        quote = 'The routing layer groups related patches into learned windows.'
+        methods = retrieve_methods([
+            {'number': 1, 'text': '1. Introduction\n' + 'The introduction describes the objective. '*8},
+            {'number': 3, 'text': '4. Architecture\n' + quote*3 + '\n5. Experiments\n' + 'The benchmark reports results. '*8}
+        ], query='routing')
+        self.assertEqual([row['page'] for row in methods], [3])
+        self.assertEqual(methods[0]['section'], '4. Architecture')
+        self.assertNotIn('benchmark', methods[0]['text'])
+        reviewer = Reviewer()
+        budget = Budget()
+        good = {'id': 'c1', 'title': 'Patch routing layer', 'chunk_id': 'M1', 'quote': quote}
+        rows = [
+            {**good, 'paper_id': 'W1'}, {**good, 'paper_id': 'W2', 'title': 'Learned routing windows'},
+            {**good, 'paper_id': 'W1', 'id': 'fake', 'title': 'Synthetic graph', 'quote': 'This passage is missing from the paper.'}
+        ]
+        relation = {'left_paper': 'W1', 'right_paper': 'W2', 'left_id': 'c1', 'right_id': 'c1',
+                    'description': '两项方法均使用窗口组织图块，但关注不同路由粒度。'}
+        data = {'contributions': rows, 'relations': [relation, {**relation, 'right_id': 'missing'}]}
+        with patch.object(reviewer, 'post', return_value={'choices': [{'message': {'content': json.dumps(data)}}]}) as post:
+            graph, edges = synthesize(reviewer, budget, [
+                {'id': 'W1', 'title': 'First', 'chunks': methods, 'existing': []},
+                {'id': 'W2', 'title': 'Second', 'chunks': methods, 'existing': []}], [['W1', 'W2']])
+        self.assertEqual(budget.calls, 1)
+        self.assertIn(quote, post.call_args.args[0]['messages'][1]['content'])
+        self.assertEqual([row['title'] for row in graph['W1']], ['Patch routing layer'])
+        self.assertEqual(len(edges), 1)
 
     def test_terminated_assessment_cannot_reopen_or_resume_execution(self):
         store = MemoryStore()
