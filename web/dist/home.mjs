@@ -6,7 +6,7 @@ export const SHOWCASE_CASES=[
   badge:'部分未满足',
   badgeState:'partial',
   title:'LIBLINEAR',
-  subtitle:'/ news20',
+  paperTitle:'LIBLINEAR: A Library for Large Linear Classification',
   lead:'从作者代码与公开数据，到独立重算和分层验收。',
   factsKey:'fromReport',
   scope:'采用现代作者代码与重新划分。当前覆盖 news20 的有限实验，主要结论保留未通过。'
@@ -17,7 +17,7 @@ export const SHOWCASE_CASES=[
   badge:'指标超出容差',
   badgeState:'failed',
   title:'ResNet-110',
-  subtitle:'/ CIFAR-10',
+  paperTitle:'Deep Residual Learning for Image Recognition',
   lead:'核对公开预训练权重评估精度与论文 Table 6 报告值的一致性。',
   facts:[['实际运行','6','个阶段'],['提取图表指标','18','项'],['Top-1 误差偏差','+0.42','%']],
   levels:[['run','计划执行',true],['environment_rebuilt','环境重建',true],['training','论文训练协议',false],['conclusion','主要结论',false]],
@@ -30,7 +30,7 @@ export const SHOWCASE_CASES=[
   badge:'数据获取中断',
   badgeState:'failed',
   title:'TextCNN',
-  subtitle:'/ SST-2 & MR',
+  paperTitle:'Convolutional Neural Networks for Sentence Classification',
   lead:'卷积神经网络句子分类实验复现，检测外部预训练权重与数据划分完备性。',
   facts:[['实际运行','2','/ 5 阶段'],['报错退出码','1','FileNotFound'],['观测指标','0','/ 12 项']],
   levels:[['run','计划执行',false],['environment_rebuilt','环境重建',true],['training','论文训练协议',false],['conclusion','主要结论',false]],
@@ -43,7 +43,7 @@ export const SHOWCASE_CASES=[
   badge:'发现数据泄漏',
   badgeState:'failed',
   title:'GAT-Variant',
-  subtitle:'/ Cora & CiteSeer',
+  paperTitle:'Graph Attention Networks',
   lead:'图注意力网络半监督节点分类复现，交叉核查训练集与测试集掩码隔离性。',
   facts:[['实际运行','4','个阶段'],['重叠测试节点','142','个'],['报告准确率虚高','+4.8','%']],
   levels:[['run','计划执行',true],['environment_rebuilt','环境重建',true],['training','论文训练协议',false],['conclusion','主要结论',false]],
@@ -56,7 +56,7 @@ export const SHOWCASE_CASES=[
   badge:'评测协议不符',
   badgeState:'failed',
   title:'QLoRA-Adapter',
-  subtitle:'/ MMLU-5shot',
+  paperTitle:'QLoRA: Efficient Finetuning of Quantized LLMs',
   lead:'低秩自适应微调权重评估，核对 4-bit 量化推理脚本与论文汇报的 5-shot 提示模板。',
   facts:[['实际运行','3','/ 4 阶段'],['识别图表指标','24','项'],['MMLU 均值偏差','-2.15','%']],
   levels:[['run','计划执行',true],['environment_rebuilt','环境重建',true],['training','论文训练协议',false],['conclusion','主要结论',false]],
@@ -75,6 +75,8 @@ export function renderHome({projects,report,mode,esc,icon,storageError='',caseIn
  const levelRows=[['run','计划执行'],['environment_rebuilt','环境重建'],['training','论文训练协议'],['conclusion','主要结论']];
  const idx=((Number(caseIndex)||0)%SHOWCASE_CASES.length+SHOWCASE_CASES.length)%SHOWCASE_CASES.length;
  const activeCase=SHOWCASE_CASES[idx];
+ const paperTitle=Array.from(activeCase.paperTitle);
+ const caseHeading=paperTitle.length>52?paperTitle.slice(0,51).join('')+'…':activeCase.paperTitle;
  const renderCaseBody=()=>{
   if(activeCase.factsKey==='fromReport'){
    if(!c)return '<div class="start-case-unavailable"><p>公开案例暂未读取成功。</p><button class="btn" data-action="nav" data-page="workbench">进入案例与归档重试</button></div>';
@@ -87,5 +89,5 @@ export function renderHome({projects,report,mode,esc,icon,storageError='',caseIn
  <div class="start-grid"><section class="start-intro" aria-labelledby="start-title"><h2 id="start-title">一篇论文，一条证据链。</h2><p class="start-description">提交论文或代码，自动识别图表指标、审查材料，并追踪实际执行证据。</p><div class="start-cta-row"><button class="btn primary start-primary" data-action="new">${icon('plus')}开始在线审查</button><button class="btn start-secondary" data-action="nav" data-page="workbench">查看复现项目列表 (${model.total})</button></div>
  <ol class="start-steps"><li><strong>准备论文与代码</strong><span>PDF、仓库地址或代码 ZIP</span></li><li><strong>自动识别审查需求</strong><span>论文自查、代码检查与复现评估</span></li><li><strong>执行并审查证据</strong><span>逐条判定，保留来源与复核记录</span></li></ol>
  <div class="start-runtime"><span class="connection-dot ${mode==='runtime'?'connected':''}"></span><div><strong>${mode==='runtime'?'本地执行已连接':'在线 API 工作台'}</strong><p>${mode==='runtime'?'可通过当前工作台提交真实核查，证据保存在本机。':'在线审查连接模型 API，并在云端隔离环境自动验证代码与实验指标。'}</p></div><button class="btn text" data-action="connection">${mode==='runtime'?'运行设置':'连接方式'}</button></div></section>
- <section class="start-case start-case-carousel" aria-labelledby="start-case-title" data-carousel-index="${idx}"><div class="start-case-topbar"><h2 id="start-case-title">${esc(activeCase.title)} <span>${esc(activeCase.subtitle)}</span></h2><div class="start-carousel-controls" role="group" aria-label="案例轮播切换"><button type="button" class="carousel-arrow" data-case-prev aria-label="上一个案例">‹</button><div class="carousel-dots">${SHOWCASE_CASES.map((item,i)=>`<button type="button" class="carousel-dot ${i===idx?'active':''}" data-case-index="${i}" aria-label="切换到案例 ${i+1}: ${esc(item.title)}"></button>`).join('')}</div><button type="button" class="carousel-arrow" data-case-next aria-label="下一个案例">›</button></div></div><p>${esc(activeCase.lead)}</p>${renderCaseBody()}</section></div></div>`;
+ <section class="start-case start-case-carousel" aria-labelledby="start-case-title" data-carousel-index="${idx}"><div class="start-case-topbar"><h2 id="start-case-title" title="${esc(activeCase.title+' – '+activeCase.paperTitle)}"><span class="case-project-name">${esc(activeCase.title)}</span><span class="case-heading-divider"> – </span><span class="case-paper-name">${esc(caseHeading)}</span></h2><div class="start-carousel-controls" role="group" aria-label="案例轮播切换"><button type="button" class="carousel-arrow" data-case-prev aria-label="上一个案例">‹</button><div class="carousel-dots">${SHOWCASE_CASES.map((item,i)=>`<button type="button" class="carousel-dot ${i===idx?'active':''}" data-case-index="${i}" aria-label="切换到案例 ${i+1}: ${esc(item.title)}"></button>`).join('')}</div><button type="button" class="carousel-arrow" data-case-next aria-label="下一个案例">›</button></div></div><p>${esc(activeCase.lead)}</p>${renderCaseBody()}</section></div></div>`;
 }

@@ -5,6 +5,7 @@ short-lived source archives over HTTPS, verifies SHA256, and runs each stage
 inside an isolated user/network/PID/mount namespace with read-only CUDA runtime.
 """
 import ast
+import errno
 import hashlib
 import io
 import json
@@ -29,6 +30,23 @@ import zipfile
 MAX_CODE_BYTES = 100 * 1024**2
 RUNTIME_DIR = '/opt/articheck-runtime'
 ALLOWED_ARCHIVE_SUFFIXES = ('.e2b.app', '.e2b.dev')
+
+STAGE_RETRY_LIMIT = 3
+# Worker files are deployed independently to CPU sandboxes and the GPU host.
+TRANSIENT_STAGE_ERROR = re.compile(
+    r'connection (?:reset|aborted|refused|timed out)|remote end closed connection|'
+    r'temporary failure in name resolution|could not resolve host|network is unreachable|'
+    r'operation timed out|readtimeout|connecttimeout|unexpected eof|'
+    r'(?:HTTP(?: Error|/[\d.]+)?[ :]+|status code[: ]+)(?:429|502|503|504)\b',
+    re.IGNORECASE,
+)
+
+
+def stage_interrupted(code, output):
+    # SIGKILL can mean OOM and must not repeatedly consume the same resources.
+    return code in {-1, -2, -13, -15, 129, 130, 141, 143, 125} or (
+        code != 0 and bool(TRANSIENT_STAGE_ERROR.search(output)))
+
 
 IMPORT_TO_PYPI = {
     'cv2': 'opencv-python-headless',
@@ -501,8 +519,8 @@ class GPUWorker:
 
         plan = record['plan']
         started = time.time()
-        deadline = time.monotonic() + max(int(plan.get('max_seconds') or 0),
-                                          record.get('deadline', time.time() + 86400) - time.time())
+        deadline = time.monotonic() + min(int(plan.get('max_seconds') or 300),
+                                          max(0, record['deadline'] - time.time()))
         report = {'status': 'running', 'started_at': started, 'stages': [], 'metrics': [],
                   'execution_performed': False, 'scientific_validation': False,
                   'hardware': {'cpu_count': self.capacity['cpu_count'], 'gpu': True,
@@ -604,15 +622,36 @@ class GPUWorker:
                         record['result'] = report
                         self.save_record(record)
 
-                self._stage_tick = on_stage_tick
-                try:
-                    code, timed_out, stage_cancelled = self.run_stage_command(
-                        work_dir, log_path, stage['command'], deadline, job_id)
-                finally:
-                    self._stage_tick = None
-                report['execution_performed'] = True
-                log_text, truncated = read_bounded_log(log_path)
-                if code != 0 and not timed_out and not stage_cancelled and not self.is_cancelled(job_id) and time.monotonic() < deadline:
+                def run_command(command, attempt_log):
+                    self._stage_tick = on_stage_tick
+                    try:
+                        code, timed_out, stage_cancelled = self.run_stage_command(
+                            work_dir, attempt_log, command, deadline, job_id)
+                    except OSError as exc:
+                        if exc.errno not in {errno.EINTR, errno.EAGAIN}:
+                            raise
+                        return 125, False, False, f'无法启动阶段命令：{exc}', False
+                    finally:
+                        self._stage_tick = None
+                    report['execution_performed'] = True
+                    output, truncated = read_bounded_log(attempt_log)
+                    return code, timed_out, stage_cancelled, output, truncated
+
+                code, timed_out, stage_cancelled, log_text, truncated = run_command(stage['command'], log_path)
+                for retry in range(1, STAGE_RETRY_LIMIT + 1):
+                    if (timed_out or stage_cancelled or self.is_cancelled(job_id)
+                            or time.monotonic() >= deadline or not stage_interrupted(code, log_text)):
+                        break
+                    row.update(retry_count=retry, live_tail=[], output='')
+                    event('experiment_runner', 'stage_retry', stage=stage['id'], retry=retry, exit_code=code)
+                    record['result'] = report
+                    self.save_record(record)
+                    retry_log = results_dir / f"{stage['id']}_retry{retry}.log"
+                    code, timed_out, stage_cancelled, log_text, truncated = run_command(stage['command'], retry_log)
+                if row.get('retry_count') and code != 0 and not stage_cancelled:
+                    row['reason'] = f"命令中断后已自动重试 {row['retry_count']} 次，仍未成功。"
+                if (code != 0 and not timed_out and not stage_cancelled and not row.get('retry_count')
+                        and not self.is_cancelled(job_id) and time.monotonic() < deadline):
                     missing_mods = parse_missing_modules_from_log(log_text)
                     req_conflict = bool(re.search(r'pip install.*-r\s+\S*requirements', stage['command'])) and bool(
                         re.search(r'(ResolutionImpossible|No matching distribution| Conflict|Cannot install|subprocess-exited-with-error)', log_text, re.I))
@@ -627,16 +666,9 @@ class GPUWorker:
                             retry_cmd = f"python -m pip install --user --no-input --prefer-binary {pkg_args}"
                         else:
                             retry_cmd = f"python -m pip install --user --no-input --prefer-binary {pkg_args} && ({stage['command']})"
-                        self._stage_tick = on_stage_tick
-                        try:
-                            code2, timed_out2, stage_cancelled2 = self.run_stage_command(
-                                work_dir, heal_log, retry_cmd, deadline, job_id)
-                        finally:
-                            self._stage_tick = None
-                        heal_text, heal_trunc = read_bounded_log(heal_log)
+                        code, timed_out, stage_cancelled, heal_text, heal_trunc = run_command(retry_cmd, heal_log)
                         log_text = (log_text.rstrip() + f"\n\n[ArtiCheck 自动补齐依赖: {', '.join(heal_pkgs)}]\n" + heal_text)[-24000:]
                         truncated = truncated or heal_trunc
-                        code, timed_out, stage_cancelled = code2, timed_out2, stage_cancelled2
                         provisioned_pkgs = sorted(set(provisioned_pkgs) | set(heal_pkgs))
                         report['runtime']['auto_provisioned_packages'] = provisioned_pkgs
                 all_logs.append(log_text)

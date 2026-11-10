@@ -547,6 +547,26 @@ class HostedReviewTests(unittest.TestCase):
             self.assertFalse(value['scientific_validation'])
             self.assertEqual(json.loads((result/'status.json').read_text())['status'], 'failed')
 
+    def test_cpu_supervisor_retries_transient_interruptions_three_times(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            results = root / 'results'
+            results.mkdir()
+            plan = {'max_seconds': 30, 'stages': [
+                {'id': 'S1', 'title': 'recover', 'file': 'probe.sh',
+                 'command': "if test -f recovered; then echo score:1; else : > recovered; echo 'connection reset'; exit 1; fi"},
+                {'id': 'S2', 'title': 'fail', 'file': 'probe.sh',
+                 'command': "echo try >> attempts; echo 'connection timed out'; exit 1"},
+                {'id': 'S3', 'title': 'dependent', 'file': 'probe.sh', 'command': 'exit 0'}]}
+            report = run_plan(plan, root, results, run_as=None)
+            self.assertEqual([row['status'] for row in report['stages']], ['completed', 'failed', 'skipped'])
+            self.assertEqual([row.get('retry_count') for row in report['stages']], [1, 3, None])
+            self.assertEqual(report['stages'][0]['live_tail'], ['score:1'])
+            self.assertEqual(len((root / 'attempts').read_text().splitlines()), 4)
+            self.assertIn('重试 3 次', report['stages'][1]['reason'])
+            self.assertEqual([ev['retry'] for ev in report['events'] if ev['kind'] == 'stage_retry'], [1, 1, 2, 3])
+            self.assertEqual(json.loads((results / 'status.json').read_text())['status'], 'failed')
+
     def test_independent_experiment_continues_and_numeric_outputs_are_stage_scoped(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);results=root/'results';results.mkdir()
@@ -686,6 +706,11 @@ class HostedReviewTests(unittest.TestCase):
                 if op == 'LPOP':
                     q = self.queues.setdefault(args[0], [])
                     return q.pop(0) if q else None
+                if op == 'LREM':
+                    q = self.queues.setdefault(args[0], [])
+                    count = q.count(args[2])
+                    q[:] = [job for job in q if job != args[2]]
+                    return count
                 if op == 'EVAL' and 'RPUSH' in args[0]:
                     job_key, queue_key, record_json, job_id = args[2], args[3], args[4], args[5]
                     if job_key in self.kv:
@@ -775,6 +800,17 @@ class HostedReviewTests(unittest.TestCase):
                 self.assertTrue(stopped_ok)
                 polled_cancelled = hybrid.poll(launched2)
                 self.assertEqual(polled_cancelled['status'], 'cancelled')
+
+                # Transient stage errors replay in the same GPU workspace, with a hard cap.
+                launched3 = hybrid.launch(assessment, {'code': materials()['code']})
+                key = worker.job_key(launched3['gpu_job_id'])
+                record = json.loads(store.kv[key])
+                record['plan']['stages'][0]['command'] = "echo 'connection reset'; exit 1"
+                worker.save_record(record)
+                failed = worker.poll_once()
+                self.assertEqual(failed['status'], 'failed')
+                self.assertEqual(failed['result']['stages'][0]['retry_count'], 3)
+                self.assertEqual([ev['retry'] for ev in failed['result']['events'] if ev['kind'] == 'stage_retry'], [1, 2, 3])
 
                 # Fifth-batch: AST/regex import dependency analysis and ModuleNotFoundError parser
                 from articheck.gpu_worker import infer_project_dependencies, parse_missing_modules_from_log

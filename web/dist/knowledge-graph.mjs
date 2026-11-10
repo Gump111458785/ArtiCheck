@@ -72,7 +72,7 @@ export class KnowledgeGraphWorkspace{
  neighbors(id){const s=new Set([id]);for(const e of this.data?.edges||[]){if(e.source===id)s.add(e.target);if(e.target===id)s.add(e.source);}return s;}
  render(){
   const e=v=>this.esc(v),d=this.data;
-  const toolbar=`<div class="kg-filters"><label class="kg-filter"><span>搜索</span><input type="search" data-kg-search value="${e(this.query)}" placeholder="论文或贡献"></label>${this.filterControls()}</div>`;
+  const toolbar=`<div class="kg-filters"><label class="kg-filter"><span>搜索</span><input type="search" aria-label="搜索论文名称" data-kg-search value="${e(this.query)}" placeholder="论文名称"></label>${this.filterControls()}</div>`;
   if(this.loading&&!d)return `<section class="kg-workspace">${toolbar}<div class="kg-loading" role="status">正在读取知识图谱…</div></section>`;
   if(!d)return `<section class="kg-workspace">${toolbar}<div class="kg-empty"><h3>${this.error?'暂时无法读取图谱':'打开我的知识图谱'}</h3><p>${e(this.error||'从论文报告打开图谱，或加载已经保存的论文。')}</p><button class="btn primary" data-kg-action="load">加载我的图谱</button></div></section>`;
   const count=this.matchingPapers().filter(p=>!p.hidden).length;
@@ -85,7 +85,7 @@ export class KnowledgeGraphWorkspace{
   const hasSimilarity=similarityCount>0;
   edges.sort((a,b)=>Number(a.edge_type==='SIMILAR_CONTRIBUTION')-Number(b.edge_type==='SIMILAR_CONTRIBUTION'));
   const neighbors=this.selected?this.neighbors(this.selected):null,q=this.query.trim().toLowerCase();
-  const hit=n=>!q||[n.full_title,n.label].join(' ').toLowerCase().includes(q);
+  const hit=n=>!q||n.node_type==='Paper'&&[n.full_title,n.label].join(' ').toLowerCase().includes(q);
   const labels=new Map(),occupied=[];
   const priority=n=>n.id===this.selected?0:n.node_type==='Paper'?1:neighbors?.has(n.id)?2:3;
   for(const n of [...visible].sort((a,b)=>priority(a)-priority(b))){

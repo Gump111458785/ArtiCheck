@@ -5,6 +5,9 @@ import {hasCode,taskNames} from './online-core.mjs';
 
 const date=value=>value?value.slice(0,16).replace('T',' '):'未记录时间';
 const archiveStates={draft:'待启动',reviewing:'正在审阅',queued:'等待执行',reproducing:'正在复现',cancelling:'正在中断',waiting:'等待资源',interrupted:'已中断',completed:'已完成',terminated:'已终止'};
+const archiveInProgress=new Set(['reviewing','queued','reproducing','cancelling']);
+const archiveExecutionFilters={in_progress:'审查中',...Object.fromEntries(Object.entries(archiveStates).filter(([key])=>key!=='terminated'&&!archiveInProgress.has(key)))};
+const matchesStatus=(item,key)=>key==='in_progress'?archiveInProgress.has(item.statusKey):item.statusKey===key;
 const archiveVerdicts={unassessed:'待验收',passed:'通过',issues:'发现问题',failed:'未通过',inapplicable:'不适用'};
 const archiveMaterials={paper_only:'仅论文',code_only:'仅代码',both:'论文与代码',none:'待提交材料'};
 const tabsFor=kind=>kind==='full'?[['overview','任务概览'],['roles','角色协作'],['trace','阶段与输出'],['evidence','证据复核'],['report','完整报告']]:[['overview','任务概览'],['roles','角色协作'],['trace','执行事件'],['evidence','证据复核']];
@@ -59,7 +62,7 @@ export class ExecutionCenter {
     waiting?'waiting':interrupted?'interrupted':r?.review?'completed':'draft';
    const completedCount=execStages.filter(stage=>stage.status==='completed').length;
    const totalStages=codeBound?stages.length:0;
-   const verdict=r?.review?reportVerdict(r):null;
+   const verdict=r?.review?reportVerdict(r,p):null;
    const verdictKey=verdict?.label==='不适用'?'inapplicable':verdict?.state==='passed'?'passed':verdict?.state==='failed'?'failed':statusKey==='completed'&&r?.review?.findings?.length?'issues':'unassessed';
    const statusTone=['waiting','interrupted','cancelling'].includes(statusKey)?'amber':
     statusKey==='completed'&&['failed','issues'].includes(verdictKey)?'red':statusKey==='completed'&&verdictKey==='passed'?'green':
@@ -100,12 +103,12 @@ export class ExecutionCenter {
  }
  matchesArchiveFilter(item){
   const f=this.archiveFilters;
-  if(this.orderFilter!=='all'&&item.statusKey!==this.orderFilter)return false;
+  if(this.orderFilter!=='all'&&!matchesStatus(item,this.orderFilter))return false;
   if(f.projectName&&!item.title.toLowerCase().includes(f.projectName.trim().toLowerCase()))return false;
   if(f.paperName&&!item.paperName.toLowerCase().includes(f.paperName.trim().toLowerCase()))return false;
   if(f.codeName&&!item.codeName.toLowerCase().includes(f.codeName.trim().toLowerCase()))return false;
   if(f.verdict!=='all'&&item.verdictKey!==f.verdict)return false;
-  if(f.execution!=='all'&&item.statusKey!==f.execution)return false;
+  if(f.execution!=='all'&&!matchesStatus(item,f.execution))return false;
   if(f.material!=='all'&&item.materialKey!==f.material)return false;
   if(f.taskType!=='all'&&item.taskKey!==f.taskType)return false;
   if(f.dateRange!=='all'&&item.timestamp){
@@ -121,7 +124,7 @@ export class ExecutionCenter {
   const e=this.h.esc;
   const items=this.onlineOrderItems();
   const filtered=items.filter(item=>this.matchesArchiveFilter(item));
-  const tabs=[['all','全部条目',items.length],...Object.entries(archiveStates).map(([key,label])=>[key,label,items.filter(item=>item.statusKey===key).length]).filter(([, ,count])=>count)];
+  const tabs=[['all','全部条目',items.length],['completed','已完成',items.filter(item=>matchesStatus(item,'completed')).length],['in_progress','审查中',items.filter(item=>matchesStatus(item,'in_progress')).length]];
   const f=this.archiveFilters;
   return `<section class="repro-order-center archive-table-center" aria-label="案例与归档表格条目中心">
    <header class="repro-order-header">
@@ -149,7 +152,7 @@ export class ExecutionCenter {
      </div>
      ${[
       ['verdict','审查结论',archiveVerdicts],
-      ['execution','执行状态',archiveStates],
+      ['execution','执行状态',archiveExecutionFilters],
       ['material','材料类型',archiveMaterials],
       ['taskType','任务类型',taskNames]
      ].map(([key,label,values])=>`<div class="archive-filter-field"><label for="af-${key}">${label}</label><select id="af-${key}" data-archive-select="${key}"><option value="all">全部</option>${Object.entries(values).map(([value,name])=>`<option value="${value}" ${f[key]===value?'selected':''}>${name}</option>`).join('')}</select></div>`).join('')}
@@ -216,7 +219,6 @@ export class ExecutionCenter {
           item.statusKey==='terminated'?`<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="process">查看记录</button>`:
           item.hasReport?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="report">查看报告</button>`:
           `<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="materials">准备材料</button>`}
-         ${item.hasPaper&&['completed','terminated'].includes(item.statusKey)?`<button type="button" class="btn small kg-entry-btn" data-open-kg="${e(item.id)}">知识图谱</button>`:''}
         </div>
        </td>
       </tr>`).join('')}

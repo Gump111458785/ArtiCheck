@@ -5,6 +5,7 @@ process count, file size and address space. Results are root-owned. Uploaded cod
 can still print arbitrary numbers: an observed stdout is not scientific truth.
 """
 import ast
+import errno
 import json
 import math
 import os
@@ -19,6 +20,23 @@ import sys
 import time
 import shutil
 import statistics
+
+STAGE_RETRY_LIMIT = 3
+# Worker files are deployed independently to CPU sandboxes and the GPU host.
+TRANSIENT_STAGE_ERROR = re.compile(
+    r'connection (?:reset|aborted|refused|timed out)|remote end closed connection|'
+    r'temporary failure in name resolution|could not resolve host|network is unreachable|'
+    r'operation timed out|readtimeout|connecttimeout|unexpected eof|'
+    r'(?:HTTP(?: Error|/[\d.]+)?[ :]+|status code[: ]+)(?:429|502|503|504)\b',
+    re.IGNORECASE,
+)
+
+
+def stage_interrupted(code, output):
+    # SIGKILL can mean OOM and must not repeatedly consume the same resources.
+    return code in {-1, -2, -13, -15, 129, 130, 141, 143, 125} or (
+        code != 0 and bool(TRANSIENT_STAGE_ERROR.search(output)))
+
 
 IMPORT_TO_PYPI = {
     'cv2': 'opencv-python-headless',
@@ -284,59 +302,60 @@ def run_plan(plan, root, results, *, run_as='articheck'):
             # Drop identity directly. Utilities such as runuser can reset
             # RLIMIT_AS / RLIMIT_FSIZE after the supervisor has applied them.
             limits(plan.get('address_space_mb',3072))
-        timed_out = False
-        with log_path.open('wb') as log:
-            process = subprocess.Popen(command, cwd=root, stdout=log, stderr=subprocess.STDOUT,
-                env=stage_env, start_new_session=True, preexec_fn=child_limits)
-            report['execution_performed'] = True
+        def run_command(argv, attempt_log):
+            timed_out = False
             try:
-                while True:
-                    code = process.poll()
-                    if code is not None:
-                        break
-                    if time.monotonic() >= deadline:
-                        timed_out = True
-                        os.killpg(process.pid, signal.SIGKILL)
-                        code = process.wait()
-                        break
-                    partial_log, _ = read_bounded_log(log_path, 24000)
-                    if partial_log:
-                        row['output'] = partial_log
-                        row['live_tail'] = extract_live_tail(partial_log, 3)
-                        atomic(status_path, report)
-                    time.sleep(min(1.0, max(0.05, deadline - time.monotonic())))
-            finally:
-                # Kill descendants left in the process group before the next stage.
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-        log_text, truncated = read_bounded_log(log_path, 24000)
-        if code != 0 and not timed_out and time.monotonic() < deadline:
+                with attempt_log.open('wb') as log:
+                    process = subprocess.Popen(argv, cwd=root, stdout=log, stderr=subprocess.STDOUT,
+                        env=stage_env, start_new_session=True, preexec_fn=child_limits)
+                    report['execution_performed'] = True
+                    try:
+                        while (code := process.poll()) is None:
+                            if time.monotonic() >= deadline:
+                                timed_out = True
+                                os.killpg(process.pid, signal.SIGKILL)
+                                code = process.wait()
+                                break
+                            partial, _ = read_bounded_log(attempt_log, 24000)
+                            if partial:
+                                row.update(output=partial, live_tail=extract_live_tail(partial, 3))
+                                atomic(status_path, report)
+                            time.sleep(min(1.0, max(0.05, deadline - time.monotonic())))
+                    finally:
+                        # Remove any descendants before replaying or advancing.
+                        try:
+                            os.killpg(process.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+            except OSError as exc:
+                # Retry launch resource interruptions, not invalid commands or permissions.
+                if exc.errno not in {errno.EINTR, errno.EAGAIN}:
+                    raise
+                return 125, False, f'无法启动阶段命令：{exc}', False
+            output, truncated = read_bounded_log(attempt_log, 24000)
+            return code, timed_out, output, truncated
+
+        code, timed_out, log_text, truncated = run_command(command, log_path)
+        for retry in range(1, STAGE_RETRY_LIMIT + 1):
+            if timed_out or time.monotonic() >= deadline or not stage_interrupted(code, log_text):
+                break
+            row.update(retry_count=retry, live_tail=[], output='')
+            event('experiment_runner', 'stage_retry', stage=stage['id'], retry=retry, exit_code=code)
+            atomic(status_path, report)
+            retry_log = results / f"{stage['id']}_retry{retry}.log"
+            code, timed_out, log_text, truncated = run_command(command, retry_log)
+        if row.get('retry_count') and code != 0:
+            row['reason'] = f"命令中断后已自动重试 {row['retry_count']} 次，仍未成功。"
+        if code != 0 and not timed_out and not row.get('retry_count') and time.monotonic() < deadline:
             missing_mods = parse_missing_modules_from_log(log_text)
             heal_pkgs = sorted(set(missing_mods.values()))
             if heal_pkgs:
                 heal_log = results / (stage['id'] + '_autoheal.log')
                 pkg_args = ' '.join(heal_pkgs)
                 retry_cmd = ['/bin/bash', '-c', f"python3 -m pip install --user --no-input --prefer-binary {pkg_args} && ({stage['command']})"]
-                timed_out2 = False
-                with heal_log.open('wb') as hlog:
-                    proc2 = subprocess.Popen(retry_cmd, cwd=root, stdout=hlog, stderr=subprocess.STDOUT,
-                        env=stage_env, start_new_session=True, preexec_fn=child_limits)
-                    try:
-                        code2 = proc2.wait(timeout=max(1, deadline - time.monotonic()))
-                    except subprocess.TimeoutExpired:
-                        timed_out2 = True
-                        os.killpg(proc2.pid, signal.SIGKILL)
-                        code2 = proc2.wait()
-                    finally:
-                        try:
-                            os.killpg(proc2.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                heal_text, _ = read_bounded_log(heal_log, 24000)
+                code, timed_out, heal_text, heal_truncated = run_command(retry_cmd, heal_log)
                 log_text = (log_text.rstrip() + f"\n\n[ArtiCheck 自动补齐依赖: {', '.join(heal_pkgs)}]\n" + heal_text)[-24000:]
-                code, timed_out = code2, timed_out2
+                truncated = truncated or heal_truncated
                 report['runtime']['auto_provisioned_packages'] = sorted(set(report['runtime']['auto_provisioned_packages']) | set(heal_pkgs))
         all_logs.append(log_text)
         stage_logs[stage['id']]=log_text

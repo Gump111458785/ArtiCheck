@@ -92,7 +92,7 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  const matHtml=ws.materials({paper:{name:'resnet.pdf',pages:[1,2,3]},repository:null,online_auto_execute:true});
  assert.match(matHtml,/rail-badge ready">已导入 · 3 页/);
  assert.match(matHtml,/rail-badge empty">未提供/);
- assert.match(matHtml,/rail-badge info">云端隔离执行/);
+ assert.doesNotMatch(matHtml,/范围|执行模式|材料缺失时会怎样/);
  assert.doesNotMatch(matHtml,/RTX 4090/);
  assert.match(matHtml,/online-upload has-file/);
  const multiStageReport={...failedReport,
@@ -102,7 +102,8 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
   execution:{...failedReport.execution,status:'running',stages:[{id:'S1',status:'running',live_tail:['Epoch 1/10 loss=0.42','Epoch 2/10 loss=0.31','Epoch 3/10 acc=91.4%'],output:'Epoch 1/10 loss=0.42\nEpoch 2/10 loss=0.31\nEpoch 3/10 acc=91.4%'}]}};
  const execHtml=ws.execution(multiStageReport,false);
  assert.match(execHtml,/云端隔离执行/);
- assert.match(execHtml,/遇到报错自动中断/);
+ assert.match(execHtml,/意外中断最多重试 3 次/);
+ assert.doesNotMatch(execHtml,/展开完整日志|实时动态输出|来源 s1/);
  assert.match(execHtml,/中断运行/);
  assert.doesNotMatch(execHtml,/NVIDIA GeForce RTX 4090/);
  assert.match(execHtml,/terminal-live-tail/);
@@ -211,4 +212,15 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  const centerHtml=acct.center();
  assert.doesNotMatch(centerHtml,/account-change-avatar-btn/);
  assert.match(centerHtml,/data-account="edit-name"/);
+});
+
+test('human criterion confirmations are report-specific and keep model evidence intact', async()=>{
+ const {criteriaDecisions,reportVerdict}=await import('../../web/dist/report-verdict.mjs');
+ const criteria=[{dimension:'code',status:'needs_review',note:'检查提交版本'}];
+ const report={id:'first',status:'completed',review:{paper_type:'empirical',criteria,findings:[],coverage:{gaps:[]},plan:{stages:[]}}};
+ const project={online_criteria_review:{reportId:'first',dimensions:['code']}};
+ assert.equal(reportVerdict(report,project).state,'passed');
+ assert.equal(criteriaDecisions(report,project)[0].manuallyReviewed,true);
+ assert.equal(reportVerdict({...report,id:'second'},project).state,'pending');
+ assert.equal(criteria[0].status,'needs_review');
 });

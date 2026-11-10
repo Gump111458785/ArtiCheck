@@ -2301,3 +2301,53 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .kg-search-progress progress{width:calc(100% + 28px);margin:5px -14px 0;height:3px;accent-color:#177d72}
 .kg-delete-actions{border-top:1px solid #dce6f1;margin-top:12px;padding-top:10px}
 .kg-method-missing{padding:8px 10px;background:#f3f7f9;color:#475569;border-radius:6px}
+
+/* PDF feedback: material rail, report evidence, and process detail. */
+.online-rail .rail-source-name,
+.online-repo-state .repo-state-label {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.online-rail { min-width: 0; }
+.online-rail.has-task-choice { display: block; }
+#online-task-choice { margin-top: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.task-choice-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.task-choice-head h3 { font-size: 16px; color: var(--ink); }
+#online-task-choice .review-choice { gap: 8px; }
+#online-task-choice .review-choice button { width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px; }
+#online-task-choice .review-choice button span { font-size: 13px; line-height: 1.5; }
+.online-counts .count-card-head > span:last-child { font-size: 15px; font-weight: 600; color: var(--ink); }
+.online-counts .online-count-card .count-num-sub { font-size: 15px; color: #475569; }
+.online-count-card > strong { display: flex; gap: 5px; align-items: baseline; }
+.criterion-jump { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 10px; text-decoration: none; color: var(--ink); border-bottom: 1px solid var(--line); }
+.criterion-jump:hover { background: #f3f7fc; }
+.criterion-jump:focus-visible { outline: 2px solid #2458b5; outline-offset: -2px; }
+.criterion-details { margin-top: 24px; }
+.criterion-details-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.criterion-detail { padding: 16px; border: 1px solid var(--line); border-radius: 8px; scroll-margin-top: 20px; }
+.criterion-detail header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.criterion-detail h3 { font-size: 15px; }
+.criterion-detail p { margin: 10px 0; overflow-wrap: anywhere; }
+.criterion-detail .btn { margin-top: 8px; }
+.finding-source { margin-top: 9px; color: var(--muted); font-size: 13px; }
+.finding-source summary { cursor: pointer; width: fit-content; color: #25558f; }
+.role-code-review .role-node-grid { align-items: start; }
+.role-code-criteria { margin: 0; }
+.role-code-criteria > div { padding: 10px 0; border-top: 1px solid var(--line); }
+.role-code-criteria dt { display: flex; gap: 8px; align-items: center; justify-content: space-between; font-weight: 600; }
+.role-code-criteria dd { margin: 6px 0 0; color: var(--muted); overflow-wrap: anywhere; }
+.role-code-mini summary { cursor: pointer; }
+.role-code-mini small { display: block; margin: 4px 0 0; overflow-wrap: anywhere; }
+.role-audit-findings { margin-top: 16px; }
+.role-audit-findings > h4 { margin-bottom: 10px; }
+.start-case-topbar { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; }
+.start-case-topbar #start-case-title { min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.start-case-topbar #start-case-title .case-project-name { color: var(--ink) !important; font-weight: 700 !important; }
+.start-case-topbar .start-carousel-controls { flex-shrink: 0; }
+@media (max-width: 760px) {
+  .criterion-details-list { grid-template-columns: minmax(0,1fr); }
+}
