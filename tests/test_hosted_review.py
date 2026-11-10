@@ -120,7 +120,7 @@ class HostedReviewTests(unittest.TestCase):
         job = 'c' * 32
         store.save(OWNER, {
             'id': job, 'status': 'completed',
-            'review': {'paper_title': 'Original paper', 'paper_contributions': ['A claim from the review'],
+            'review': {'task': 'self_review', 'paper_title': 'Original paper', 'paper_contributions': ['Shared benchmark contribution'],
                        'metrics': [{'id': 'target', 'metric': 'accuracy', 'value': 50}]},
             'execution': {'status': 'completed', 'scientific_validation': False,
                           'metrics': [{'id': 'other', 'metric': 'accuracy', 'observed': 50,
@@ -139,13 +139,43 @@ class HostedReviewTests(unittest.TestCase):
         claims = [n for n in nodes if n.get('paper_id') == paper['id'] and n['node_type'] == 'Claim']
         self.assertEqual(claims[0]['support_status'], 'UNVERIFIED')
         self.assertFalse(any(n.get('paper_id') == paper['id'] and n['node_type'] == 'Evidence' for n in nodes))
-        visibility = {'paper_id': paper['id'], 'visibility': 'GLOBAL'}
-        self.assertEqual(client.post('/kg/visibility', json=visibility, headers=HEADERS).status_code, 200)
-        self.assertTrue(any(n['id'] == paper['id'] for n in client.get('/kg/graph?scope=GLOBAL', headers=other).json['nodes']))
-        visibility['visibility'] = 'PRIVATE'
-        self.assertEqual(client.post('/kg/visibility', json=visibility, headers=other).status_code, 404)
-        self.assertEqual(client.post('/kg/visibility', json=visibility, headers=HEADERS).status_code, 200)
-        self.assertFalse(any(n['id'] == paper['id'] for n in client.get('/kg/graph?scope=GLOBAL', headers=other).json['nodes']))
+        self.assertEqual(client.get('/kg/graph', headers=other).json['papers'], [])
+        for scope in ('GLOBAL', 'COMBINED'):
+            self.assertEqual(client.get('/kg/graph?scope=' + scope, headers=HEADERS).status_code, 400)
+        for route in ('visibility', 'import-external', 'verify-conflict'):
+            self.assertEqual(client.post('/kg/' + route, json={}, headers=HEADERS).status_code, 404)
+        self.assertEqual(client.get('/kg/graph?paper_id=' + paper['id'], headers=other).json['focus_paper_id'], '')
+
+        comparison_job = 'd' * 32
+        store.save(OWNER, {'id': comparison_job, 'status': 'completed',
+                           'review': {'task': 'self_review', 'paper_title': 'Second paper',
+                                      'paper_contributions': ['Shared benchmark contribution']}})
+        client.post('/kg/ingest', json={'assessment_id': comparison_job}, headers=HEADERS)
+        url = '/kg/assessments/' + job + '/conflicts'
+        self.assertEqual(client.get(url, headers=other).status_code, 404)
+        items = client.get(url, headers=HEADERS).json['items']
+        candidate = next(item for item in items if item['source_title'] == item['target_title'])
+        self.assertFalse(candidate['user_verified'])
+        self.assertEqual(client.post(url, json={'comparison_id': 'foreign', 'decision': 'confirm'}, headers=HEADERS).status_code, 404)
+        self.assertEqual(client.post(url, json={'comparison_id': candidate['id'], 'decision': 'confirm'}, headers=HEADERS).status_code, 200)
+        self.assertTrue(next(item for item in client.get(url, headers=HEADERS).json['items'] if item['id'] == candidate['id'])['user_verified'])
+
+    def test_retired_shared_and_external_entries_cannot_enter_personal_graph(self):
+        from articheck.kg_service import KnowledgeGraphService, extract_paper_graph_entry
+        store = MemoryStore()
+        store.namespace = 'test'
+        graph = KnowledgeGraphService({}, store)
+        own = extract_paper_graph_entry({'title': 'Own upload'}, graph._owner_hash(OWNER))
+        own['visibility'] = 'GLOBAL'
+        external = extract_paper_graph_entry({'title': 'Old manual reference', 'source_type': 'MANUAL_REFERENCE'}, graph._owner_hash(OWNER))
+        foreign = extract_paper_graph_entry({'title': 'Another account'}, graph._owner_hash('b' * 64))
+        graph.save_private_papers(OWNER, [own, external, foreign])
+        graph.save_layout(OWNER, {'pinned': [external['id'], foreign['id']]})
+        result = graph.build_graph_response(OWNER, focus_paper_id=foreign['id'])
+        self.assertEqual([item['title'] for item in result['papers']], ['Own upload'])
+        self.assertEqual(result['papers'][0]['visibility'], 'PRIVATE')
+        self.assertEqual(result['focus_paper_id'], own['id'])
+        self.assertEqual(result['layout']['pinned'], [])
 
     def test_decimal_ratio_with_unsubstantiated_percent_is_not_an_acceptance_target(self):
         context,_=prepare_assessment(materials())

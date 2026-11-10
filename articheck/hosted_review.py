@@ -103,6 +103,7 @@ GitHub ZIP 的统一外层目录会被剥除。命令在剥除外层后的仓库
 JSON 结构：
 {"summary":"总体判断", "paper_title":"论文题目（无论文则为空字符串）", "paper_abstract":"论文摘要（无论文则为空字符串）",
  "paper_contributions":["论文核心创新点或贡献1","创新点或贡献2"],
+ "publication_year":null, "publication_venue":"PDF 明示的发表期刊或会议，否则为空", "research_direction":"PDF 明示的主题或关键词，否则为空",
  "paper_type":"empirical|diagnostic|survey|nonpaper|unknown|code_only",
  "task":"self_review|reproduction|code_review", "classification_reason":"依据", "repository_hint":null,
  "criteria":[{"dimension":"scope|code|data|environment|settings|workflow|resources|results",
@@ -442,10 +443,20 @@ def validate_assessment(value, context):
         paper_title = ''
         paper_abstract = ''
         paper_contributions = []
+    metadata_text = ' '.join(' '.join(page['text'].casefold().split()) for page in context.get('paper_excerpts', []))
+    year = value.get('publication_year')
+    year = year if type(year) is int and 1800 <= year <= 2100 and re.search(rf'\b{year}\b', metadata_text) else None
+
+    def metadata_label(key):
+        label = value.get(key)
+        label = ' '.join(label.split()) if isinstance(label, str) else ''
+        return label if 0 < len(label) <= 180 and label.casefold() in metadata_text else ''
+
     core_code_snippets = extract_core_code_snippets(value, context, stages, criteria, clean_findings)
     result = {'summary': text(value, 'summary', 4000), 'paper_title': paper_title,
               'paper_abstract': paper_abstract, 'paper_contributions': paper_contributions,
-              'paper_type': value['paper_type'],
+              'publication_year': year, 'publication_venue': metadata_label('publication_venue'),
+              'research_direction': metadata_label('research_direction'), 'paper_type': value['paper_type'],
               'task':task, 'repository_hint':hint,
               'classification_reason': text(value, 'classification_reason'), 'criteria': criteria,
               'findings': clean_findings, 'metrics': sorted(clean_metrics, key=lambda m: not m['author_method']),

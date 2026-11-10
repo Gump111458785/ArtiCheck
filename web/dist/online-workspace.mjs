@@ -268,7 +268,27 @@ export class OnlineWorkspace{
   const e=v=>this.esc(v),v=reportVerdict(r),rv=r.review||{};
   const projectTitle=p?.title||r?.project_title||'未命名审查项目';
   const paperMeta=extractPaperMeta(r,p);
-  return `<section id="report-top-section" class="report-editorial-top"><div class="review-verdict editorial-verdict ${v.state}" role="status"><div class="verdict-main"><span class="verdict-scope-tag">${e(v.scope)}</span><h2 class="verdict-headline">${e(v.label)}</h2><p class="verdict-explanation">${e(v.reason)}</p></div><div class="verdict-actions"><button type="button" class="btn kg-entry-btn" data-open-kg="${e(p?.id||'')}">${UI_SVG.spark}<span>探索学术贡献知识图谱</span></button><button class="btn primary" data-online="export">导出完整报告</button><button class="btn" data-online-tab="process">查看过程详情</button></div></div>${this.criteriaSection(r)}<div class="report-project-banner"><div class="report-project-meta"><span class="online-kicker">${e(typeNames[rv.paper_type]||'研究审查')} · ${e(taskNames[rv.task]||'自动识别')}</span><h1 class="report-project-title">${e(projectTitle)}</h1></div></div>${paperMeta?`<div class="report-paper-overview"><div class="report-paper-section"><div class="report-section-label">论文题目与摘要</div><h2 class="report-paper-title">${e(paperMeta.title)}</h2><p class="report-paper-abstract">${e(paperMeta.abstract)}</p></div><div class="report-paper-section contributions-section"><div class="report-section-label">${UI_SVG.spark}论文创新点与核心贡献</div><ul class="report-contributions-list">${paperMeta.contributions.map((item,idx)=>`<li><span class="contrib-index">0${idx+1}</span><p>${e(item)}</p></li>`).join('')}</ul></div></div>`:''}</section>${this.report(r,p)}${this.coreCodeSection(r,p)}${this.observations(r)}<section class="report-evidence">${this.evidence(r)}</section>`;
+  return `<section id="report-top-section" class="report-editorial-top"><div class="review-verdict editorial-verdict ${v.state}" role="status"><div class="verdict-main"><span class="verdict-scope-tag">${e(v.scope)}</span><h2 class="verdict-headline">${e(v.label)}</h2><p class="verdict-explanation">${e(v.reason)}</p></div><div class="verdict-actions">${paperMeta?`<button type="button" class="btn kg-entry-btn" data-open-kg="${e(p?.id||'')}">${UI_SVG.spark}<span>探索学术贡献知识图谱</span></button>`:''}<button class="btn primary" data-online="export">导出完整报告</button><button class="btn" data-online-tab="process">查看过程详情</button></div></div>${this.criteriaSection(r)}<div class="report-project-banner"><div class="report-project-meta"><span class="online-kicker">${e(typeNames[rv.paper_type]||'研究审查')} · ${e(taskNames[rv.task]||'自动识别')}</span><h1 class="report-project-title">${e(projectTitle)}</h1></div></div>${paperMeta?`<div class="report-paper-overview"><div class="report-paper-section"><div class="report-section-label">论文题目与摘要</div><h2 class="report-paper-title">${e(paperMeta.title)}</h2><p class="report-paper-abstract">${e(paperMeta.abstract)}</p></div><div class="report-paper-section contributions-section"><div class="report-section-label">${UI_SVG.spark}论文创新点与核心贡献</div><ul class="report-contributions-list">${paperMeta.contributions.map((item,idx)=>`<li><span class="contrib-index">0${idx+1}</span><p>${e(item)}</p></li>`).join('')}</ul></div></div>`:''}</section>${this.report(r,p)}${this.conflictsSection(r)}${this.coreCodeSection(r,p)}${this.observations(r)}<section class="report-evidence">${this.evidence(r)}</section>`;
+ }
+
+ conflictsSection(report){
+  if(report.review?.task!=='self_review')return '';
+  const e=v=>this.esc(v),state=this.conflictState?.id===report.id?this.conflictState:null;
+  const statuses={CONFIRMED_CONFLICT:'人工确认',REJECTED_CONFLICT:'人工排除',NEEDS_MORE_EVIDENCE:'待核实'};
+  const actions=[['confirm','确认冲突'],['dismiss','排除'],['more_evidence','需补证据']];
+  return `<section class="online-findings report-conflicts" data-report-conflicts="${e(report.id)}"><div class="online-section-heading"><h2>潜在冲突</h2></div><p>只比较当前账号已加入图谱的论文。候选项基于报告中已有的相似内容和实验信息。</p>${state?.error?`<p role="alert">${e(state.error)}</p><button class="btn small" data-conflict-retry>重试</button>`:state?.items?state.items.map(item=>`<article><header><h3>${e(item.source_paper_title)} 与 ${e(item.target_paper_title)}</h3><span class="pill">${e(statuses[item.verdict]||'待核实')}</span></header><p>${e(item.explanation)}</p><dl><dt>${e(item.source_title)}</dt><dd><blockquote>${e(item.evidence_chain?.source_quote||'暂无定位依据')}</blockquote></dd><dt>${e(item.target_title)}</dt><dd><blockquote>${e(item.evidence_chain?.target_quote||'暂无定位依据')}</blockquote></dd></dl><div class="kg-insp-actions">${actions.map(([key,label])=>`<button class="btn small" data-conflict-id="${e(item.id)}" data-conflict-decision="${key}" ${state.saving?'disabled':''}>${label}</button>`).join('')}</div></article>`).join('')||'<p>本次未发现需要核对的候选项。</p>':'<p role="status">正在核对候选项…</p>'}</section>`;
+ }
+ async loadConflicts(id,decision){
+  const state={id,items:decision?this.conflictState?.items:null,saving:Boolean(decision)};
+  this.conflictState=state;
+  if(decision)this.renderNow();
+  try{
+   const path='/kg/assessments/'+encodeURIComponent(id)+'/conflicts';
+   if(decision)await this.request(path,decision);
+   if(this.conflictState!==state)return;
+   state.items=(await this.request(path)).items;
+  }catch(error){state.error=error.message;}
+  finally{if(this.conflictState===state){state.saving=false;this.renderNow();}}
  }
 
  coreCodeSection(r,p=this.current()){
@@ -574,11 +594,17 @@ export class OnlineWorkspace{
    }
   }finally{if(!this.cancelling){this.busy='';this.phase='materials';this.renderNow();}}
  }
- afterRender(){clearTimeout(this.timer);clearTimeout(this.repoTicker);if(this.repoStartedAt){const tick=()=>{const sec=Math.floor((Date.now()-this.repoStartedAt)/1000),node=document.querySelector('[data-repo-elapsed]'),railNode=document.querySelector('[data-rail-repo-elapsed]');if(node)node.textContent='已等待 '+sec+' 秒';if(railNode)railNode.textContent=(this.repoState||'正在读取源码…')+' · 已等待 '+sec+' 秒';if(this.repoStartedAt)this.repoTicker=setTimeout(tick,1000);};tick();}if(!this.capabilities&&!this.pending){this.pending=true;this.request('/capabilities').then(v=>{this.capabilities=v;this.renderNow();}).catch(()=>{}).finally(()=>{this.pending=false;});}const p=this.current();if((['queued','running','starting','cancelling'].includes(p?.online_report?.execution?.status)||p?.online_report?.status==='reviewing'||p?.online_pending_request&&!p?.online_report)&&!this.busy)this.timer=setTimeout(()=>this.action('refresh-silent'),2500);}
+ afterRender(){const reportId=document.querySelector('[data-report-conflicts]')?.dataset.reportConflicts;if(reportId&&this.conflictState?.id!==reportId)this.loadConflicts(reportId);clearTimeout(this.timer);clearTimeout(this.repoTicker);if(this.repoStartedAt){const tick=()=>{const sec=Math.floor((Date.now()-this.repoStartedAt)/1000),node=document.querySelector('[data-repo-elapsed]'),railNode=document.querySelector('[data-rail-repo-elapsed]');if(node)node.textContent='已等待 '+sec+' 秒';if(railNode)railNode.textContent=(this.repoState||'正在读取源码…')+' · 已等待 '+sec+' 秒';if(this.repoStartedAt)this.repoTicker=setTimeout(tick,1000);};tick();}if(!this.capabilities&&!this.pending){this.pending=true;this.request('/capabilities').then(v=>{this.capabilities=v;this.renderNow();}).catch(()=>{}).finally(()=>{this.pending=false;});}const p=this.current();if((['queued','running','starting','cancelling'].includes(p?.online_report?.execution?.status)||p?.online_report?.status==='reviewing'||p?.online_pending_request&&!p?.online_report)&&!this.busy)this.timer=setTimeout(()=>this.action('refresh-silent'),2500);}
  bind(){
   document.addEventListener('submit',event=>{if(event.target.id==='new-review-form'){event.preventDefault();if(event.target.reportValidity())this.createProject(new FormData(event.target).get('title'));}else if(event.target.id==='rename-review-form'){event.preventDefault();if(event.target.reportValidity())this.renameProject(new FormData(event.target).get('title'));}});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){const p=this.current();if((['queued','running','starting','cancelling'].includes(p?.online_report?.execution?.status)||p?.online_report?.status==='reviewing'||p?.online_pending_request&&!p?.online_report)&&!this.busy)this.action('refresh-silent');}});
   document.addEventListener('click',event=>{
+   const conflictAction=event.target.closest('[data-conflict-retry],[data-conflict-id]');
+   if(conflictAction){
+    const id=conflictAction.closest('[data-report-conflicts]').dataset.reportConflicts;
+    this.loadConflicts(id,conflictAction.dataset.conflictId?{comparison_id:conflictAction.dataset.conflictId,decision:conflictAction.dataset.conflictDecision}:undefined);
+    return;
+   }
    const sidebarJump=event.target.closest('[data-sidebar-jump]');
    if(sidebarJump&&!event.target.closest('[data-online-tab]')){
     const pid=sidebarJump.dataset.sidebarJump;

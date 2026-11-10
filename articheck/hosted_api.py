@@ -384,9 +384,10 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     @app.get('/kg/graph')
     def get_kg_graph():
         owner = authorize()
-        scope = request.args.get('scope', 'COMBINED')
+        if request.args.get('scope', 'PRIVATE').upper() != 'PRIVATE':
+            raise ReviewError('invalid_graph_scope', '知识图谱仅限当前账号。')
         focus_paper_id = request.args.get('paper_id', '')
-        return jsonify(kg.build_graph_response(owner, scope=scope, focus_paper_id=focus_paper_id))
+        return jsonify(kg.build_graph_response(owner, focus_paper_id=focus_paper_id))
 
     @app.post('/kg/ingest')
     def ingest_kg_project():
@@ -396,34 +397,37 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         if not re.fullmatch(r'[a-f0-9]{32}', job):
             raise ReviewError('invalid_assessment', '请从已完成的在线审查报告打开图谱。')
         report = store.get(owner, job)
-        if not report.get('review'):
+        review = report.get('review')
+        if not review:
             raise ReviewError('report_not_ready', '审查报告尚未生成。', 409)
+        if review.get('paper_type') in {'code_only', 'nonpaper'}:
+            raise ReviewError('paper_required', '只有论文审查报告可以加入图谱。', 422)
         return jsonify(kg.ingest_project(owner, {
             'project_id': str(payload.get('project_id') or '')[:100],
             'title': str(payload.get('title') or '')[:300],
             'report': report,
         }))
 
-    @app.post('/kg/import-external')
-    def import_external_kg_paper():
-        owner = authorize()
-        return jsonify(kg.import_external_paper(owner, body()))
+    def self_review_report(owner, job):
+        report = store.get(owner, job)
+        if (report.get('review') or {}).get('task') != 'self_review':
+            raise ReviewError('report_type', '只有论文自查报告提供潜在冲突核对。', 404)
+        return report
 
-    @app.post('/kg/verify-conflict')
-    def verify_kg_conflict():
+    @app.get('/kg/assessments/<job>/conflicts')
+    def get_kg_conflicts(job):
         owner = authorize()
-        payload = body()
-        cmp_id = str(payload.get('comparison_id') or '').strip()
-        if not cmp_id:
-            raise ReviewError('missing_comparison_id', '请提供需要确认的冲突关系 ID。')
-        res = kg.save_verification(owner, cmp_id, payload.get('decision'), payload.get('note', ''))
-        return jsonify({'status': 'ok', 'verification': res})
+        return jsonify(items=kg.report_conflicts(owner, self_review_report(owner, job)))
 
-    @app.post('/kg/visibility')
-    def set_kg_visibility():
+    @app.post('/kg/assessments/<job>/conflicts')
+    def verify_kg_conflict(job):
         owner = authorize()
+        report = self_review_report(owner, job)
         payload = body()
-        return jsonify(kg.set_visibility(owner, payload.get('paper_id', ''), payload.get('visibility', 'PRIVATE')))
+        cmp_id = str(payload.get('comparison_id') or '')
+        if not any(item['id'] == cmp_id for item in kg.report_conflicts(owner, report)):
+            raise ReviewError('comparison_not_found', '当前报告没有这项候选冲突。', 404)
+        return jsonify(kg.save_verification(owner, cmp_id, payload.get('decision'), payload.get('note', '')))
 
     @app.post('/kg/layout')
     def save_kg_layout():

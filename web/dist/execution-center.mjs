@@ -109,7 +109,7 @@ export class ExecutionCenter {
     metricsCount:r?.review?.metrics?.length||0,
     findingsCount:r?.review?.findings?.length||0,
     hasReport:Boolean(r?.review),
-    hasPaper:Boolean(p.paper||r?.materials?.paper||r?.review),
+    hasPaper:Boolean(r?.review && !['code_only','nonpaper'].includes(r.review.paper_type) && (p.paper||r.materials?.paper||r.review.paper_title)),
     priorityRank
    };
   });
@@ -164,15 +164,14 @@ export class ExecutionCenter {
   return `<section class="repro-order-center archive-table-center" aria-label="案例与归档表格条目中心">
    <header class="repro-order-header">
     <div>
-     <span class="online-kicker">优先级置顶 · 多维检索表格工作台</span>
-     <h2>案例与归档条目</h2>
-     <p>未执行完与等待补充资源的项目自动置顶显示；支持按项目名称、论文名称、代码仓库、审查结论与更新时间多维筛选。</p>
+     <h2>项目归档</h2>
+     <p>按材料或审查结果查找项目。进行中和待处理的项目排在前面。</p>
     </div>
     <div class="repro-order-tabs" role="group" aria-label="项目条目状态快速筛选">
      ${tabs.map(([id,label,cnt])=>`<button type="button" class="order-tab-btn ${this.orderFilter===id?'active':''}" data-order-filter="${id}">${label}<span>${cnt}</span></button>`).join('')}
     </div>
    </header>
-   <form class="archive-filter-panel" data-archive-filter-form onsubmit="return false;" aria-label="案例与归档多条件筛选栏">
+   <form class="archive-filter-panel" data-archive-filter-form aria-label="案例与归档多条件筛选栏">
     <div class="archive-filter-grid">
      <div class="archive-filter-field">
       <label for="af-project">项目名称</label>
@@ -217,9 +216,9 @@ export class ExecutionCenter {
      </div>
     </div>
     <div class="archive-filter-actions">
-     <span class="archive-filter-count">共匹配 <strong>${filtered.length}</strong> / ${items.length} 条项目记录（未执行完与等待资源条目已优先置顶）</span>
+     <span class="archive-filter-count">显示 <strong>${filtered.length}</strong> / ${items.length} 个项目</span>
      <div class="archive-filter-btns">
-      <button type="button" class="btn primary small" data-archive-action="search">${this.h.icon('search')}查询</button>
+      <button type="submit" class="btn primary small">${this.h.icon('search')}查询</button>
       <button type="button" class="btn small" data-archive-action="reset">重置筛选</button>
      </div>
     </div>
@@ -240,7 +239,6 @@ export class ExecutionCenter {
       ${filtered.map(item=>`<tr class="archive-table-row status-${e(item.statusKey)} ${item.priorityRank<=1?'is-priority-pinned':''}">
        <td class="archive-col-project">
         <div class="archive-project-cell">
-         ${item.priorityRank===0?'<span class="priority-pin-tag running">进行中置顶</span>':item.priorityRank===1?'<span class="priority-pin-tag waiting">待处理置顶</span>':''}
          <button type="button" class="order-title-link" data-order-open="${e(item.id)}" data-order-tab="${item.statusKey==='running'||item.statusKey==='cancelling'||item.statusKey==='failed'?'process':item.hasReport?'report':'materials'}">${e(item.title)}</button>
          <span class="archive-task-sub">${e(item.taskLabel)}</span>
         </div>
@@ -267,7 +265,7 @@ export class ExecutionCenter {
        </td>
        <td class="archive-col-actions">
         <div class="order-actions-col">
-         ${item.statusKey==='cancelling'?`<button type="button" class="btn small" disabled>正在中断…</button>`:item.statusKey==='running'?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">${item.paperOnly?'查看审阅进度':'查看实时复现'}</button><button type="button" class="btn danger small" data-order-cancel="${e(item.id)}">临时终止</button>`:item.statusKey==='failed'?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">补完 / 查看诊断</button>${item.hasPaper?`<button type="button" class="btn small kg-entry-btn" data-open-kg="${e(item.id)}">知识图谱</button>`:''}`:item.hasReport?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="report">查看报告</button><button type="button" class="btn small kg-entry-btn" data-open-kg="${e(item.id)}">知识图谱</button>`:`<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="materials">准备材料</button>`}
+         ${item.statusKey==='cancelling'?`<button type="button" class="btn small" disabled>正在中断…</button>`:item.statusKey==='running'?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">${item.paperOnly?'查看审阅进度':'查看实时复现'}</button><button type="button" class="btn danger small" data-order-cancel="${e(item.id)}">临时终止</button>`:item.statusKey==='failed'?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看诊断</button>${item.hasPaper?`<button type="button" class="btn small kg-entry-btn" data-open-kg="${e(item.id)}">知识图谱</button>`:''}`:item.hasReport?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="report">查看报告</button>${item.hasPaper?`<button type="button" class="btn small kg-entry-btn" data-open-kg="${e(item.id)}">知识图谱</button>`: ''}`:`<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="materials">准备材料</button>`}
         </div>
        </td>
       </tr>`).join('')}
@@ -350,11 +348,15 @@ export class ExecutionCenter {
    if(el.dataset.centerFilter){this.filters[el.dataset.centerFilter]=el.value;this.limit=25;this.h.render();}
    if(el.matches('[data-center-role-run]')){this.roleRunId=el.value;const row=this.rows().find(r=>r.key===el.value);try{if(row?.kind==='probe'){const run=await this.h.selectProbe(row.id);this.probeCache.set(row.id,run);}else if(row?.kind==='full'&&row.source==='runtime')await this.loadRoles(row);}catch(error){this.error=error.message;}this.h.render();}
   });
+  document.addEventListener('submit',event=>{
+   if(!event.target.matches('[data-archive-filter-form]'))return;
+   event.preventDefault();
+   this.h.render();
+  });
   document.addEventListener('click',async event=>{
    const el=event.target.closest('[data-archive-action],[data-order-filter],[data-order-open],[data-order-cancel],[data-center-open],[data-center-status],[data-center-tab],[data-center-back],[data-center-clear],[data-center-more],[data-center-refresh],[data-center-stop],[data-center-export],[data-center-role],[data-role-nav]');
    if(!el)return;
    try{
-    if(el.dataset.archiveAction==='search'){this.h.render();return;}
     if(el.dataset.archiveAction==='reset'){
      this.orderFilter='all';
      this.archiveFilters={projectName:'',paperName:'',codeName:'',verdict:'all',taskType:'all',dateRange:'all'};
