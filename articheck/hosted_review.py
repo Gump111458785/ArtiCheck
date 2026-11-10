@@ -103,6 +103,7 @@ GitHub ZIP 的统一外层目录会被剥除。命令在剥除外层后的仓库
 JSON 结构：
 {"summary":"总体判断", "paper_title":"论文题目（无论文则为空字符串）", "paper_abstract":"论文摘要（无论文则为空字符串）",
  "paper_contributions":["论文核心创新点或贡献1","创新点或贡献2"],
+ "contribution_details":[{"contribution_index":1,"summary":"该主贡献下的具体方法或设计","page":1,"quote":"该细分贡献的 PDF 逐字依据"}],
  "publication_year":null, "publication_venue":"PDF 明示的发表期刊或会议，否则为空", "research_direction":"PDF 明示的主题或关键词，否则为空",
  "paper_type":"empirical|diagnostic|survey|nonpaper|unknown|code_only",
  "task":"self_review|reproduction|code_review", "classification_reason":"依据", "repository_hint":null,
@@ -443,18 +444,36 @@ def validate_assessment(value, context):
         paper_title = ''
         paper_abstract = ''
         paper_contributions = []
-    metadata_text = ' '.join(' '.join(page['text'].casefold().split()) for page in context.get('paper_excerpts', []))
+    excerpts = context.get('paper_excerpts', [])
+    metadata_text = ' '.join(' '.join(page['text'].casefold().split()) for page in excerpts)
+    publication_text = ' '.join(' '.join(page['text'].casefold().split()) for page in excerpts if page['page'] <= 2)
     year = value.get('publication_year')
-    year = year if type(year) is int and 1800 <= year <= 2100 and re.search(rf'\b{year}\b', metadata_text) else None
+    year = year if type(year) is int and 1800 <= year <= 2100 and re.search(rf'\b{year}\b', publication_text) else None
 
     def metadata_label(key):
         label = value.get(key)
         label = ' '.join(label.split()) if isinstance(label, str) else ''
-        return label if 0 < len(label) <= 180 and label.casefold() in metadata_text else ''
+        evidence = publication_text if key == 'publication_venue' else metadata_text
+        return label if 0 < len(label) <= 180 and label.casefold() in evidence else ''
+
+    pages = {page['page']: ' '.join(page['text'].casefold().split())
+             for page in context.get('paper_excerpts', [])}
+    contribution_details = []
+    for row in (value.get('contribution_details') or [])[:18] if isinstance(value.get('contribution_details'), list) else []:
+        if not isinstance(row, dict):
+            continue
+        index, page = row.get('contribution_index'), row.get('page')
+        quote, summary = row.get('quote'), row.get('summary')
+        if (type(index) is int and 1 <= index <= len(paper_contributions) and type(page) is int
+                and isinstance(quote, str) and 16 <= len(quote) <= 700
+                and isinstance(summary, str) and 4 <= len(summary) <= 400
+                and ' '.join(quote.casefold().split()) in pages.get(page, '')):
+            contribution_details.append({'index': index, 'page': page, 'quote': quote, 'summary': summary})
 
     core_code_snippets = extract_core_code_snippets(value, context, stages, criteria, clean_findings)
     result = {'summary': text(value, 'summary', 4000), 'paper_title': paper_title,
               'paper_abstract': paper_abstract, 'paper_contributions': paper_contributions,
+              'contribution_details': contribution_details,
               'publication_year': year, 'publication_venue': metadata_label('publication_venue'),
               'research_direction': metadata_label('research_direction'), 'paper_type': value['paper_type'],
               'task':task, 'repository_hint':hint,

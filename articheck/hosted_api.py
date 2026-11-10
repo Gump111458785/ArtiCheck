@@ -12,7 +12,7 @@ from .hosted_review import assess, material_identity, prepare_assessment, digest
 from .hosted_gpu import HybridExecutor
 from .hosted_store import HostedStore
 from .hosted_images import text_materials
-from .hosted_sources import lookup
+from .hosted_sources import lookup, public_identifier
 from .hosted_audit import cross_audit
 from .kg_service import KnowledgeGraphService
 from .review_api import ReviewError, now
@@ -212,6 +212,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         activity('汇总审查报告',['reporter'],'建议、图表出处、覆盖缺口与执行计划已整理。','completed')
         value['activity']=pending['activity']
         value.update(id=job, status='completed', input_sha256=identity)
+        if identifier := public_identifier(context):
+            value['public_paper_identifier'] = identifier
         value['budget'] = {'model_reserved_attempts': attempt, 'model_max_attempts': getattr(budget,'max_attempts',10)}
         if cancelled():
             return jsonify(store.get(owner, job))
@@ -252,6 +254,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     def execute(job):
         owner = authorize()
         value = store.get(owner, job)
+        if value.get('terminated_at'):
+            raise ReviewError('assessment_terminated', '本次审查已终止。', 409)
         payload = body()
         if not value.get('review'):
             raise ReviewError('review_not_ready', '请等待材料审查完成后再执行。', 409)
@@ -278,19 +282,23 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             raise ReviewError('material_changed', '代码版本已变化，请重新审查。', 409)
         if not store.lock(owner, job,attempt_number):
             raise ReviewError('execution_already_requested', '这份计划已提交过执行。请刷新状态；不会重复启动或扣费。', 409)
+        previous = copy.deepcopy(value)
+        if retry:
+            value['execution_history'] = history + [previous_execution]
+        attempt_id = uuid.uuid4().hex
+        value['execution'] = {'status': 'starting', 'execution_performed': False, 'attempt_id': attempt_id,
+                              'scientific_validation': False,
+                              'deadline': time.time() + value['review']['plan']['max_seconds'] + 60}
+        if not store.replace(owner, previous, value):
+            store.unlock_before_launch(owner, job, attempt_number)
+            raise ReviewError('execution_changed', '任务状态已更新，请刷新。', 409)
         try:
             attempt = store.reserve_compute()
         except ReviewError:
-            # No provider call has started. A transient ledger outage must not
-            # permanently turn this frozen plan into an unstartable task.
-            store.unlock_before_launch(owner,job,attempt_number)
+            store.replace(owner, value, previous)
+            store.unlock_before_launch(owner, job, attempt_number)
             raise
-        if retry:value['execution_history']=history+[previous_execution]
-        attempt_id=uuid.uuid4().hex
-        value['execution'] = {'status': 'starting', 'execution_performed': False,'attempt_id':attempt_id,
-                              'scientific_validation': False, 'reserved_attempt': attempt,
-                              'deadline': time.time() + value['review']['plan']['max_seconds'] + 60}
-        store.save(owner, value)
+        value['execution']['reserved_attempt'] = attempt
         try:
             value['execution'] = {**executor.launch(value, payload), 'reserved_attempt': attempt,'attempt_id':attempt_id}
         except Exception as exc:
@@ -345,10 +353,41 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             store.save(owner, value)
         return jsonify(value)
 
+    @app.post('/assessments/<job>/terminate')
+    def terminate(job):
+        owner = authorize()
+        value = store.get(owner, job)
+        if value.get('terminated_at'):
+            return jsonify(value)
+        execution = value.get('execution') or {}
+        review = value.get('review') or {}
+        status = execution.get('status')
+        if value.get('status') == 'reviewing' or status in {'queued', 'starting', 'running', 'cancelling'}:
+            raise ReviewError('assessment_active', '请先中断运行，再终止本次审查。', 409)
+        blocked = (status in {'failed', 'expired', 'cancelled'} or value.get('status') in {'failed', 'cancelled'}
+                   or any(stage.get('status') == 'failed' for stage in execution.get('stages', []))
+                   or (not execution and ((review.get('resource_preflight') or {}).get('needs_user')
+                       or (review.get('task') == 'reproduction' and not (value.get('materials') or {}).get('code')))))
+        if not blocked:
+            raise ReviewError('assessment_not_interrupted', '只有中断或等待资源的审查可以终止。', 409)
+        updated = {**value, 'terminated_at': now(), 'notice': '本次审查已终止，已取得的证据保留。'}
+        if not store.replace(owner, value, updated):
+            raise ReviewError('assessment_changed', '任务状态已更新，请刷新。', 409)
+        return jsonify(updated)
+
     @app.post('/assessments/<job>/feedback')
     def answer_blocker(job):
         owner = authorize()
         value = store.get(owner, job)
+        if value.get('terminated_at'):
+            raise ReviewError('assessment_terminated', '本次审查已终止。', 409)
+        previous = copy.deepcopy(value)
+
+        def save_answer():
+            if not store.replace(owner, previous, value):
+                raise ReviewError('assessment_changed', '任务状态已更新，请刷新。', 409)
+            return jsonify(value)
+
         execution = value.get('execution') or {}
         answer = body().get('answer')
         preflight=(value.get('review') or {}).get('resource_preflight') or {}
@@ -358,8 +397,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             value['availability']={'resource':'compute_capacity','answer':answer,'confirmed_at':now(),
                 'verdict':'当前托管 CPU 条件不足，受影响实验未复现。' if answer=='unavailable' else '可选择本地工作台提供所需资源；当前云端未启动实验。',
                 'scientific_validation':False}
-            store.save(owner,value)
-            return jsonify(value)
+            return save_answer()
         if not execution and value.get('review',{}).get('task')=='reproduction' and not value['materials']['code']:
             if answer not in {'unavailable','can_provide'}:
                 raise ReviewError('invalid_feedback','请选择能否补充代码来源。')
@@ -369,8 +407,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             value['availability']={'resource':'source_code','answer':answer,'confirmed_at':now(),
                  'verdict':'当前条件下无法取得代码，代码执行保留为未复现。' if answer=='unavailable' else '等待补充 GitHub 地址或代码 ZIP 后重新审查。',
                  'scientific_validation':False}
-            store.save(owner,value)
-            return jsonify(value)
+            return save_answer()
         if not execution.get('needs_user') or answer not in {'unavailable', 'can_provide'}:
             raise ReviewError('invalid_feedback', '只有实际执行遇到材料阻碍后，才需要确认补充情况。')
         execution['user_answer'] = answer
@@ -378,8 +415,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         # A skip cannot become a scientific pass, including after user feedback.
         execution['scientific_validation'] = False
         value['execution'] = execution
-        store.save(owner, value)
-        return jsonify(value)
+        return save_answer()
 
     @app.get('/kg/graph')
     def get_kg_graph():
@@ -428,6 +464,20 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         if not any(item['id'] == cmp_id for item in kg.report_conflicts(owner, report)):
             raise ReviewError('comparison_not_found', '当前报告没有这项候选冲突。', 404)
         return jsonify(kg.save_verification(owner, cmp_id, payload.get('decision'), payload.get('note', '')))
+
+    @app.post('/kg/literature/expand')
+    def expand_kg_literature():
+        owner = authorize()
+        payload = body()
+        return jsonify(kg.expand_literature(owner, str(payload.get('paper_id') or ''),
+                                            kinds=payload.get('kinds'), limit=payload.get('limit')))
+
+    @app.post('/kg/literature/paper')
+    def update_kg_paper():
+        owner = authorize()
+        payload = body()
+        return jsonify(kg.update_paper_choice(owner, str(payload.get('paper_id') or ''),
+                                             str(payload.get('action') or '')))
 
     @app.post('/kg/layout')
     def save_kg_layout():

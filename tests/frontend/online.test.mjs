@@ -103,7 +103,7 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  const execHtml=ws.execution(multiStageReport,false);
  assert.match(execHtml,/云端隔离执行/);
  assert.match(execHtml,/遇到报错自动中断/);
- assert.match(execHtml,/临时终止/);
+ assert.match(execHtml,/中断运行/);
  assert.doesNotMatch(execHtml,/NVIDIA GeForce RTX 4090/);
  assert.match(execHtml,/terminal-live-tail/);
  assert.match(execHtml,/Epoch 3\/10 acc=91\.4%/);
@@ -168,7 +168,7 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  assert.doesNotMatch(cancelledView,/data-online="terminal"/);
  assert.doesNotMatch(cancelledView,/data-online-tab="report"/);
  assert.match(cancelledView,/review-ended/);
- assert.match(cancelledView,/审查已临时终止/);
+ assert.match(cancelledView,/审查已中断/);
  assert.match(cancelledView,/data-online="resume-review"/);
 
  wsRender.i.projects[0].online_report=paperOnlyReport;

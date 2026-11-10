@@ -3,14 +3,17 @@
 Implements the structured Extraction -> Normalization -> Retrieval -> Pairwise Comparison ->
 Human-in-the-Loop Verification & Graph View Builder pipeline specified in docs/功能1.md.
 """
+import copy
 import hashlib
 import json
 import math
 import uuid
 
+from .kg_literature import KINDS, LIMITS, OpenAlex, normalize_title
 from .review_api import ReviewError, now
 
 KG_TTL = 30 * 86400
+COMMON_TERMS = set('the and for that this from with are were paper study method methods approach approaches results show using based their these work we our introduce propose present develop performance model models experiment experiments'.split())
 
 def _tokenize(text):
     import re
@@ -94,6 +97,7 @@ def extract_paper_graph_entry(project_payload, owner_id='anonymous'):
             'id': f'{paper_id}_contribution_{index + 1}', 'title': description.strip(),
             'summary': description.strip(), 'review_support_level': 'UNVERIFIED',
             'contribution_type': 'UNCLASSIFIED', 'claims': [],
+            'details': [row for row in review.get('contribution_details', []) if row.get('index') == index + 1][:3],
         })
     if claims:
         contributions.append({
@@ -107,7 +111,9 @@ def extract_paper_graph_entry(project_payload, owner_id='anonymous'):
     return {
         'id': paper_id, 'evidence_schema': 1, 'project_id': payload.get('project_id') or '', 'owner_id': owner_id,
         'title': title, 'authors': [], 'year': review.get('publication_year'),
-        'venue': review.get('publication_venue') or '', 'direction': review.get('research_direction') or '', 'doi': payload.get('doi') or '',
+        'venue': review.get('publication_venue') or '', 'direction': review.get('research_direction') or '',
+        'doi': report.get('public_paper_identifier', '') if report.get('public_paper_identifier', '').startswith('10.') else '',
+        'metadata_source': 'PDF' if any(review.get(key) for key in ('publication_year','publication_venue','research_direction')) else '',
         'arxiv_id': payload.get('arxiv_id') or '',
         'abstract': review.get('paper_abstract') or payload.get('paper_abstract') or '',
         'visibility': 'PRIVATE', 'source_type': payload.get('source_type') or 'USER_UPLOAD',
@@ -237,6 +243,8 @@ class KnowledgeGraphService:
         self._mem_private = {}
         self._mem_layouts = {}
         self._mem_verifications = {}
+        self._mem_literature = {}
+        self.literature = OpenAlex(env.get('OPENALEX_API_KEY', ''))
 
     def _redis_get(self, key, default):
         if not getattr(self.store, 'url', '') or not getattr(self.store, 'token', ''):
@@ -340,6 +348,94 @@ class KnowledgeGraphService:
         self.save_private_papers(owner, [*papers, entry])
         return self.build_graph_response(owner, focus_paper_id=entry['id'])
 
+    def literature_state(self, owner):
+        key = f'articheck:kg:literature:{self.store.namespace}:{self._owner_hash(owner)}'
+        default = {'papers': {}, 'links': {}, 'matches': {}, 'choices': {}}
+        return key, copy.deepcopy(self._redis_get(key, self._mem_literature.get(key, default)))
+
+    def update_literature(self, owner, change):
+        # Compare-and-swap the raw value so simultaneous searches and reading edits merge.
+        key, _ = self.literature_state(owner)
+        if not getattr(self.store, 'url', '') or not getattr(self.store, 'token', ''):
+            _, state = self.literature_state(owner)
+            change(state)
+            self._mem_literature[key] = state
+            return
+        script = ("if (redis.call('GET',KEYS[1]) or '')~=ARGV[1] then return 0 end; "
+                  "redis.call('SET',KEYS[1],ARGV[2],'EX',ARGV[3]); return 1")
+        for _ in range(4):
+            raw = self.store.command('GET', key)
+            state = json.loads(raw) if raw else {'papers': {}, 'links': {}, 'matches': {}, 'choices': {}}
+            change(state)
+            if self.store.command('EVAL', script, '1', key, raw or '', json.dumps(state, ensure_ascii=False), str(KG_TTL)) == 1:
+                return
+        raise ReviewError('graph_changed', '文献条目正在更新，请重试。', 409)
+
+    def expand_literature(self, owner, paper_id, *, kinds, limit):
+        if not isinstance(kinds, list) or not kinds or any(not isinstance(kind, str) or kind not in KINDS for kind in kinds):
+            raise ReviewError('invalid_literature_kind', '请选择需要查找的研究关系。')
+        if type(limit) is not int or limit not in LIMITS:
+            raise ReviewError('invalid_literature_limit', '请选择每类 3、5 或 8 篇。')
+        _, state = self.literature_state(owner)
+        own = {paper['id']: paper for paper in self.owned_papers(owner)}
+        paper = own.get(paper_id) or state['papers'].get(paper_id)
+        if not paper or state['choices'].get(paper_id, {}).get('removed'):
+            raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
+        metadata, groups = self.literature.neighborhood(
+            title=paper['title'], identifier=state['matches'].get(paper_id, paper_id if paper_id in state['papers'] else ''),
+            doi=paper.get('doi', ''), kinds=set(kinds), limit=limit,
+        )
+
+        def save(current):
+            if current['choices'].get(paper_id, {}).get('removed'):
+                raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
+            identifier = metadata['id']
+            current['matches'][paper_id] = identifier
+            current['papers'][identifier] = metadata
+            for kind, papers in groups.items():
+                for related in papers:
+                    target = related['id']
+                    if current['choices'].get(target, {}).get('removed'):
+                        continue
+                    current['papers'][target] = related
+                    source, destination = (target, identifier) if kind == 'previous' else (identifier, target)
+                    if kind == 'similar':
+                        source, destination = sorted((identifier, target))
+                    key = f'{kind if kind == "similar" else "citation"}:{source}:{destination}'
+                    current['links'][key] = {'source': source, 'target': destination,
+                                             'kind': 'similar' if kind == 'similar' else 'citation'}
+            if len(current['papers']) > 75 or len(current['links']) > 300:
+                raise ReviewError('literature_capacity', '图谱的公开条目或关系已达上限，请先移除部分条目。', 409)
+
+        self.update_literature(owner, save)
+        return self.build_graph_response(owner, focus_paper_id=paper_id)
+
+    def update_paper_choice(self, owner, paper_id, action):
+        own = {paper['id'] for paper in self.owned_papers(owner)}
+
+        def change(state):
+            if paper_id not in own and paper_id not in state['papers']:
+                raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
+            flags = state['choices'].setdefault(paper_id, {})
+            if action in {'read', 'unread'}:
+                flags['read'] = action == 'read'
+            elif action in {'hide', 'show'}:
+                flags['hidden'] = action == 'hide'
+            elif action == 'remove' and paper_id not in own:
+                del state['papers'][paper_id]
+                state['matches'].pop(paper_id, None)
+                flags['removed'] = True
+                state['links'] = {key: link for key, link in state['links'].items()
+                                  if paper_id not in (link['source'], link['target'])}
+                # Tombstones stop a repeated expansion from undoing an explicit removal.
+                if len(state['choices']) > 240:
+                    state['choices'].pop(next(iter(state['choices'])))
+            else:
+                raise ReviewError('invalid_paper_action', '请选择可用的论文操作。')
+
+        self.update_literature(owner, change)
+        return self.build_graph_response(owner)
+
     def report_conflicts(self, owner, report):
         paper = extract_paper_graph_entry({'report': report}, owner_id=self._owner_hash(owner))
         verifications = self.get_verifications(owner)
@@ -356,243 +452,125 @@ class KnowledgeGraphService:
         return sorted(candidates, key=lambda item: (-item['overlap_score'], item['id']))[:24]
 
     def build_graph_response(self, owner, *, focus_paper_id=''):
-        papers = self.owned_papers(owner)
-        saved_layout = self.get_layout(owner)
-
-        nodes = []
-        edges = []
-        comparisons = []
-        all_contribs = []
-
-        # 1. Build Paper -> Contribution -> Claim -> Evidence / ReviewFinding nodes & edges
-        num_papers = max(1, len(papers))
-        for p_idx, paper in enumerate(papers):
-            angle = (2 * math.pi * p_idx) / num_papers
-            radius = 0 if num_papers == 1 else 190
-            px = round(520 + radius * math.cos(angle), 1)
-            py = round(340 + radius * math.sin(angle), 1)
-            pos_override = (saved_layout.get('positions') or {}).get(paper['id'])
-            if isinstance(pos_override, dict) and 'x' in pos_override and 'y' in pos_override:
-                px, py = float(pos_override['x']), float(pos_override['y'])
-
-            nodes.append({
-                'id': paper['id'],
-                'node_type': 'Paper',
-                'label': paper['title'][:38] + ('…' if len(paper['title']) > 38 else ''),
-                'full_title': paper['title'],
-                'year': paper.get('year'),
-                'venue': paper.get('venue') or '',
-                'visibility': paper.get('visibility') or 'PRIVATE',
-                'source_type': paper.get('source_type') or 'USER_UPLOAD',
-                'review_status': paper.get('review_status') or 'UNREVIEWED',
-                'repro_status': paper.get('repro_status') or 'NOT_RUN',
-                'abstract': paper.get('abstract') or '',
-                'project_id': paper.get('project_id') or '',
-                'direction': paper.get('direction') or '',
-                'x': px,
-                'y': py,
-                'layer': 1
+        own = self.owned_papers(owner)
+        _, library = self.literature_state(owner)
+        aliases = {}
+        papers = []
+        for paper in own:
+            matched = library['matches'].get(paper['id'])
+            if not matched:
+                title = normalize_title(paper['title'])
+                matches = [item['id'] for item in library['papers'].values()
+                           if title and normalize_title(item['title']) == title]
+                matched = matches[0] if len(matches) == 1 else ''
+            public = library['papers'].get(matched, {})
+            if matched:
+                aliases.setdefault(matched, paper['id'])
+            contributions = [row for row in paper['contributions'] if row.get('contribution_type') != 'EMPIRICAL']
+            papers.append({
+                'id': paper['id'], 'title': paper['title'], 'project_id': paper['project_id'],
+                'source_type': 'USER_UPLOAD', 'source_url': public.get('source_url', ''),
+                'review_status': paper['review_status'], 'contributions': contributions or public.get('contributions', []),
+                'abstract': paper['abstract'], 'metadata': self.metadata(paper, public),
             })
+        for public in library['papers'].values():
+            if public['id'] not in aliases:
+                papers.append({**public, 'source_type': 'PUBLIC_LITERATURE', 'metadata': self.metadata({}, public)})
+        focus_paper_id = aliases.get(focus_paper_id, focus_paper_id)
+        if not any(paper['id'] == focus_paper_id for paper in papers):
+            focus_paper_id = own[-1]['id'] if own else (papers[0]['id'] if papers else '')
+        papers.sort(key=lambda paper: paper['id'] != focus_paper_id)
+        layout = self.get_layout(owner)
+        positions = layout.get('positions') or {}
+        nodes, edges, timeline = [], [], []
+        contributions_by_paper = {}
+        comparison_links = []
 
-            contribs = paper.get('contributions') or []
-            for c_idx, contrib in enumerate(contribs):
-                c_angle = angle + ((c_idx - (len(contribs) - 1) / 2.0) * 0.42)
-                c_dist = 115
-                cx = round(px + c_dist * math.cos(c_angle), 1)
-                cy = round(py + c_dist * math.sin(c_angle), 1)
-                c_pos = (saved_layout.get('positions') or {}).get(contrib['id'])
-                if isinstance(c_pos, dict) and 'x' in c_pos and 'y' in c_pos:
-                    cx, cy = float(c_pos['x']), float(c_pos['y'])
+        def append_node(node, x, y):
+            override = positions.get(node['id']) or {}
+            node['x'], node['y'] = override.get('x', round(x, 1)), override.get('y', round(y, 1))
+            nodes.append(node)
+            return node['x'], node['y']
 
-                all_contribs.append((contrib, paper))
-                nodes.append({
-                    'id': contrib['id'],
-                    'paper_id': paper['id'],
-                    'paper_title': paper['title'],
-                    'paper_year': paper.get('year'),
-                    'node_type': 'Contribution',
-                    'label': contrib['title'][:30] + ('…' if len(contrib['title']) > 30 else ''),
-                    'full_title': contrib['title'],
-                    'summary': contrib.get('summary') or '',
-                    'problem': contrib.get('problem') or '',
-                    'method': contrib.get('method') or '',
-                    'applicable_task': contrib.get('applicable_task') or '',
-                    'datasets': contrib.get('datasets') or [],
-                    'metrics': contrib.get('metrics') or [],
-                    'baselines': contrib.get('baselines') or [],
-                    'key_delta': contrib.get('key_delta') or '',
-                    'limitations': contrib.get('limitations') or '',
-                    'contribution_type': contrib.get('contribution_type') or 'METHOD',
-                    'confidence': contrib.get('confidence'),
-                    'review_support_level': contrib.get('review_support_level') or 'UNVERIFIED',
-                    'visibility': paper.get('visibility') or 'PRIVATE',
-                    'source_spans': contrib.get('source_spans') or [],
-                    'claims': contrib.get('claims') or [],
-                    'x': cx,
-                    'y': cy,
-                    'layer': 2
-                })
-                edges.append({
-                    'id': f"edge_{paper['id']}__{contrib['id']}",
-                    'source': paper['id'],
-                    'target': contrib['id'],
-                    'edge_type': 'HAS_CONTRIBUTION',
-                    'label': '包含核心贡献',
-                    'layer': 1
-                })
+        def add_edge(source, target, kind, label, description='', source_url=''):
+            edges.append({'id': f'{kind}:{source}:{target}', 'source': source, 'target': target,
+                          'edge_type': kind, 'label': label, 'description': description, 'source_url': source_url})
 
-                # Layer 2 & 3: Claim -> Evidence & ReviewFinding (expanded on demand in UI)
-                for cl_idx, claim in enumerate(contrib.get('claims') or []):
-                    cl_angle = c_angle + (cl_idx - 0.5) * 0.35
-                    clx = round(cx + 82 * math.cos(cl_angle), 1)
-                    cly = round(cy + 82 * math.sin(cl_angle), 1)
-                    nodes.append({
-                        'id': claim['id'],
-                        'parent_id': contrib['id'],
-                        'paper_id': paper['id'],
-                        'node_type': 'Claim',
-                        'label': f"{claim.get('dataset') or '实验'}: {claim.get('reported_value') or '声明'}",
-                        'full_title': claim.get('claim_text') or '',
-                        'claim_type': claim.get('claim_type') or 'PERFORMANCE',
-                        'dataset': claim.get('dataset') or '',
-                        'metric': claim.get('metric') or '',
-                        'baseline': claim.get('baseline') or '',
-                        'reported_value': claim.get('reported_value') or '',
-                        'condition': claim.get('condition') or '',
-                        'support_status': claim.get('support_status') or 'UNVERIFIED',
-                        'x': clx,
-                        'y': cly,
-                        'layer': 3
-                    })
-                    edges.append({
-                        'id': f"edge_{contrib['id']}__{claim['id']}",
-                        'source': contrib['id'],
-                        'target': claim['id'],
-                        'edge_type': 'HAS_CLAIM',
-                        'label': '具体声明',
-                        'layer': 3
-                    })
-                    for ev in (claim.get('evidences') or []):
-                        nodes.append({
-                            'id': ev['id'],
-                            'parent_id': claim['id'],
-                            'contrib_id': contrib['id'],
-                            'paper_id': paper['id'],
-                            'node_type': 'Evidence',
-                            'label': f"{ev.get('section') or '证据'} · P{ev.get('page') or 1}",
-                            'full_title': ev.get('quote') or '',
-                            'evidence_type': ev.get('evidence_type') or 'TABLE',
-                            'section': ev.get('section') or '',
-                            'page': ev.get('page') or 1,
-                            'x': round(clx + 55, 1),
-                            'y': round(cly - 28, 1),
-                            'layer': 3
-                        })
-                        edges.append({
-                            'id': f"edge_{claim['id']}__{ev['id']}",
-                            'source': claim['id'],
-                            'target': ev['id'],
-                            'edge_type': 'SUPPORTED_BY',
-                            'label': '原文证据',
-                            'layer': 3
-                        })
-                    for fd in (claim.get('findings') or []):
-                        nodes.append({
-                            'id': fd['id'],
-                            'parent_id': claim['id'],
-                            'contrib_id': contrib['id'],
-                            'paper_id': paper['id'],
-                            'node_type': 'ReviewFinding',
-                            'label': f"审查发现 ({fd.get('severity') or 'MEDIUM'})",
-                            'full_title': fd.get('message') or '',
-                            'finding_type': fd.get('finding_type') or 'WEAK_EVIDENCE',
-                            'severity': fd.get('severity') or 'MEDIUM',
-                            'x': round(clx + 55, 1),
-                            'y': round(cly + 32, 1),
-                            'layer': 3
-                        })
-                        edges.append({
-                            'id': f"edge_{claim['id']}__{fd['id']}",
-                            'source': claim['id'],
-                            'target': fd['id'],
-                            'edge_type': 'QUESTIONED_BY',
-                            'label': '审查质疑',
-                            'layer': 3
-                        })
+        for index, paper in enumerate(papers):
+            paper_id = paper['id']
+            flags = {**library['choices'].get(paper_id, {})}
+            for public_id, own_id in aliases.items():
+                if own_id == paper_id:
+                    flags = {**library['choices'].get(public_id, {}), **flags}
+            ring = 1 + (index - 1) // 6 if index else 0
+            angle = (index - 1) % 6 * math.pi / 3 + (ring % 2) * math.pi / 6
+            radius = ring * 252
+            item = {'paper_id': paper_id, 'title': paper['title'],
+                    'year': paper['metadata']['year']['value'], 'direction': paper['metadata']['direction']['value'],
+                    'venue': paper['metadata']['venue']['value'], 'source_type': paper['source_type'],
+                    'visibility': 'PRIVATE', 'read': bool(flags.get('read')), 'hidden': bool(flags.get('hidden')), 'source_url': paper.get('source_url', '')}
+            timeline.append(item)
+            px, py = append_node({**item, 'id': paper_id, 'node_type': 'Paper', 'layer': 1,
+                                  'label': paper['title'], 'full_title': paper['title'],
+                                  'abstract': paper.get('abstract', ''), 'metadata': paper['metadata']},
+                                 520 + radius * math.cos(angle), 325 + radius * math.sin(angle))
+            parent_nodes = []
+            for offset, contribution in enumerate(paper['contributions'][:6]):
+                cid = contribution.get('id') or f'{paper_id}_contribution_{offset+1}'
+                direction = angle + (offset - (len(paper['contributions'][:6])-1) / 2) * .65
+                parent = {'id': cid, 'paper_id': paper_id, 'paper_title': paper['title'],
+                          'parent_id': paper_id, 'node_type': 'Contribution', 'layer': 2,
+                          'label': contribution['title'], 'full_title': contribution['title'],
+                          'summary': contribution.get('summary', ''), 'source_url': contribution.get('source_url', '')}
+                cx, cy = append_node(parent, px + 105*math.cos(direction), py + 105*math.sin(direction))
+                add_edge(paper_id, cid, 'HAS_CONTRIBUTION', '主贡献')
+                parent_nodes.append(parent)
+                for detail_index, detail in enumerate(contribution.get('details', [])[:3]):
+                    did = f'{cid}_detail_{detail_index+1}'
+                    theta = direction + (detail_index - 1) * .63
+                    child = {'id': did, 'paper_id': paper_id, 'paper_title': paper['title'],
+                             'parent_id': cid, 'node_type': 'Detail', 'layer': 3,
+                             'label': detail['summary'], 'full_title': detail['summary'],
+                             'quote': detail.get('quote', ''), 'page': detail.get('page')}
+                    append_node(child, cx + 79*math.cos(theta), cy + 79*math.sin(theta))
+                    add_edge(cid, did, 'HAS_DETAIL', '细分贡献')
+                    parent_nodes.append(child)
+            contributions_by_paper[paper_id] = parent_nodes
 
-        # 2. Pairwise Contribution Comparisons & Relation Edges
-        for i in range(len(all_contribs)):
-            for j in range(i + 1, len(all_contribs)):
-                ca, pa = all_contribs[i]
-                cb, pb = all_contribs[j]
-                cmp_item = compare_contributions_pair(ca, pa, cb, pb)
-                if cmp_item['overlap_score'] >= 0.32 or (cmp_item['shared_datasets'] and cmp_item['shared_metrics']):
-                    comparisons.append(cmp_item)
-                    edges.append({
-                        'id': cmp_item['id'],
-                        'source': ca['id'],
-                        'target': cb['id'],
-                        'edge_type': cmp_item['relation_type'],
-                        'conflict_type': cmp_item['conflict_type'],
-                        'verdict': cmp_item['verdict'],
-                        'overlap_score': cmp_item['overlap_score'],
-                        'confidence': cmp_item['confidence'],
-                        'user_verified': cmp_item['user_verified'],
-                        'label': {
-                            'EXTENDS': '脉络演进 (Extends)',
-                            'COMPLEMENTARY': '方法互补',
-                            'SIMILAR': '相似基线对照'
-                        }.get(cmp_item['relation_type'], '贡献关联'),
-                        'layer': 2
-                    })
-
-        # 3. Build Research Evolution Timeline
-        timeline = sorted(
-            [
-                {
-                    'paper_id': p['id'],
-                    'title': p['title'],
-                    'year': p.get('year'),
-                    'venue': p.get('venue') or '',
-                    'direction': p.get('direction') or '',
-                    'visibility': p.get('visibility') or 'PRIVATE',
-                    'review_status': p.get('review_status') or 'PASS',
-                    'repro_status': p.get('repro_status') or 'NOT_RUN',
-                    'contributions': [
-                        {
-                            'id': c['id'],
-                            'title': c['title'],
-                            'type': c.get('contribution_type') or 'METHOD',
-                            'key_delta': c.get('key_delta') or c.get('summary') or '',
-                            'support': c.get('review_support_level') or 'SUPPORTED'
-                        }
-                        for c in (p.get('contributions') or [])
-                    ]
-                }
-                for p in papers
-            ],
-            key=lambda x: (x['year'] is None, x['year'] or 0, x['title'])
-        )
+        for link in library['links'].values():
+            source, target = (aliases.get(link[key], link[key]) for key in ('source', 'target'))
+            if source == target or source not in contributions_by_paper or target not in contributions_by_paper:
+                continue
+            if link['kind'] == 'citation':
+                add_edge(source, target, 'CITED_BY', '被后续论文引用', '箭头由被引用论文指向引用它的论文。', 'https://openalex.org/' + link['target'])
+            comparison_links.append((source, target))
+        # Each paper pair has at most two contribution links and only when the text supplies an identifiable basis.
+        for source, target in sorted({tuple(sorted(pair)) for pair in comparison_links}):
+            matches = []
+            for left in contributions_by_paper[source]:
+                for right in contributions_by_paper[target]:
+                    a = _tokenize(left.get('quote') or left['label']) - COMMON_TERMS
+                    b = _tokenize(right.get('quote') or right['label']) - COMMON_TERMS
+                    shared = a & b
+                    if len(shared) >= 2 and len(shared) / len(a | b) >= .18:
+                        matches.append((len(shared) / len(a | b), sorted(shared), left, right))
+            for _, shared, left, right in sorted(matches, key=lambda row: -row[0])[:2]:
+                add_edge(left['id'], right['id'], 'SIMILAR_CONTRIBUTION', '贡献相似候选',
+                         '共同术语为 ' + '、'.join(shared[:6]) + '。具体方法与结论仍需核对原文。',
+                         left.get('source_url') or right.get('source_url', ''))
 
         node_ids = {node['id'] for node in nodes}
-        saved_layout = {
-            'positions': {key: pos for key, pos in (saved_layout.get('positions') or {}).items() if key in node_ids},
-            'pinned': [key for key in saved_layout.get('pinned', []) if key in node_ids],
-        }
-        if not any(p['id'] == focus_paper_id for p in papers):
-            focus_paper_id = papers[-1]['id'] if papers else ''
-
         return {
-            'focus_paper_id': focus_paper_id,
-            'papers': papers,
-            'nodes': nodes,
-            'edges': edges,
-            'comparisons': comparisons,
-            'timeline': timeline,
-            'layout': saved_layout,
-            'stats': {
-                'paper_count': len(papers),
-                'contribution_count': len(all_contribs),
-                'claim_count': sum(len(c.get('claims') or []) for c, _ in all_contribs),
-            }
+            'focus_paper_id': focus_paper_id, 'nodes': nodes, 'edges': edges,
+            'papers': timeline, 'timeline': sorted(timeline, key=lambda row: (row['year'] is None, row['year'] or 0, row['title'])),
+            'layout': {'positions': {key: pos for key, pos in positions.items() if key in node_ids},
+                       'pinned': [key for key in layout.get('pinned', []) if key in node_ids]},
+            'stats': {'paper_count': len(papers)},
         }
+
+    @staticmethod
+    def metadata(paper, public):
+        return {key: {'value': public.get(key) or paper.get(key),
+                      'source': 'OpenAlex' if public.get(key) else 'PDF' if paper.get(key) else '',
+                      'source_url': public.get('source_url', '') if public.get(key) else ''}
+                for key in ('year', 'venue', 'direction')}

@@ -76,3 +76,7 @@ node --test tests/frontend/*.test.mjs
 ```
 
 历史 v1 教学材料验收保留于 [供应商记录](evidence/edgeone-deepseek-acceptance.json) 和 [浏览器导出](evidence/edgeone-browser-acceptance.json)。v2 的真实网站 CPU 执行和材料类型测试单独记录，不用历史教学结果替代。
+
+### 公开研究脉络
+
+用户在图谱中主动发起检索后，服务用论文题目、DOI 或已匹配的书目 ID 查询 OpenAlex。公开书目和阅读标记保存在当前账号的图谱中，上传的 PDF、报告及其他账号的数据不会发送给书目服务。可选的 `OPENALEX_API_KEY` 由管理员在 EdgeOne 服务端配置；未设置时使用公开接口的匿名额度。找不到可核验的书目信息时保留 PDF 已核对字段或显示未知。

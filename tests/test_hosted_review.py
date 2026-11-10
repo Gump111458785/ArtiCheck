@@ -135,10 +135,8 @@ class HostedReviewTests(unittest.TestCase):
         nodes = response.json['nodes']
         paper = next(n for n in nodes if n['full_title'] == 'Original paper')
         self.assertIsNone(paper['year'])
-        self.assertEqual(paper['repro_status'], 'PARTIAL')
-        claims = [n for n in nodes if n.get('paper_id') == paper['id'] and n['node_type'] == 'Claim']
-        self.assertEqual(claims[0]['support_status'], 'UNVERIFIED')
-        self.assertFalse(any(n.get('paper_id') == paper['id'] and n['node_type'] == 'Evidence' for n in nodes))
+        self.assertEqual({n['node_type'] for n in nodes}, {'Paper', 'Contribution'})
+        self.assertNotIn('accuracy', json.dumps(response.json))
         self.assertEqual(client.get('/kg/graph', headers=other).json['papers'], [])
         for scope in ('GLOBAL', 'COMBINED'):
             self.assertEqual(client.get('/kg/graph?scope=' + scope, headers=HEADERS).status_code, 400)
@@ -176,6 +174,81 @@ class HostedReviewTests(unittest.TestCase):
         self.assertEqual(result['papers'][0]['visibility'], 'PRIVATE')
         self.assertEqual(result['focus_paper_id'], own['id'])
         self.assertEqual(result['layout']['pinned'], [])
+
+    def test_literature_second_hop_relationships_and_choices_are_account_scoped(self):
+        store = MemoryStore()
+        store.namespace = 'test'
+        app = Flask(__name__)
+        app.register_error_handler(ReviewError, lambda error: (jsonify(error=str(error)), error.status))
+        with patch('articheck.kg_service.OpenAlex') as provider:
+            register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), Budget(),
+                     store=store, executor=Executor())
+        job = 'e' * 32
+        contribution = 'Residual shortcut connections stabilize gradient propagation'
+        store.save(OWNER, {'id': job, 'status': 'completed',
+                           'review': {'task': 'self_review', 'paper_title': 'Owned paper',
+                                      'paper_contributions': [contribution],
+                                      'contribution_details': [{'index': 1, 'summary': 'Identity shortcuts',
+                                                                'quote': 'Identity shortcuts preserve gradients', 'page': 2}]}})
+        client = app.test_client()
+        other = {**HEADERS, 'X-ArtiCheck-Session': 'b' * 64}
+        graph = client.post('/kg/ingest', json={'assessment_id': job}, headers=HEADERS).json
+        root = graph['focus_paper_id']
+        public = lambda ident, title, year: {'id': ident, 'title': title, 'year': year, 'venue': 'CVPR',
+            'direction': 'Computer vision', 'source_url': 'https://openalex.org/' + ident,
+            'contributions': [{'title': contribution, 'source_url': 'https://openalex.org/' + ident}]}
+        original, past, future = public('W11', 'Owned paper', 2016), public('W22', 'Earlier work', 2014), public('W33', 'Later work', 2017)
+        provider.return_value.neighborhood.side_effect = [(original, {'previous': [past], 'next': [future]}),
+                                                           (future, {'previous': [original, past]})]
+        expand = '/kg/literature/expand'
+        choice = '/kg/literature/paper'
+        payload = {'paper_id': root, 'kinds': ['previous', 'next'], 'limit': 3}
+        self.assertEqual(client.post(expand, json=payload, headers=other).status_code, 404)
+        graph = client.post(expand, json=payload, headers=HEADERS).json
+        by_id = {row['id']: row for row in graph['nodes']}
+        self.assertEqual(by_id[root]['metadata']['year']['source'], 'OpenAlex')
+        self.assertIn('Detail', {n['node_type'] for n in graph['nodes']})
+        self.assertNotIn('Claim', {n['node_type'] for n in graph['nodes']})
+        pairs = {(edge['source'], edge['target']) for edge in graph['edges'] if edge['edge_type'] == 'CITED_BY'}
+        self.assertEqual(pairs, {('W22', root), (root, 'W33')})
+        self.assertTrue(any(edge['edge_type'] == 'SIMILAR_CONTRIBUTION'
+                            and by_id[edge['source']]['node_type'] != 'Paper'
+                            and edge['source_url'] for edge in graph['edges']))
+        self.assertFalse(by_id['W33']['read'])
+        for action in ('read', 'hide'):
+            graph = client.post(choice, json={'paper_id': 'W33', 'action': action}, headers=HEADERS).json
+        hidden = next(row for row in graph['papers'] if row['paper_id'] == 'W33')
+        self.assertTrue(hidden['read'] and hidden['hidden'])
+        graph = client.post(expand, json={'paper_id': 'W33', 'kinds': ['previous'], 'limit': 3}, headers=HEADERS).json
+        self.assertEqual(provider.return_value.neighborhood.call_args.kwargs['identifier'], 'W33')
+        self.assertEqual({row['paper_id'] for row in graph['papers']}, {root, 'W22', 'W33'})
+        self.assertEqual(client.post(choice, json={'paper_id': 'W33', 'action': 'show'}, headers=other).status_code, 404)
+        graph = client.post(choice, json={'paper_id': 'W33', 'action': 'show'}, headers=HEADERS).json
+        self.assertFalse(next(row for row in graph['papers'] if row['paper_id'] == 'W33')['hidden'])
+        graph = client.post(choice, json={'paper_id': 'W22', 'action': 'remove'}, headers=HEADERS).json
+        self.assertFalse(any('W22' in (edge['source'], edge['target']) for edge in graph['edges']))
+        self.assertEqual(client.get('/kg/graph', headers=other).json['papers'], [])
+
+    def test_terminated_assessment_cannot_reopen_or_resume_execution(self):
+        store = MemoryStore()
+        store.namespace = 'test'
+        app = Flask(__name__)
+        app.register_error_handler(ReviewError, lambda error: (jsonify(error=str(error)), error.status))
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), Budget(),
+                 store=store, executor=Executor())
+        job = 'c' * 32
+        evidence = [{'id': 'S1', 'status': 'failed', 'stdout': 'existing evidence'}]
+        store.save(OWNER, {'id': job, 'status': 'completed', 'review': {'task': 'reproduction'},
+                           'execution': {'status': 'failed', 'stages': evidence}})
+        client = app.test_client()
+        base = '/assessments/' + job
+        first = client.post(base + '/terminate', json={}, headers=HEADERS).json
+        second = client.post(base + '/terminate', json={}, headers=HEADERS).json
+        self.assertEqual(first['terminated_at'], second['terminated_at'])
+        self.assertEqual(first['execution']['stages'], evidence)
+        self.assertEqual(client.post(base + '/execute', json={}, headers=HEADERS).status_code, 409)
+        self.assertEqual(client.post(base + '/feedback', json={'answer': 'can_provide'}, headers=HEADERS).status_code, 409)
+        self.assertEqual(store.reservations, 0)
 
     def test_decimal_ratio_with_unsubstantiated_percent_is_not_an_acceptance_target(self):
         context,_=prepare_assessment(materials())

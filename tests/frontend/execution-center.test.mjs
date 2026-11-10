@@ -50,3 +50,27 @@ test('cancelled full jobs keep recorded roles stopped rather than completed',asy
 });
 
 test('the public CI archive carries the real complete role trace and matching layered verdict',()=>{const report=archive(),rows=report.role_trace.events;assert.equal(rows.length,162);assert.equal(rows.filter(r=>r.role==='Planner'&&r.event==='schedule_run').length,15);assert.equal(rows.filter(r=>r.role==='ExperimentRunner'&&r.event==='stage').length,60);assert.ok(rows.every(r=>r.run_id===report.run_id));assert.deepEqual(rows.at(-1).levels,report.levels);assert.equal(report.levels.conclusion,false);assert.equal(report.provenance.commit_sha,'784ba4bb3197dcccdf84cb052627caaaa52e5ece');});
+
+test('archive treats each execution state and review verdict as an independent filter',()=>{
+ const base={task:'reproduction',paper_type:'empirical',criteria:[],findings:[],coverage:{gaps:[]},plan:{stages:[{id:'S1'}]}};
+ const row=(id,execution,review=base,extra={})=>({id,title:id,online_report:{status:'completed',materials:{paper:'p',code:'c'},execution,review,...extra}});
+ const {center}=harness({projects:()=>[
+  row('waiting',{status:'failed',needs_user:true}),row('interrupted',{status:'failed'}),
+  row('green',{status:'completed',execution_performed:true,metrics:[{status:'within_tolerance',observed:1}]}),
+  row('red',{status:'completed',execution_performed:true,metrics:[{status:'outside_tolerance',observed:0}]}),
+  row('closed',{status:'failed'},base,{terminated_at:'2026-11-10'})
+ ]});
+ const byId=Object.fromEntries(center.onlineOrderItems().map(item=>[item.id,item]));
+ assert.equal(byId.waiting.statusTone,'amber');assert.equal(byId.interrupted.statusTone,'amber');
+ assert.equal(byId.green.statusTone,'green');assert.equal(byId.red.statusTone,'red');
+ assert.equal(byId.closed.statusKey,'terminated');
+ center.archiveFilters.execution='waiting';
+ assert.deepEqual(Object.values(byId).filter(item=>center.matchesArchiveFilter(item)).map(item=>item.id),['waiting']);
+ center.archiveFilters.execution='all';center.archiveFilters.verdict='failed';
+ assert.deepEqual(Object.values(byId).filter(item=>center.matchesArchiveFilter(item)).map(item=>item.id),['red']);
+ center.archiveFilters.verdict='all';
+ const html=center.renderOrderCenter();
+ assert.match(html,/data-order-terminate="interrupted"/);
+ assert.doesNotMatch(html,/data-order-terminate="closed"/);
+ assert.doesNotMatch(html,/正在审阅或复现中|中断 \/ 等待资源补完/);
+});

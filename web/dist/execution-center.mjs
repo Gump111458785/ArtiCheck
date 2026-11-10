@@ -4,6 +4,9 @@ import {reportVerdict} from './report-verdict.mjs';
 import {hasCode,taskNames} from './online-core.mjs';
 
 const date=value=>value?value.slice(0,16).replace('T',' '):'未记录时间';
+const archiveStates={draft:'待启动',reviewing:'正在审阅',queued:'等待执行',reproducing:'正在复现',cancelling:'正在中断',waiting:'等待资源',interrupted:'已中断',completed:'已完成',terminated:'已终止'};
+const archiveVerdicts={unassessed:'待验收',passed:'通过',issues:'发现问题',failed:'未通过',inapplicable:'不适用'};
+const archiveMaterials={paper_only:'仅论文',code_only:'仅代码',both:'论文与代码',none:'待提交材料'};
 const tabsFor=kind=>kind==='full'?[['overview','任务概览'],['roles','角色协作'],['trace','阶段与输出'],['evidence','证据复核'],['report','完整报告']]:[['overview','任务概览'],['roles','角色协作'],['trace','执行事件'],['evidence','证据复核']];
 
 export class ExecutionCenter {
@@ -16,6 +19,8 @@ export class ExecutionCenter {
    paperName:'',
    codeName:'',
    verdict:'all',
+   execution:'all',
+   material:'all',
    taskType:'all',
    dateRange:'all'
   };
@@ -44,46 +49,26 @@ export class ExecutionCenter {
    const execStages=ex?.stages||[];
    const codeBound=Boolean(hasCode(p)||r?.materials?.code);
    const paperOnly=Boolean(!codeBound&&(p.paper||r?.materials?.paper));
-   const isCancelling=Boolean(this.h.isProjectCancelling?.(p.id)||ex?.status==='cancelling');
-   const pendingStale=Boolean(p.online_pending_request&&(r?.review||['completed','failed','cancelled'].includes(r?.status)));
-   const reviewingNow=Boolean(!isCancelling&&(r?.status==='reviewing'||(p.online_pending_request&&!pendingStale&&!r?.review)));
-   const execRunning=Boolean(!isCancelling&&codeBound&&['queued','starting','running'].includes(ex?.status));
-   const running=Boolean(isCancelling||reviewingNow||execRunning);
-   const failed=Boolean(!running&&(['failed','cancelled'].includes(r?.status)||['failed','cancelled','expired'].includes(ex?.status)||execStages.some(s=>s.status==='failed')||(!ex&&r?.review?.resource_preflight?.needs_user)||(!ex&&r?.review?.task==='reproduction'&&!codeBound)));
-   const completed=Boolean(!running&&!failed&&r?.review);
-   const statusKey=isCancelling?'cancelling':running?'running':failed?'failed':completed?'completed':'draft';
-   const completedCount=execStages.filter(s=>s.status==='completed').length;
+   const terminated=Boolean(r?.terminated_at);
+   const isCancelling=!terminated&&Boolean(this.h.isProjectCancelling?.(p.id)||ex?.status==='cancelling');
+   const reviewingNow=!terminated&&!isCancelling&&Boolean(r?.status==='reviewing'||(!r&&p.online_pending_request));
+   const waiting=!terminated&&Boolean(ex?.needs_user||(!ex&&(r?.review?.resource_preflight?.needs_user||(r?.review?.task==='reproduction'&&!codeBound))));
+   const interrupted=Boolean(['failed','cancelled'].includes(r?.status)||['failed','cancelled','expired'].includes(ex?.status)||execStages.some(stage=>stage.status==='failed'));
+   const statusKey=terminated?'terminated':isCancelling?'cancelling':reviewingNow?'reviewing':
+    ex?.status==='running'?'reproducing':['queued','starting'].includes(ex?.status)?'queued':
+    waiting?'waiting':interrupted?'interrupted':r?.review?'completed':'draft';
+   const completedCount=execStages.filter(stage=>stage.status==='completed').length;
    const totalStages=codeBound?stages.length:0;
-   const progressPct=isCancelling?60:running?(totalStages?Math.max(15,Math.round(((completedCount+0.5)/totalStages)*100)):65):completed?100:failed?(totalStages?Math.max(20,Math.round((completedCount/totalStages)*100)):35):15;
-   const verdictObj=r?.review?reportVerdict(r):null;
-   const verdictKey=isCancelling||running?'running':failed?'interrupted':verdictObj?.state==='pass'?'pass':verdictObj?.state==='partial'?'partial':verdictObj?.state==='fail'?'fail':completed?'reviewed':'draft';
-   let statusLabel='';
-   if(isCancelling){
-    statusLabel='正在中断…';
-   }else if(running){
-    if(paperOnly||!codeBound){
-     statusLabel='正在审阅论文';
-    }else if(ex?.status==='running'){
-     statusLabel=`正在复现 (${completedCount}/${totalStages||1})`;
-    }else if(reviewingNow){
-     statusLabel='正在审阅材料';
-    }else{
-     statusLabel='正在准备云端复现';
-    }
-   }else if(failed){
-    if(ex?.status==='cancelled'||r?.status==='cancelled')statusLabel='已临时终止';
-    else if(!ex&&r?.review?.resource_preflight?.needs_user)statusLabel='等待补充资源';
-    else if(!ex&&r?.review?.task==='reproduction'&&!codeBound)statusLabel='待补充代码仓库';
-    else statusLabel='复现报错中断';
-   }else if(completed){
-    statusLabel=verdictObj?.label||(paperOnly?'论文审阅已完成':'审查与复现已完成');
-   }else{
-    statusLabel=paperOnly?'待开始论文审阅':'待启动审查';
-   }
+   const verdict=r?.review?reportVerdict(r):null;
+   const verdictKey=verdict?.label==='不适用'?'inapplicable':verdict?.state==='passed'?'passed':verdict?.state==='failed'?'failed':statusKey==='completed'&&r?.review?.findings?.length?'issues':'unassessed';
+   const statusTone=['waiting','interrupted','cancelling'].includes(statusKey)?'amber':
+    statusKey==='completed'&&['failed','issues'].includes(verdictKey)?'red':statusKey==='completed'&&(verdictKey==='passed'||ex?.status==='completed')?'green':
+    ['reviewing','queued','reproducing'].includes(statusKey)?'blue':'neutral';
+   const statusLabel=archiveStates[statusKey];
+   const materialKey=paperOnly?'paper_only':codeBound?(p.paper||r?.materials?.paper?'both':'code_only'):'none';
    const rawTime=p.updated_at||r?.updated_at||p.created_at||new Date().toISOString();
    const ts=Date.parse(rawTime)||0;
-   // Priority rank: 0 = running/cancelling (incomplete), 1 = failed/waiting-for-resources, 2 = draft, 3 = completed
-   const priorityRank=(statusKey==='running'||statusKey==='cancelling')?0:statusKey==='failed'?1:statusKey==='draft'?2:3;
+   const priorityRank=['reviewing','queued','reproducing','cancelling'].includes(statusKey)?0:['waiting','interrupted'].includes(statusKey)?1:statusKey==='draft'?2:3;
    const taskKey=r?.review?.task||p.online_task||(paperOnly?'self_review':'auto');
    const taskLabel=paperOnly&&taskKey==='auto'?'仅论文审阅':(taskNames[taskKey]||'自动识别');
    return {
@@ -101,9 +86,8 @@ export class ExecutionCenter {
     statusKey,
     statusLabel,
     verdictKey,
-    verdictLabel:verdictObj?.label||statusLabel,
-    verdictScope:verdictObj?.scope||(paperOnly?'论文自查':'综合审查'),
-    progressPct,
+    verdictLabel:archiveVerdicts[verdictKey],
+    statusTone, materialKey,
     totalStages,
     completedCount,
     metricsCount:r?.review?.metrics?.length||0,
@@ -117,24 +101,14 @@ export class ExecutionCenter {
  }
  matchesArchiveFilter(item){
   const f=this.archiveFilters;
-  if(this.orderFilter!=='all'){
-   if(this.orderFilter==='running'&&!['running','cancelling'].includes(item.statusKey))return false;
-   if(this.orderFilter!=='running'&&item.statusKey!==this.orderFilter)return false;
-  }
+  if(this.orderFilter!=='all'&&item.statusKey!==this.orderFilter)return false;
   if(f.projectName&&!item.title.toLowerCase().includes(f.projectName.trim().toLowerCase()))return false;
   if(f.paperName&&!item.paperName.toLowerCase().includes(f.paperName.trim().toLowerCase()))return false;
   if(f.codeName&&!item.codeName.toLowerCase().includes(f.codeName.trim().toLowerCase()))return false;
-  if(f.verdict!=='all'){
-   if(f.verdict==='pass'&&item.verdictKey!=='pass')return false;
-   if(f.verdict==='attention'&&!['partial','fail','interrupted'].includes(item.verdictKey))return false;
-   if(f.verdict==='interrupted'&&item.statusKey!=='failed')return false;
-   if(f.verdict==='running'&&!['running','cancelling'].includes(item.statusKey))return false;
-  }
-  if(f.taskType!=='all'){
-   if(f.taskType==='paper_only'&&!item.paperOnly)return false;
-   if(f.taskType==='with_code'&&!item.codeBound)return false;
-   if(['self_review','reproduction','code_review'].includes(f.taskType)&&item.taskKey!==f.taskType)return false;
-  }
+  if(f.verdict!=='all'&&item.verdictKey!==f.verdict)return false;
+  if(f.execution!=='all'&&item.statusKey!==f.execution)return false;
+  if(f.material!=='all'&&item.materialKey!==f.material)return false;
+  if(f.taskType!=='all'&&item.taskKey!==f.taskType)return false;
   if(f.dateRange!=='all'&&item.timestamp){
    const now=Date.now();
    const diffDays=(now-item.timestamp)/(1000*3600*24);
@@ -147,19 +121,8 @@ export class ExecutionCenter {
  renderOrderCenter(){
   const e=this.h.esc;
   const items=this.onlineOrderItems();
-  const counts={
-   all:items.length,
-   running:items.filter(x=>['running','cancelling'].includes(x.statusKey)).length,
-   failed:items.filter(x=>x.statusKey==='failed').length,
-   completed:items.filter(x=>x.statusKey==='completed').length
-  };
   const filtered=items.filter(item=>this.matchesArchiveFilter(item));
-  const tabs=[
-   ['all','全部条目',counts.all],
-   ['running','未完成 / 进行中',counts.running],
-   ['failed','等待资源 / 中断',counts.failed],
-   ['completed','已完成归档',counts.completed]
-  ];
+  const tabs=[['all','全部条目',items.length],...Object.entries(archiveStates).map(([key,label])=>[key,label,items.filter(item=>item.statusKey===key).length]).filter(([, ,count])=>count)];
   const f=this.archiveFilters;
   return `<section class="repro-order-center archive-table-center" aria-label="案例与归档表格条目中心">
    <header class="repro-order-header">
@@ -185,26 +148,12 @@ export class ExecutionCenter {
       <label for="af-code">代码 / 仓库名</label>
       <input id="af-code" type="search" data-archive-input="codeName" value="${e(f.codeName)}" placeholder="输入 ZIP 名称或 GitHub 仓库…">
      </div>
-     <div class="archive-filter-field">
-      <label for="af-verdict">是否通过审查</label>
-      <select id="af-verdict" data-archive-select="verdict">
-       <option value="all" ${f.verdict==='all'?'selected':''}>全部审查结论</option>
-       <option value="pass" ${f.verdict==='pass'?'selected':''}>通过审查 / 一致性良好</option>
-       <option value="attention" ${f.verdict==='attention'?'selected':''}>存在问题 / 需复核</option>
-       <option value="interrupted" ${f.verdict==='interrupted'?'selected':''}>中断 / 等待资源补完</option>
-       <option value="running" ${f.verdict==='running'?'selected':''}>正在审阅或复现中</option>
-      </select>
-     </div>
-     <div class="archive-filter-field">
-      <label for="af-task">材料与任务类型</label>
-      <select id="af-task" data-archive-select="taskType">
-       <option value="all" ${f.taskType==='all'?'selected':''}>全部类型</option>
-       <option value="paper_only" ${f.taskType==='paper_only'?'selected':''}>仅论文审阅（无代码）</option>
-       <option value="with_code" ${f.taskType==='with_code'?'selected':''}>论文 + 代码实验复现</option>
-       <option value="self_review" ${f.taskType==='self_review'?'selected':''}>论文自查</option>
-       <option value="reproduction" ${f.taskType==='reproduction'?'selected':''}>复现核查</option>
-      </select>
-     </div>
+     ${[
+      ['verdict','审查结论',archiveVerdicts],
+      ['execution','执行状态',archiveStates],
+      ['material','材料类型',archiveMaterials],
+      ['taskType','任务类型',taskNames]
+     ].map(([key,label,values])=>`<div class="archive-filter-field"><label for="af-${key}">${label}</label><select id="af-${key}" data-archive-select="${key}"><option value="all">全部</option>${Object.entries(values).map(([value,name])=>`<option value="${value}" ${f[key]===value?'selected':''}>${name}</option>`).join('')}</select></div>`).join('')}
      <div class="archive-filter-field">
       <label for="af-date">更新时间</label>
       <select id="af-date" data-archive-select="dateRange">
@@ -229,7 +178,7 @@ export class ExecutionCenter {
       <tr>
        <th style="width:22%">项目名称与任务类型</th>
        <th style="width:24%">论文与代码材料</th>
-       <th style="width:17%">审查结果 / 当前状态</th>
+       <th style="width:17%">执行状态与审查结论</th>
        <th style="width:15%">指标与核查统计</th>
        <th style="width:11%">更新时间</th>
        <th style="width:11%">操作</th>
@@ -239,7 +188,7 @@ export class ExecutionCenter {
       ${filtered.map(item=>`<tr class="archive-table-row status-${e(item.statusKey)} ${item.priorityRank<=1?'is-priority-pinned':''}">
        <td class="archive-col-project">
         <div class="archive-project-cell">
-         <button type="button" class="order-title-link" data-order-open="${e(item.id)}" data-order-tab="${item.statusKey==='running'||item.statusKey==='cancelling'||item.statusKey==='failed'?'process':item.hasReport?'report':'materials'}">${e(item.title)}</button>
+         <button type="button" class="order-title-link" data-order-open="${e(item.id)}" data-order-tab="${item.statusKey==='completed'?'report':item.statusKey==='draft'?'materials':'process'}">${e(item.title)}</button>
          <span class="archive-task-sub">${e(item.taskLabel)}</span>
         </div>
        </td>
@@ -248,10 +197,7 @@ export class ExecutionCenter {
         <div class="archive-material-line" title="${e(item.codeName)}"><span class="mat-tag ${item.codeBound?'code':'nocode'}">代码</span><span class="mat-name">${e(item.codeName)}</span></div>
        </td>
        <td class="archive-col-status">
-        <div class="order-status-pill ${e(item.statusKey)} ${e(item.verdictKey)}">
-         ${item.statusKey==='cancelling'?'<span class="cancelling-anim" aria-hidden="true"><i></i><i></i><i></i></span>':item.statusKey==='running'?'<span class="online-spinner" aria-hidden="true"></span>':''}
-         <span>${e(item.statusLabel)}</span>
-        </div>
+        <div class="archive-status-stack"><span class="order-status-pill tone-${item.statusTone}">${e(item.statusLabel)}</span>${item.hasReport?`<span class="archive-verdict verdict-${item.verdictKey}">${e(item.verdictLabel)}</span>`:''}</div>
        </td>
        <td class="archive-col-metrics">
         <div class="archive-metrics-inline">
@@ -265,7 +211,13 @@ export class ExecutionCenter {
        </td>
        <td class="archive-col-actions">
         <div class="order-actions-col">
-         ${item.statusKey==='cancelling'?`<button type="button" class="btn small" disabled>正在中断…</button>`:item.statusKey==='running'?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">${item.paperOnly?'查看审阅进度':'查看实时复现'}</button><button type="button" class="btn danger small" data-order-cancel="${e(item.id)}">临时终止</button>`:item.statusKey==='failed'?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看诊断</button>${item.hasPaper?`<button type="button" class="btn small kg-entry-btn" data-open-kg="${e(item.id)}">知识图谱</button>`:''}`:item.hasReport?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="report">查看报告</button>${item.hasPaper?`<button type="button" class="btn small kg-entry-btn" data-open-kg="${e(item.id)}">知识图谱</button>`: ''}`:`<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="materials">准备材料</button>`}
+         ${item.statusKey==='cancelling'?'<button type="button" class="btn small" disabled>正在中断</button>':
+          ['reviewing','queued','reproducing'].includes(item.statusKey)?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看进度</button><button type="button" class="btn small" data-order-cancel="${e(item.id)}">中断运行</button>`:
+          ['waiting','interrupted'].includes(item.statusKey)?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看诊断</button><button type="button" class="btn danger small" data-order-terminate="${e(item.id)}">终止审查</button>`:
+          item.statusKey==='terminated'?`<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="process">查看记录</button>`:
+          item.hasReport?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="report">查看报告</button>`:
+          `<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="materials">准备材料</button>`}
+         ${item.hasPaper&&['completed','terminated'].includes(item.statusKey)?`<button type="button" class="btn small kg-entry-btn" data-open-kg="${e(item.id)}">知识图谱</button>`:''}
         </div>
        </td>
       </tr>`).join('')}
@@ -354,17 +306,18 @@ export class ExecutionCenter {
    this.h.render();
   });
   document.addEventListener('click',async event=>{
-   const el=event.target.closest('[data-archive-action],[data-order-filter],[data-order-open],[data-order-cancel],[data-center-open],[data-center-status],[data-center-tab],[data-center-back],[data-center-clear],[data-center-more],[data-center-refresh],[data-center-stop],[data-center-export],[data-center-role],[data-role-nav]');
+   const el=event.target.closest('[data-archive-action],[data-order-filter],[data-order-open],[data-order-cancel],[data-order-terminate],[data-center-open],[data-center-status],[data-center-tab],[data-center-back],[data-center-clear],[data-center-more],[data-center-refresh],[data-center-stop],[data-center-export],[data-center-role],[data-role-nav]');
    if(!el)return;
    try{
     if(el.dataset.archiveAction==='reset'){
      this.orderFilter='all';
-     this.archiveFilters={projectName:'',paperName:'',codeName:'',verdict:'all',taskType:'all',dateRange:'all'};
+     this.archiveFilters={projectName:'',paperName:'',codeName:'',verdict:'all',execution:'all',material:'all',taskType:'all',dateRange:'all'};
      this.h.render();
      return;
     }
     if(el.dataset.orderFilter){this.orderFilter=el.dataset.orderFilter;this.h.render();return;}
     if(el.dataset.orderOpen){this.h.openOnlineOrder?.(el.dataset.orderOpen,el.dataset.orderTab||'process');return;}
+    if(el.dataset.orderTerminate){await this.h.terminateOnlineOrder?.(el.dataset.orderTerminate);return;}
     if(el.dataset.orderCancel){await this.h.cancelOnlineOrder?.(el.dataset.orderCancel);return;}
     if(el.dataset.centerOpen){await this.open(el.dataset.centerOpen,this.h.state().page==='evidence'?'evidence':'overview');return;}
     if(el.dataset.centerStatus){this.filters.status=el.dataset.centerStatus;this.limit=25;}
