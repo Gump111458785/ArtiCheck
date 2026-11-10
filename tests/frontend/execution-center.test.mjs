@@ -58,12 +58,18 @@ test('archive treats each execution state and review verdict as an independent f
   row('waiting',{status:'failed',needs_user:true}),row('interrupted',{status:'failed'}),
   row('green',{status:'completed',execution_performed:true,metrics:[{status:'within_tolerance',observed:1}]}),
   row('red',{status:'completed',execution_performed:true,metrics:[{status:'outside_tolerance',observed:0}]}),
-  row('closed',{status:'failed'},base,{terminated_at:'2026-11-10'})
+  row('closed',{status:'failed'},base,{terminated_at:'2026-11-10'}),
+  row('unverified',{status:'completed',execution_performed:true,metrics:[{observed:null}]})
  ]});
  const byId=Object.fromEntries(center.onlineOrderItems().map(item=>[item.id,item]));
  assert.equal(byId.waiting.statusTone,'amber');assert.equal(byId.interrupted.statusTone,'amber');
  assert.equal(byId.green.statusTone,'green');assert.equal(byId.red.statusTone,'red');
  assert.equal(byId.closed.statusKey,'terminated');
+ assert.equal(byId.closed.statusLabel,'已终止');
+ assert.equal(byId.green.statusLabel,'已完成');
+ assert.equal(byId.red.statusLabel,'未通过');
+ assert.equal(byId.unverified.statusTone,'neutral');
+ assert.equal(byId.unverified.statusLabel,'执行结束');
  center.archiveFilters.execution='waiting';
  assert.deepEqual(Object.values(byId).filter(item=>center.matchesArchiveFilter(item)).map(item=>item.id),['waiting']);
  center.archiveFilters.execution='all';center.archiveFilters.verdict='failed';
@@ -71,6 +77,7 @@ test('archive treats each execution state and review verdict as an independent f
  center.archiveFilters.verdict='all';
  const html=center.renderOrderCenter();
  assert.match(html,/data-order-terminate="interrupted"/);
+ assert.doesNotMatch(html,/class="archive-verdict/);
  assert.doesNotMatch(html,/data-order-terminate="closed"/);
  assert.doesNotMatch(html,/正在审阅或复现中|中断 \/ 等待资源补完/);
 });

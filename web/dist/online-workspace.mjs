@@ -463,13 +463,19 @@ export class OnlineWorkspace{
   }
   if(action==='terminate-review'){
    if(!p?.online_report?.id||this.busy||!confirm('终止本次审查？已取得的证据会保留。'))return;
+   const page=this.i.h.page?.();
+   let terminated=false;
    this.busy='正在终止本次审查…';this.error='';this.renderNow();
    try{
     p.online_report=checkAssessment(await this.request('/assessments/'+p.online_report.id+'/terminate',{}));
     p.online_pending_request=null;await this.save(p);this.liveReport=null;this.tab='process';
+    terminated=true;
     this.i.h.toast?.('本次审查已终止');
    }catch(error){this.error=error.message;this.i.h.toast?.(error.message);}
-   finally{this.busy='';this.renderNow();}
+   finally{
+    this.busy='';this.renderNow();
+    if(terminated&&this.i.h.page?.()===page&&typeof window!=='undefined')window.scrollTo({top:0,behavior:'instant'});
+   }
    return;
   }
   if(action==='cancel'){

@@ -9,6 +9,7 @@ import json
 import math
 import uuid
 
+from .hosted_review import subcontribution_phrase
 from .kg_literature import KINDS, LIMITS, OpenAlex, normalize_title
 from .review_api import ReviewError, now
 
@@ -526,11 +527,14 @@ class KnowledgeGraphService:
                 add_edge(paper_id, cid, 'HAS_CONTRIBUTION', '主贡献')
                 parent_nodes.append(parent)
                 for detail_index, detail in enumerate(contribution.get('details', [])[:3]):
+                    phrase = subcontribution_phrase(detail.get('summary'))
+                    if not phrase:
+                        continue
                     did = f'{cid}_detail_{detail_index+1}'
                     theta = direction + (detail_index - 1) * .63
                     child = {'id': did, 'paper_id': paper_id, 'paper_title': paper['title'],
                              'parent_id': cid, 'node_type': 'Detail', 'layer': 3,
-                             'label': detail['summary'], 'full_title': detail['summary'],
+                             'label': phrase, 'full_title': phrase,
                              'quote': detail.get('quote', ''), 'page': detail.get('page')}
                     append_node(child, cx + 79*math.cos(theta), cy + 79*math.sin(theta))
                     add_edge(cid, did, 'HAS_DETAIL', '细分贡献')
@@ -558,6 +562,7 @@ class KnowledgeGraphService:
                 add_edge(left['id'], right['id'], 'SIMILAR_CONTRIBUTION', '贡献相似候选',
                          '共同术语为 ' + '、'.join(shared[:6]) + '。具体方法与结论仍需核对原文。',
                          left.get('source_url') or right.get('source_url', ''))
+                edges[-1]['excerpts'] = [left.get('quote') or left['label'], right.get('quote') or right['label']]
 
         node_ids = {node['id'] for node in nodes}
         return {

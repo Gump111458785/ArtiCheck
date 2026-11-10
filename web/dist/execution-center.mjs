@@ -62,9 +62,9 @@ export class ExecutionCenter {
    const verdict=r?.review?reportVerdict(r):null;
    const verdictKey=verdict?.label==='不适用'?'inapplicable':verdict?.state==='passed'?'passed':verdict?.state==='failed'?'failed':statusKey==='completed'&&r?.review?.findings?.length?'issues':'unassessed';
    const statusTone=['waiting','interrupted','cancelling'].includes(statusKey)?'amber':
-    statusKey==='completed'&&['failed','issues'].includes(verdictKey)?'red':statusKey==='completed'&&(verdictKey==='passed'||ex?.status==='completed')?'green':
+    statusKey==='completed'&&['failed','issues'].includes(verdictKey)?'red':statusKey==='completed'&&verdictKey==='passed'?'green':
     ['reviewing','queued','reproducing'].includes(statusKey)?'blue':'neutral';
-   const statusLabel=archiveStates[statusKey];
+   const statusLabel=statusTone==='red'?'未通过':statusKey==='completed'&&statusTone!=='green'?(verdictKey==='inapplicable'?'不适用':'执行结束'):archiveStates[statusKey];
    const materialKey=paperOnly?'paper_only':codeBound?(p.paper||r?.materials?.paper?'both':'code_only'):'none';
    const rawTime=p.updated_at||r?.updated_at||p.created_at||new Date().toISOString();
    const ts=Date.parse(rawTime)||0;
@@ -86,7 +86,6 @@ export class ExecutionCenter {
     statusKey,
     statusLabel,
     verdictKey,
-    verdictLabel:archiveVerdicts[verdictKey],
     statusTone, materialKey,
     totalStages,
     completedCount,
@@ -136,15 +135,15 @@ export class ExecutionCenter {
    </header>
    <form class="archive-filter-panel" data-archive-filter-form aria-label="案例与归档多条件筛选栏">
     <div class="archive-filter-grid">
-     <div class="archive-filter-field">
+     <div class="archive-filter-field archive-search-field">
       <label for="af-project">项目名称</label>
       <input id="af-project" type="search" data-archive-input="projectName" value="${e(f.projectName)}" placeholder="输入项目名称关键词…">
      </div>
-     <div class="archive-filter-field">
+     <div class="archive-filter-field archive-search-field">
       <label for="af-paper">论文名称</label>
       <input id="af-paper" type="search" data-archive-input="paperName" value="${e(f.paperName)}" placeholder="输入 PDF 文件名或论文标题…">
      </div>
-     <div class="archive-filter-field">
+     <div class="archive-filter-field archive-search-field">
       <label for="af-code">代码 / 仓库名</label>
       <input id="af-code" type="search" data-archive-input="codeName" value="${e(f.codeName)}" placeholder="输入 ZIP 名称或 GitHub 仓库…">
      </div>
@@ -197,7 +196,7 @@ export class ExecutionCenter {
         <div class="archive-material-line" title="${e(item.codeName)}"><span class="mat-tag ${item.codeBound?'code':'nocode'}">代码</span><span class="mat-name">${e(item.codeName)}</span></div>
        </td>
        <td class="archive-col-status">
-        <div class="archive-status-stack"><span class="order-status-pill tone-${item.statusTone}">${e(item.statusLabel)}</span>${item.hasReport?`<span class="archive-verdict verdict-${item.verdictKey}">${e(item.verdictLabel)}</span>`:''}</div>
+        <span class="order-status-pill tone-${item.statusTone}">${e(item.statusLabel)}</span>
        </td>
        <td class="archive-col-metrics">
         <div class="archive-metrics-inline">

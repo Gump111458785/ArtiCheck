@@ -2251,10 +2251,6 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .report-conflicts blockquote{border-left:2px solid #c9d6e5;margin:6px 0;padding-left:10px;overflow-wrap:anywhere}
 @media(max-width:900px){.local-repo-hero,.local-project-overview{grid-template-columns:1fr}.local-repo-facts{border-left:0;padding-left:0}.kg-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-.archive-status-stack{display:grid;justify-items:start;gap:4px}
-.archive-verdict{padding-left:6px;font-size:12px;color:#51637b}
-.archive-verdict.verdict-failed,.archive-verdict.verdict-issues{color:#a22924}
-.archive-verdict.verdict-passed{color:#176245}
 .order-status-pill.tone-amber{background:#fff3ce;color:#75500c}
 .order-status-pill.tone-green{background:#e4f4ea;color:#176245}
 .order-status-pill.tone-red{background:#fdebe8;color:#a22924}
@@ -2275,3 +2271,28 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .kg-node.unread circle.kg-node-mark{fill:#f7faff;stroke:#2258b4;stroke-width:2}
 
 .interruption-step-badge,.review-ended.failed .review-ended-icon{background:#fff3ce;color:#75500c}
+
+/* Graph controls live above the SVG so panning never moves them. */
+.kg-canvas-tools{position:absolute;z-index:2;top:12px;right:12px;width:max-content;max-width:calc(100% - 24px)}
+.kg-canvas-actions{display:flex;justify-content:flex-end;gap:6px}
+.kg-home-view{position:absolute;z-index:2;right:12px;bottom:12px}
+.kg-legend{right:155px}
+.kg-canvas-tools .kg-literature-form{width:min(296px,100%);margin:6px 0 0 auto;padding:12px;background:#fff;border:1px solid #cbd9eb;border-radius:8px;box-shadow:0 5px 18px #18325114}
+.kg-search-progress{position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:2;display:grid;gap:6px;width:min(210px,calc(100% - 32px));padding:8px 12px;background:#fff;color:#1c4074;border:1px solid #c3d5ee;border-radius:8px;font-size:12px;text-align:center}
+.kg-search-progress progress{width:100%;height:5px;accent-color:#2458b3}
+.kg-node.unread circle.kg-node-mark{fill:#b36b19;stroke:#fff}
+.kg-reading.read{color:#2458b3}
+.kg-reading.unread{color:#8a510e}
+.kg-lineage li>div{min-width:0;flex:1}
+.kg-paper-manage{align-self:flex-start;max-width:82px;padding:2px 4px;font-size:11px}
+.kg-canvas.has-similarity .kg-edge.citation{opacity:.24}
+.kg-canvas.has-similarity .kg-edge.similar{opacity:.9}
+.kg-canvas.has-similarity .kg-edge.similar line{stroke-width:2.5}
+.kg-cmp-card blockquote{margin:4px 0 8px;padding-left:8px;border-left:2px solid #c3d5ee}
+.archive-filter-panel{padding:12px 14px}
+.archive-filter-grid{grid-template-columns:repeat(15,minmax(0,1fr));gap:8px 12px}
+.archive-filter-field{grid-column:span 3;gap:3px}
+.archive-search-field{grid-column:span 5}
+.archive-filter-field select{height:30px;min-height:30px;padding-left:8px;background-position:right 8px center}
+.archive-filter-actions{margin-top:8px}
+@media(max-width:1150px){.archive-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.archive-filter-field,.archive-search-field{grid-column:auto}}

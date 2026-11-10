@@ -189,7 +189,8 @@ class HostedReviewTests(unittest.TestCase):
                            'review': {'task': 'self_review', 'paper_title': 'Owned paper',
                                       'paper_contributions': [contribution],
                                       'contribution_details': [{'index': 1, 'summary': 'Identity shortcuts',
-                                                                'quote': 'Identity shortcuts preserve gradients', 'page': 2}]}})
+                                                                'quote': 'Identity shortcuts preserve gradients', 'page': 2},
+                                                               {'index': 1, 'summary': '对照实验准确率提高 5%', 'quote': 'Comparison experiment', 'page': 4}]}})
         client = app.test_client()
         other = {**HEADERS, 'X-ArtiCheck-Session': 'b' * 64}
         graph = client.post('/kg/ingest', json={'assessment_id': job}, headers=HEADERS).json
@@ -207,7 +208,7 @@ class HostedReviewTests(unittest.TestCase):
         graph = client.post(expand, json=payload, headers=HEADERS).json
         by_id = {row['id']: row for row in graph['nodes']}
         self.assertEqual(by_id[root]['metadata']['year']['source'], 'OpenAlex')
-        self.assertIn('Detail', {n['node_type'] for n in graph['nodes']})
+        self.assertEqual([n['label'] for n in graph['nodes'] if n['node_type'] == 'Detail'], ['Identity shortcuts'])
         self.assertNotIn('Claim', {n['node_type'] for n in graph['nodes']})
         pairs = {(edge['source'], edge['target']) for edge in graph['edges'] if edge['edge_type'] == 'CITED_BY'}
         self.assertEqual(pairs, {('W22', root), (root, 'W33')})
@@ -249,6 +250,13 @@ class HostedReviewTests(unittest.TestCase):
         self.assertEqual(client.post(base + '/execute', json={}, headers=HEADERS).status_code, 409)
         self.assertEqual(client.post(base + '/feedback', json={'answer': 'can_provide'}, headers=HEADERS).status_code, 409)
         self.assertEqual(store.reservations, 0)
+
+    def test_subcontribution_shortens_architecture_and_excludes_evaluation_details(self):
+        from articheck.hosted_review import subcontribution_phrase
+        self.assertEqual(subcontribution_phrase('我们提出了残差路由模块，准确率提升 5%'), '残差路由模块')
+        self.assertEqual(subcontribution_phrase('我们在测试集做了消融实验，F1 为 89%'), '')
+        self.assertEqual(subcontribution_phrase('We introduce identity shortcut connections for training, improving accuracy.'), 'identity shortcut connections for training')
+        self.assertLessEqual(len(subcontribution_phrase('并行缓存模块用于批量调度与异步回收以及长期性能优化与模型工程适配')), 24)
 
     def test_decimal_ratio_with_unsubstantiated_percent_is_not_an_acceptance_target(self):
         context,_=prepare_assessment(materials())

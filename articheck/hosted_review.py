@@ -18,6 +18,33 @@ PAPER_TYPES = {'empirical', 'diagnostic', 'survey', 'nonpaper', 'unknown', 'code
 MAX_SECONDS = 600
 
 
+_DESIGN_TERM = re.compile(
+    r'框架|架构|模块|分支|接口|管线|实现|代码|机制|算法|编码|解码|连接|路由|缓存|并行|调度|融合|归一化|正则|损失|采样|剪枝|量化|蒸馏|对齐|校准|分解|注意力|卷积|残差|表征|索引|过滤|聚合|迭代|检索|分词|梯度|门控|嵌入|内核|数据结构'
+    r'|\b(?:frameworks?|architectures?|modules?|branches|interfaces?|pipelines?|implement\w*|code|mechanisms?|algorithms?|encod\w*|decod\w*|connections?|shortcuts?|routing|cach\w*|parallel\w*|schedul\w*|fusion|normaliz\w*|regulariz\w*|sampling|pruning|quantiz\w*|distill\w*|align\w*|calibrat\w*|decompos\w*|attention|convolut\w*|residual|index\w*|filter\w*|aggregat\w*|retriev\w*|gradient\w*|gat\w*|embedd\w*|kernels?)\b', re.I)
+_RESULT_TERM = re.compile(
+    r'\d\s*[%％]|准确率|精确率|召回率|(?:提升|提高|降低|减少).{0,10}(?:延迟|吞吐|耗时|显存|错误率)|对照实验|消融实验|实验结果|跑分|测试集|基准测试|随机种子|训练轮数|实验超参数|(?:在|对).{0,20}(?:数据集|基准).{0,12}(?:训练|测试|验证|对比)'
+    r'|\b(?:accuracy|precision|recall|f1|auc|bleu|rouge|perplexity|ablation|benchmark(?:ing|ed)?|test set|evaluation results|random seeds?|training epochs?|outperforms?)\b', re.I)
+
+
+def subcontribution_phrase(summary):
+    """Keep a short design phrase from an existing contribution, if supported."""
+    if not isinstance(summary, str):
+        return ''
+    clauses = re.split(r'[。；;，,：:\n]|(?<=[.!?])\s+|(?=并(?:在|将|把)?(?:提升|提高|降低|减少|评估|测试|验证|证明))', summary)
+    for clause in clauses:
+        phrase = ' '.join(clause.split()).strip(' .。:：-—')
+        if not _DESIGN_TERM.search(phrase) or _RESULT_TERM.search(phrase):
+            continue
+        phrase = re.sub(r'^(?:本文|我们)(?:提出|设计|实现|引入|采用|开发)(?:了)?\s*|^we (?:propose|design|introduce|implement|develop)\s+', '', phrase, flags=re.I)
+        if re.search(r'[\u4e00-\u9fff]', phrase):
+            shortened = phrase[:24].rstrip(' 的了和与，、')
+        else:
+            shortened = ' '.join(phrase.split()[:10]).rstrip(' .,-')
+        if _DESIGN_TERM.search(shortened):
+            return shortened
+    return ''
+
+
 def text(value, key, limit=3000):
     item = value.get(key)
     if not isinstance(item, str) or len(item) > limit:
@@ -100,10 +127,11 @@ nonpaper 仅用于简历、说明书、普通通知等非学术文档，不能�
 GitHub ZIP 的统一外层目录会被剥除。命令在剥除外层后的仓库根目录运行，引用文件可用仓库相对路径。
 命令可写小型检查脚本，但不得把论文报告值硬编码为观测结果，不得生成虚假的训练/评估输出。
 不要为运行不了的论文制造 toy 替代结果。如有论文，务必准确提取论文题目（paper_title）、摘要（paper_abstract）及 2–5 条核心创新点或主要贡献（paper_contributions）。
+细分贡献只写架构、算法机制或代码实现的具体创新，给出 PDF 逐字出处。指标、分数、对照、数据集、训练设置和具体实验不列为细分贡献。
 JSON 结构：
 {"summary":"总体判断", "paper_title":"论文题目（无论文则为空字符串）", "paper_abstract":"论文摘要（无论文则为空字符串）",
  "paper_contributions":["论文核心创新点或贡献1","创新点或贡献2"],
- "contribution_details":[{"contribution_index":1,"summary":"该主贡献下的具体方法或设计","page":1,"quote":"该细分贡献的 PDF 逐字依据"}],
+ "contribution_details":[{"contribution_index":1,"summary":"框架结构或代码实现的创新短语，最多 24 个汉字或 10 个英文词","page":1,"quote":"该细分贡献的 PDF 逐字依据"}],
  "publication_year":null, "publication_venue":"PDF 明示的发表期刊或会议，否则为空", "research_direction":"PDF 明示的主题或关键词，否则为空",
  "paper_type":"empirical|diagnostic|survey|nonpaper|unknown|code_only",
  "task":"self_review|reproduction|code_review", "classification_reason":"依据", "repository_hint":null,
@@ -468,7 +496,8 @@ def validate_assessment(value, context):
                 and isinstance(quote, str) and 16 <= len(quote) <= 700
                 and isinstance(summary, str) and 4 <= len(summary) <= 400
                 and ' '.join(quote.casefold().split()) in pages.get(page, '')):
-            contribution_details.append({'index': index, 'page': page, 'quote': quote, 'summary': summary})
+            if phrase := subcontribution_phrase(summary):
+                contribution_details.append({'index': index, 'page': page, 'quote': quote, 'summary': phrase})
 
     core_code_snippets = extract_core_code_snippets(value, context, stages, criteria, clean_findings)
     result = {'summary': text(value, 'summary', 4000), 'paper_title': paper_title,
