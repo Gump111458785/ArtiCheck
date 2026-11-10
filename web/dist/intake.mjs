@@ -34,12 +34,87 @@ export class IntakeWorkspace {
  navigate(id,step='materials'){this.activeId=id;this.step=step;try{localStorage.setItem('articheck:active-project',id);localStorage.setItem('articheck:step:'+id,step);}catch{}this.h.navigate('project');}
  async open(id,step='materials'){const p=this.all().find(p=>p.id===id);if(!p)return;this.activeId=id;this.step=step;if(p.run_id){if(p.sample&&p.run_id?.startsWith('replay-')&&this.h.mode()==='runtime')p.run_id=null;else if(!p.execution_mode||p.execution_mode===this.h.mode())await this.h.selectRun(p.run_id).catch(()=>{this.error='暂时无法读取此运行，记录仍保留，可从执行记录重试。';});}this.navigate(id,step);}
  new(){this.draft=blank();this.activeId=null;this.step='materials';this.error='';this.h.navigate('projects');document.querySelector('#project-title')?.focus();}
- title(){return this.h.page()==='projects'?'论文复现':this.current().title||'新的复现评估';}
- subtitle(){return this.h.page()==='projects'?'导入论文与代码，确定一个可核查的实验范围。':`${this.current().sample?'教学样例 · ':''}${steps.find(s=>s[0]===this.step)?.[1]} · ${this.current().resources.scope||'尚未填写实验范围'}`;}
- actions(){const p=this.current();return this.h.page()==='project'?`<button class="btn" data-intake="export">${this.icon('download')}导出项目</button><button class="btn" data-intake="home">所有项目</button>`:'';}
+ title(){return this.h.page()==='projects'?'本地环境配置与开源仓库指南':this.current().title||'新的复现评估';}
+ subtitle(){return this.h.page()==='projects'?'获取 ArtiCheck 开源仓库源码，在本地工作站或私有 GPU 服务器上一键部署隔离复现与核查环境。':`${this.current().sample?'教学样例 · ':''}${steps.find(s=>s[0]===this.step)?.[1]} · ${this.current().resources.scope||'尚未填写实验范围'}`;}
+ actions(){return this.h.page()==='project'?`<button class="btn" data-intake="export">${this.icon('download')}导出项目</button><button class="btn" data-intake="home">返回本地配置指南</button>`:`<a class="btn primary" href="https://github.com/Gump111458785/ArtiCheck" target="_blank" rel="noopener noreferrer">${this.icon('external')}访问 GitHub 开源仓库</a>`;}
  render(){return this.h.page()==='projects'?this.home():this.project();}
  notices(){return `${this.storageError?`<div class="error-box">${this.esc(this.storageError)}</div>`:''}${this.error?`<div class="error-box" role="alert">${this.esc(this.error)}</div>`:''}${this.busy?`<div class="intake-progress" role="status">${this.icon('clock')}${this.esc(this.busy)}</div>`:''}`;}
- home(){return `${this.notices()}<div class="intake-home"><section class="intake-main"><div class="section-heading"><h2>开始一项复现评估</h2><span class="muted">材料保存在当前浏览器</span></div>${this.materialForm(this.draft,true)}</section><aside class="project-rail"><div class="section-heading"><h2>最近项目</h2><span class="muted">${this.all().length} 项</span></div><div class="project-list">${this.all().sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||''))).map(p=>`<button class="project-row" data-intake="open" data-id="${p.id}"><span class="project-row-title">${this.esc(p.title||'未命名项目')}${this.icon('chevron')}</span><span class="project-row-meta">${p.sample?'教学样例 · 归档报告':`${p.paper?.pages?.length||0} 页论文 · ${p.claims.filter(c=>c.confirmed&&c.selected).length} 条主张已确认`}</span><span class="project-row-state">${p.sample?'查看示例':p.assessment?.reproduction?.job||p.run_id?'查看运行结果':p.claims.some(c=>c.confirmed)?'补充运行条件':'继续准备材料'}</span></button>`).join('')}</div><section class="scope-note"><h3>从一个实验开始</h3><p>优先选择论文中的一张表、一个数据集或一项关键结论。</p><dl><div><dt>材料准备</dt><dd>论文、代码、数据和权重是否齐备</dd></div><div><dt>代码运行</dt><dd>选定入口是否实际执行成功</dd></div><div><dt>指标对齐</dt><dd>观测结果是否支持论文主张</dd></div></dl></section></aside></div>`;}
+ home(){
+  return `${this.notices()}<div class="local-setup-guide">
+   <section class="local-repo-hero">
+    <div class="local-repo-hero-main">
+     <span class="online-kicker">OPEN-SOURCE REPOSITORY · 本地自建与私有实验部署</span>
+     <h2>ArtiCheck 开源仓库与本地配置教程</h2>
+     <p>当论文复现涉及超大规模私有数据集、多卡分布式长时训练或不便上传云端的内部源码时，可直接克隆 ArtiCheck 开源仓库，在本地工作站或实验室 GPU 服务器上运行同源审查与隔离复现引擎。</p>
+     <div class="local-repo-badges">
+      <span class="local-badge">Python 3.10+</span>
+      <span class="local-badge">Conda 临时隔离环境</span>
+      <span class="local-badge">Docker / Bubblewrap 沙箱</span>
+      <span class="local-badge">支持 CUDA GPU 与纯 CPU</span>
+     </div>
+    </div>
+    <div class="local-repo-hero-cta">
+     <a class="btn primary" href="https://github.com/Gump111458785/ArtiCheck" target="_blank" rel="noopener noreferrer">${this.icon('external')}前往 GitHub 开源仓库</a>
+     <button type="button" class="btn" data-copy-cmd="git clone https://github.com/Gump111458785/ArtiCheck.git && cd ArtiCheck">${this.icon('copy')}复制克隆命令</button>
+    </div>
+   </section>
+
+   <div class="local-guide-grid">
+    <article class="local-step-card">
+     <header><span class="local-step-num">STEP 01</span><h3>克隆开源仓库与安装基础环境</h3></header>
+     <p>在本地终端克隆仓库并创建独立的 Conda 或虚拟环境，安装核心运行时依赖：</p>
+     <div class="local-cmd-block">
+      <pre><code>git clone https://github.com/Gump111458785/ArtiCheck.git
+cd ArtiCheck
+conda create -n articheck python=3.11 -y
+conda activate articheck
+pip install -e .</code></pre>
+      <button type="button" class="btn small" data-copy-cmd="git clone https://github.com/Gump111458785/ArtiCheck.git && cd ArtiCheck && conda create -n articheck python=3.11 -y && conda activate articheck && pip install -e .">复制</button>
+     </div>
+    </article>
+
+    <article class="local-step-card">
+     <header><span class="local-step-num">STEP 02</span><h3>配置模型 API 与本地复现工作区</h3></header>
+     <p>在仓库根目录设置审查模型密钥（支持 DeepSeek / OpenAI 兼容接口）并指定本地材料存储目录：</p>
+     <div class="local-cmd-block">
+      <pre><code>export ARTICHECK_API_KEY="your-api-key"
+export ARTICHECK_MODEL="deepseek-chat"
+export ARTICHECK_WORKSPACE="./workspace"</code></pre>
+      <button type="button" class="btn small" data-copy-cmd="export ARTICHECK_API_KEY=&quot;your-api-key&quot; && export ARTICHECK_MODEL=&quot;deepseek-chat&quot; && export ARTICHECK_WORKSPACE=&quot;./workspace&quot;">复制</button>
+     </div>
+    </article>
+
+    <article class="local-step-card">
+     <header><span class="local-step-num">STEP 03</span><h3>启动本地 Web 核查工作台</h3></header>
+     <p>一键启动本地 Loopback 服务，浏览器访问 <code>http://127.0.0.1:8787</code> 即可使用与线上完全一致的界面：</p>
+     <div class="local-cmd-block">
+      <pre><code>python -m articheck.workbench --port 8787 --workspace ./workspace</code></pre>
+      <button type="button" class="btn small" data-copy-cmd="python -m articheck.workbench --port 8787 --workspace ./workspace">复制</button>
+     </div>
+    </article>
+
+    <article class="local-step-card">
+     <header><span class="local-step-num">STEP 04</span><h3>接入自有 GPU 隔离执行节点（可选）</h3></header>
+     <p>若需在实验室 GPU 服务器运行 CUDA 复现阶段，每次任务会自动创建独立的临时 Conda 环境并在结束后清理：</p>
+     <div class="local-cmd-block">
+      <pre><code>python -m articheck.gpu_worker</code></pre>
+      <button type="button" class="btn small" data-copy-cmd="python -m articheck.gpu_worker">复制</button>
+     </div>
+    </article>
+   </div>
+
+   <section class="local-arch-strip">
+    <div>
+     <strong>本地执行与在线工作台如何协同？</strong>
+     <p>在线工作台适合快速解析论文 PDF、自动抓取公开 GitHub 源码并执行中短时 GPU/CPU 验证；本地部署模式则可直接挂载本机 TB 级数据集与多卡环境，所有报告 JSON 与证据包完全通用。</p>
+    </div>
+    <div class="local-arch-actions">
+     <button type="button" class="btn" data-home-sample>体验内置教学样例</button>
+     <button type="button" class="btn primary" data-action="nav" data-page="api-review">前往在线审查 ${this.icon('arrow')}</button>
+    </div>
+   </section>
+  </div>`;
+ }
  materialForm(p,home=false){const e=v=>this.esc(v),paper=p.paper,repo=p.repository;return `<div class="material-form" data-project="${p.id}"><div class="field"><label for="project-title">项目名称</label><input id="project-title" data-field="title" value="${e(p.title)}" placeholder="例如：Table 2 的分类实验" maxlength="160"></div><section class="material-section"><div class="section-heading"><h3>论文</h3>${paper?.pages?.length?`<span class="material-state">${paper.pages.length} 页正文已读取</span>`:'<span class="muted">PDF 或论文链接</span>'}</div><label class="upload-slot ${paper?'has-file':''}" for="paper-file"><span class="upload-symbol">${this.icon(paper?'file':'plus')}</span><span><strong>${paper?e(paper.name):'选择论文 PDF'}</strong><small>${paper?`${paper.size?size(paper.size)+' · ':''}${paper.pages?.length||0} 页 · ${p.sample?'教学材料':'点击替换'}`:'支持拖放 · 最大 20 MB、150 页'}</small></span><input id="paper-file" type="file" accept="application/pdf,.pdf" data-upload="paper" ${p.sample?'disabled':''}></label><div class="field source-link"><label for="paper-url">论文链接 <span class="muted">（可选）</span></label><div class="joined-field"><input id="paper-url" data-field="paper_url" type="url" value="${e(p.paper_url||'')}" ${p.sample?'disabled':''} placeholder="https://arxiv.org/abs/…"><button class="btn" data-intake="paper-link" ${p.sample?'disabled':''}>登记链接</button></div><small>链接保留为出处；解析正文需要导入 PDF。</small></div>${paper?.warning?`<p class="material-warning">${e(paper.warning)}</p>`:''}</section><section class="material-section"><div class="section-heading"><h3>代码仓库</h3>${repo?.files?.length?`<span class="material-state">${repo.files.length} 个文件线索</span>`:'<span class="muted">GitHub 或代码 ZIP</span>'}</div><div class="field"><label for="repository-url">GitHub 仓库地址</label><div class="joined-field"><input id="repository-url" data-field="repo_url" type="url" value="${e(p.repo_url||'')}" ${p.sample?'disabled':''} placeholder="https://github.com/owner/repository"><button class="btn" data-intake="github" ${this.busy||p.sample?'disabled':''}>读取目录</button></div></div><div class="zip-line"><label class="btn" for="code-file">${this.icon('plus')}导入代码 ZIP<input id="code-file" type="file" accept=".zip,application/zip" data-upload="code" ${p.sample?'disabled':''}></label><span class="muted">${repo?e(repo.name):'最大 100 MB，仅检查目录'}</span></div>${repo?`<div class="repo-summary"><span>${e(repo.kind==='github'?'GitHub 公共目录':repo.kind==='sample'?'内置教学代码':'ZIP 目录')}</span><code>${e(repo.commit?.slice(0,12)||repo.sha256?.slice(0,12)||'toy-artifact')}</code></div>${this.clues(repo)}`:''}</section>${home?`<label class="presentation-opt-in"><input type="checkbox" data-demo-opt-in ${this.autoDemo?'checked':''}><span>提交后播放演示评测 · 预设结果，不执行代码</span></label>`:''}<div class="material-footer"><span class="muted">${p.sample?'教学材料固定，自己的论文从「所有项目」导入。':home?'先导入材料，再确认实验主张。':'替换论文或代码会清除当前确认与运行绑定。'}</span><button class="btn primary" data-intake="${home?'create':'step'}" data-step="claims" ${this.busy?'disabled':''}>${home?(this.autoDemo?'提交材料并演示评测':'建立复现项目'):'确认实验主张'} ${this.icon('arrow')}</button></div></div>`;}
  clues(repo){return `<div class="repository-clues">${repositoryClues(repo.files||[]).map(c=>`<div><span>${this.esc(c.label)}</span><span>${c.files.length?this.esc(c.files[0]):'未找到'}</span></div>`).join('')}</div><p class="small-note">文件目录只提供运行入口线索，依赖安装与执行尚未验证。</p>`;}
  project(){const p=this.current();return `${this.notices()}<nav class="project-steps" aria-label="项目评估阶段">${steps.filter(([id])=>this.step!=='demo'||['materials','demo'].includes(id)).map(([id,label])=>`<button class="${this.step===id?'active':''}" data-intake="step" data-step="${id}" aria-current="${this.step===id?'step':'false'}">${label}${id==='claims'?` <span>${p.claims.filter(c=>c.selected&&c.confirmed).length}/${p.claims.filter(c=>c.selected).length}</span>`:''}</button>`).join('')}</nav>${this.step==='demo'?'':this.versionStrip(p)}${this.step==='demo'?this.presentation.render(p):this.step==='materials'?this.materials(p):this.step==='plan'?this.assessor.plan(p):this.step==='criteria'?this.assessor.criteria(p):this.step==='resources'?this.resourceInspector.render(p):this.step==='reproduction'?this.reproduction.render(p):this.step==='claims'?this.claims(p):this.step==='readiness'?this.readiness(p):this.results(p)}`;}

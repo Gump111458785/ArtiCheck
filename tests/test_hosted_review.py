@@ -110,6 +110,43 @@ class Budget:
 
 
 class HostedReviewTests(unittest.TestCase):
+    def test_graph_uses_owned_report_and_does_not_invent_evidence(self):
+        store = MemoryStore()
+        store.namespace = 'test'
+        app = Flask(__name__)
+        app.register_error_handler(ReviewError, lambda error: (jsonify(error=str(error)), error.status))
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), Budget(),
+                 store=store, executor=Executor())
+        job = 'c' * 32
+        store.save(OWNER, {
+            'id': job, 'status': 'completed',
+            'review': {'paper_title': 'Original paper', 'paper_contributions': ['A claim from the review'],
+                       'metrics': [{'id': 'target', 'metric': 'accuracy', 'value': 50}]},
+            'execution': {'status': 'completed', 'scientific_validation': False,
+                          'metrics': [{'id': 'other', 'metric': 'accuracy', 'observed': 50,
+                                       'status': 'within_tolerance'}]},
+        })
+        client = app.test_client()
+        payload = {'assessment_id': job, 'report': {'review': {'paper_title': 'Forged title'}}}
+        other = {**HEADERS, 'X-ArtiCheck-Session': 'b' * 64}
+        self.assertEqual(client.post('/kg/ingest', json=payload, headers=other).status_code, 404)
+        response = client.post('/kg/ingest', json=payload, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        nodes = response.json['nodes']
+        paper = next(n for n in nodes if n['full_title'] == 'Original paper')
+        self.assertIsNone(paper['year'])
+        self.assertEqual(paper['repro_status'], 'PARTIAL')
+        claims = [n for n in nodes if n.get('paper_id') == paper['id'] and n['node_type'] == 'Claim']
+        self.assertEqual(claims[0]['support_status'], 'UNVERIFIED')
+        self.assertFalse(any(n.get('paper_id') == paper['id'] and n['node_type'] == 'Evidence' for n in nodes))
+        visibility = {'paper_id': paper['id'], 'visibility': 'GLOBAL'}
+        self.assertEqual(client.post('/kg/visibility', json=visibility, headers=HEADERS).status_code, 200)
+        self.assertTrue(any(n['id'] == paper['id'] for n in client.get('/kg/graph?scope=GLOBAL', headers=other).json['nodes']))
+        visibility['visibility'] = 'PRIVATE'
+        self.assertEqual(client.post('/kg/visibility', json=visibility, headers=other).status_code, 404)
+        self.assertEqual(client.post('/kg/visibility', json=visibility, headers=HEADERS).status_code, 200)
+        self.assertFalse(any(n['id'] == paper['id'] for n in client.get('/kg/graph?scope=GLOBAL', headers=other).json['nodes']))
+
     def test_decimal_ratio_with_unsubstantiated_percent_is_not_an_acceptance_target(self):
         context,_=prepare_assessment(materials())
         context['paper_excerpts']=[{'page':1,'text':'Table 1. Ours 0.8338'}]

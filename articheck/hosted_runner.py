@@ -228,6 +228,8 @@ def run_plan(plan, root, results, *, run_as='articheck'):
     report['runtime']={'python':platform.python_version(),'system':platform.system(),
                        'release':platform.release(),'architecture':platform.machine(),
                        'disk_total_bytes':disk.total,'disk_free_before_bytes':disk.free,
+                       'conda_env_created':False,
+                       'environment_kind':'python_venv' if Path('/home/articheck/venv/bin/python').is_file() else 'python_runtime',
                        'inferred_dependencies':sorted(set(inferred_deps.values())),
                        'auto_provisioned_packages':[]}
     status_path = results / 'status.json'

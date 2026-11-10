@@ -165,7 +165,7 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  wsRender.selected='p1';
  wsRender.tab='process';
  const cancelledView=wsRender.render();
- assert.match(cancelledView,/data-online="terminal"/);
+ assert.doesNotMatch(cancelledView,/data-online="terminal"/);
  assert.doesNotMatch(cancelledView,/data-online-tab="report"/);
  assert.match(cancelledView,/review-ended/);
  assert.match(cancelledView,/审查已临时终止/);

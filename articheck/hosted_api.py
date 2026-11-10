@@ -14,6 +14,7 @@ from .hosted_store import HostedStore
 from .hosted_images import text_materials
 from .hosted_sources import lookup
 from .hosted_audit import cross_audit
+from .kg_service import KnowledgeGraphService
 from .review_api import ReviewError, now
 
 
@@ -22,6 +23,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     store = store or HostedStore(env)
     executor = executor or HybridExecutor(env,store)
     uploads = HostedUploads(env,store)
+    kg = KnowledgeGraphService(env, store, reviewer)
     from .hosted_auth import Accounts
     accounts = Accounts(app,env,store)
 
@@ -378,3 +380,52 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         value['execution'] = execution
         store.save(owner, value)
         return jsonify(value)
+
+    @app.get('/kg/graph')
+    def get_kg_graph():
+        owner = authorize()
+        scope = request.args.get('scope', 'COMBINED')
+        focus_paper_id = request.args.get('paper_id', '')
+        return jsonify(kg.build_graph_response(owner, scope=scope, focus_paper_id=focus_paper_id))
+
+    @app.post('/kg/ingest')
+    def ingest_kg_project():
+        owner = authorize()
+        payload = body()
+        job = str(payload.get('assessment_id') or '')
+        if not re.fullmatch(r'[a-f0-9]{32}', job):
+            raise ReviewError('invalid_assessment', '请从已完成的在线审查报告打开图谱。')
+        report = store.get(owner, job)
+        if not report.get('review'):
+            raise ReviewError('report_not_ready', '审查报告尚未生成。', 409)
+        return jsonify(kg.ingest_project(owner, {
+            'project_id': str(payload.get('project_id') or '')[:100],
+            'title': str(payload.get('title') or '')[:300],
+            'report': report,
+        }))
+
+    @app.post('/kg/import-external')
+    def import_external_kg_paper():
+        owner = authorize()
+        return jsonify(kg.import_external_paper(owner, body()))
+
+    @app.post('/kg/verify-conflict')
+    def verify_kg_conflict():
+        owner = authorize()
+        payload = body()
+        cmp_id = str(payload.get('comparison_id') or '').strip()
+        if not cmp_id:
+            raise ReviewError('missing_comparison_id', '请提供需要确认的冲突关系 ID。')
+        res = kg.save_verification(owner, cmp_id, payload.get('decision'), payload.get('note', ''))
+        return jsonify({'status': 'ok', 'verification': res})
+
+    @app.post('/kg/visibility')
+    def set_kg_visibility():
+        owner = authorize()
+        payload = body()
+        return jsonify(kg.set_visibility(owner, payload.get('paper_id', ''), payload.get('visibility', 'PRIVATE')))
+
+    @app.post('/kg/layout')
+    def save_kg_layout():
+        owner = authorize()
+        return jsonify(kg.save_layout(owner, body()))

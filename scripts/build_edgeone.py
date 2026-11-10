@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULES = ('__init__.py', 'review_api.py', 'edgeone_review.py',
            'hosted_api.py', 'hosted_auth.py', 'hosted_review.py', 'hosted_store.py', 'hosted_github.py',
            'hosted_sandbox.py', 'hosted_gpu.py', 'hosted_runner.py', 'hosted_uploads.py',
-           'hosted_images.py', 'hosted_sources.py', 'hosted_audit.py', 'reproduction/pdf_render.py',
+           'hosted_images.py', 'hosted_sources.py', 'hosted_audit.py', 'kg_service.py', 'reproduction/pdf_render.py',
            'reproduction/paper_text.py', 'reproduction/pdf_extract.py', 'reproduction/protocol.py')
 
 

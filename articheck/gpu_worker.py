@@ -94,7 +94,7 @@ PREINSTALLED_RUNTIME_MODULES = {
     'jinja2', 'markupsafe', 'networkx', 'sympy', 'mpmath', 'fsspec',
 }
 
-SKIP_DIRS = {'.git', '.hg', '.svn', '__pycache__', '.pydeps', '.cache', 'venv', '.venv', 'env', 'node_modules', 'build', 'dist'}
+SKIP_DIRS = {'.git', '.hg', '.svn', '__pycache__', '.pydeps', '.conda_env', '.cache', 'venv', '.venv', 'env', 'node_modules', 'build', 'dist'}
 SAFE_PKG_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$')
 
 
@@ -555,11 +555,13 @@ class GPUWorker:
                                  'release': platform.release(), 'architecture': platform.machine(),
                                  'gpu_name': self.capacity.get('gpu_name'),
                                  'disk_total_bytes': disk.total, 'disk_free_before_bytes': disk.free,
+                                 'conda_env_created': False,
+                                 'environment_kind': 'gpu_base_with_job_packages',
                                  'inferred_dependencies': sorted(set(inferred_deps.values())),
                                  'auto_provisioned_packages': provisioned_pkgs}
             event('planner', 'plan_scheduled', policy='frozen_api_plan', stages=len(plan['stages']), hardware='GPU')
             record.update(status='running', source_url=None,
-                          notice='云端隔离执行器已接单，已在隔离环境中完成源码依赖分析与自动配库。',
+                          notice='云端隔离执行器已接单，额外依赖安装到任务专用目录。',
                           result=report)
             self.save_record(record)
 

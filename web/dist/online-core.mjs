@@ -9,13 +9,13 @@ export function metricUnit(m){
 }
 export function inputKey(p){return JSON.stringify([p.paper?.sha256||null,p.repository?.sha256||null,p.online_task||'auto',p.online_scope||'',p.online_max_seconds||null,p.online_supply_notes||'']);}
 export function hasCode(p){return Boolean(p.repository?.blob||p.repository?.remote?.repository);}
-export function validateInput(p,{token='',consent=false}={}){
+export function validateInput(p,{token='',consent=true}={}){
  const errors={};
  if(!p.paper?.blob&&!hasCode(p))errors.material='请至少上传论文 PDF 或导入代码。';
  if(p.online_restrict&&!p.online_scope?.trim())errors.scope='请填写本次只审查的表格、实验或指标。';
  const n=p.online_max_seconds;
  if(n!==''&&n!=null&&(!Number.isInteger(Number(n))||Number(n)<30||Number(n)>600))errors.seconds='请填写 30–600 秒，或留空使用默认时限。';
- if(!consent)errors.consent='请确认允许发送本次材料。';
+ if(consent===false)errors.consent='请确认允许发送本次材料。';
  return errors;
 }
 export function checkAssessment(value){
