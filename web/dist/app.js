@@ -47,7 +47,18 @@ let seed, spec, demoTimer, homeCaseTimer, lastFocus, intake, selfEvaluation, exe
 const app = $('#app');
 function pill(verdict){return `<span class="pill ${verdict==='supported'?'success':verdict==='issue'?'issue':'outline'}">${icon(verdict==='issue'?'alert':verdict==='supported'?'check':'clock')}${esc(verdictNames[verdict]||verdict)}</span>`}
 function statusPill(status){return `<span class="pill ${status==='completed'?'':status}">${status==='running'?'<span class="dot"></span>':''}${statusNames[status]||status}</span>`}
-function toast(message){const t=$('#toast');t.textContent=message;t.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('show'),3200)}
+function toast(message,{persistent=false,tone=''}={}){
+ const element=$('#toast');
+ const version=Symbol();
+ toast.version=version;
+ clearTimeout(toast.timer);
+ element.textContent=message;
+ element.dataset.tone=tone;
+ element.classList.add('show');
+ const dismiss=()=>{if(toast.version===version)element.classList.remove('show');};
+ if(!persistent)toast.timer=setTimeout(dismiss,3200);
+ return dismiss;
+}
 function download(name,content,type='application/json'){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 async function copy(value){try{await navigator.clipboard.writeText(value);toast('已复制')}catch{modal('复制内容',`<textarea readonly rows="8" style="width:100%">${esc(value)}</textarea>`)}}
 async function request(path,body){const response=await fetch(path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json','X-ArtiCheck-Client':'workbench'},body:body===undefined?undefined:JSON.stringify(body)});const json=await response.json();if(!response.ok)throw new Error(json.error?.message||`HTTP ${response.status}`);return json}

@@ -309,7 +309,7 @@ class KnowledgeGraphService:
     def get_layout(self, owner):
         oh = self._owner_hash(owner)
         key = f"articheck:kg:layout:{self.store.namespace}:{oh}"
-        data = self._redis_get(key, None)
+        data = self._redis_get(key, None, permanent=True)
         if data is None:
             return dict(self._mem_layouts.get(oh, {}))
         self._mem_layouts[oh] = data
@@ -344,11 +344,11 @@ end
 if ARGV[3]=='1' then table.insert(pins,ARGV[1]) end
 state.pinned=pins
 state.updated_at=ARGV[4]
-redis.call('SET',KEYS[1],cjson.encode(state),'EX',ARGV[5])
+redis.call('SET',KEYS[1],cjson.encode(state))
 return 1
 """
                 if self.store.command('EVAL', script, '1', key, node_id, json.dumps(position),
-                                      '1' if change['pinned'] else '0', stamp, str(KG_TTL)) != 1:
+                                      '1' if change['pinned'] else '0', stamp) != 1:
                     raise ReviewError('layout_capacity', '图谱布局节点达到上限。', 409)
             else:
                 state = self.get_layout(owner)
@@ -377,7 +377,7 @@ return 1
         }
         self._mem_layouts[oh] = state
         key = f"articheck:kg:layout:{self.store.namespace}:{oh}"
-        self._redis_set(key, state)
+        self._redis_set(key, state, permanent=True)
         return state
 
     def owned_papers(self, owner):
@@ -531,11 +531,13 @@ return 1
                 evidence.append({key: match.get(key) for key in ('quote', 'page', 'section', 'source_url')})
         return {**relation, 'evidence': evidence}
 
-    def edit_relation(self, owner, source, target, action, note=''):
+    def edit_relation(self, owner, source, target, action, note='', label=''):
         if action not in ('add', 'remove') or source == target:
             raise ReviewError('invalid_relation', '请选择两个不同的节点及关系操作。')
         if not isinstance(note, str) or len(note) > 360:
             raise ReviewError('invalid_relation_note', '关系说明最多 360 字。')
+        if not isinstance(label, str) or len(label) > 48:
+            raise ReviewError('invalid_relation_label', '关系名称最多 48 字。')
         graph = self.build_graph_response(owner)
         nodes = {node['id']: node for node in graph['nodes']}
         left, right = nodes.get(source), nodes.get(target)
@@ -550,7 +552,7 @@ return 1
             if key not in overrides and len(overrides) >= 1000:
                 raise ReviewError('relation_capacity', '手动关系记录已达到上限。', 409)
             overrides[key] = {'source': source, 'target': target, 'action': action,
-                              'note': note.strip(), 'updated_at': now()}
+                              'note': note.strip(), 'label': label.strip(), 'updated_at': now()}
 
         self.update_literature(owner, save)
         return self.build_graph_response(owner, focus_paper_id=left.get('paper_id', source))
@@ -681,6 +683,27 @@ return 1
                         candidates.append(comparison)
         return sorted(candidates, key=lambda item: (-item['overlap_score'], item['id']))[:24]
 
+    def paper_slots(self, owner, papers, library):
+        slots = library.get('paper_slots', {})
+        missing = [paper['id'] for paper in papers if paper['id'] not in slots]
+        if not missing:
+            return slots
+
+        def allocate(state):
+            current = state.setdefault('paper_slots', {})
+            used = set(current.values())
+            index = 0
+            for paper_id in missing:
+                if paper_id in current:
+                    continue
+                while index in used:
+                    index += 1
+                current[paper_id] = index
+                used.add(index)
+
+        self.update_literature(owner, allocate)
+        return self.literature_state(owner)[1]['paper_slots']
+
     def build_graph_response(self, owner, *, focus_paper_id=''):
         own = self.owned_papers(owner)
         _, library = self.literature_state(owner)
@@ -716,7 +739,7 @@ return 1
         focus_paper_id = aliases.get(focus_paper_id, focus_paper_id)
         if not any(paper['id'] == focus_paper_id for paper in papers):
             focus_paper_id = next((paper['id'] for paper in reversed(papers) if paper['source_type'] == 'USER_UPLOAD'), papers[0]['id'] if papers else '')
-        papers.sort(key=lambda paper: paper['id'] != focus_paper_id)
+        slots = self.paper_slots(owner, papers, library)
         layout = self.get_layout(owner)
         positions = layout.get('positions') or {}
         nodes, edges, timeline = [], [], []
@@ -733,15 +756,19 @@ return 1
             edges.append({'id': f'{kind}:{source}:{target}', 'source': source, 'target': target,
                           'edge_type': kind, 'label': label, 'description': description, 'source_url': source_url})
 
-        for index, paper in enumerate(papers):
+        for paper in papers:
             paper_id = paper['id']
+            index = slots[paper_id]
             flags = {**library['choices'].get(paper_id, {})}
             for public_id, own_id in aliases.items():
                 if own_id == paper_id:
                     flags = {**library['choices'].get(public_id, {}), **flags}
-            ring = 1 + (index - 1) // 6 if index else 0
-            angle = (index - 1) % 6 * math.pi / 3 + (ring % 2) * math.pi / 6
-            radius = ring * 252
+            ring, slot = 0, index
+            while slot >= max(1, 6 * ring):
+                slot -= max(1, 6 * ring)
+                ring += 1
+            angle = 2 * math.pi * slot / max(1, 6 * ring)
+            radius = ring * 270
             item = {'paper_id': paper_id, 'title': paper['title'],
                     'year': paper['metadata']['year']['value'], 'direction': paper['metadata']['direction']['value'],
                     'venue': paper['metadata']['venue']['value'], 'source_type': paper['source_type'],
@@ -819,7 +846,7 @@ return 1
         for link in overrides.values():
             left, right = link['source'], link['target']
             if link['action'] == 'add' and left in node_ids and right in node_ids:
-                add_edge(left, right, 'MANUAL_RELATION', '手动关系', link['note'])
+                add_edge(left, right, 'MANUAL_RELATION', link.get('label') or '自定义关联', link['note'])
         return {
             'focus_paper_id': focus_paper_id, 'nodes': nodes, 'edges': edges,
             'papers': timeline, 'timeline': sorted(timeline, key=lambda row: (row['year'] is None, row['year'] or 0, row['title'])),

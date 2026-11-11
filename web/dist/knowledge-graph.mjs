@@ -2,6 +2,7 @@
 import {sessionCapability} from './online-core.mjs';
 
 const NODE_TYPES={Paper:['论文','#2258b4'],Contribution:['主贡献','#7754ba'],Detail:['细分贡献','#157b78']};
+const MIN_NODE_GAP=68;
 const RELATIONS={previous:'前序引用',next:'后续引用',similar:'相似研究'};
 
 function broadDirection(value){
@@ -22,7 +23,7 @@ export class KnowledgeGraphWorkspace{
  esc(v){return this.h.esc(v??'');}
  headers(json){let s='';try{s=sessionCapability();}catch{}return {'X-ArtiCheck-Client':'review-api',...(s?{'X-ArtiCheck-Session':s}:{}),...(json?{'Content-Type':'application/json'}:{})};}
  async api(path,payload){const res=await fetch('/v1/kg'+path,{method:payload===undefined?'GET':'POST',headers:this.headers(payload!==undefined),body:payload===undefined?undefined:JSON.stringify(payload),keepalive:path==='/layout',credentials:'same-origin'});let v;try{v=await res.json();}catch{throw Error('知识图谱服务暂未返回有效响应。');}if(!res.ok)throw Error(v?.error?.message||'知识图谱请求失败。');return v;}
- clear(){this.generation++;this.data=null;this.selected=null;this.linkSource=null;this.contextNode=null;this.mutating=false;this.searching=false;this.expansionPaper=null;this.notice='';this.loading=false;this.error='';this.expanded.clear();this.pinned.clear();this.query='';this.focusMode=false;this.inspectorTab='detail';this.zoom=1;this.pan={x:0,y:0};this.filters={year:'',direction:'',venue:''};}
+ clear(){this.generation++;this.data=null;this.selected=null;this.linkSource=null;this.linkDraft=null;this.linkFeedback=null;this.contextNode=null;this.mutating=false;this.searching=false;this.expansionPaper=null;this.notice='';this.loading=false;this.error='';this.expanded.clear();this.pinned.clear();this.query='';this.focusMode=false;this.inspectorTab='detail';this.zoom=1;this.pan={x:0,y:0};this.filters={year:'',direction:'',venue:''};}
  async open(projectId){
   await this.layoutQueue;
   this.clear();
@@ -80,7 +81,14 @@ export class KnowledgeGraphWorkspace{
    </div>
    ${this.linkSource?'<small class="kg-link-instruction" role="status">请选择另一篇论文或另一个贡献节点</small>':''}
    ${this.contextNode&&chosen?`<div class="kg-node-menu"><button class="btn small" data-kg-action="link-start">建立联系</button><button class="btn small" data-kg-tab="relations">查看或删除联系</button><button class="btn small" data-kg-action="pin">${this.pinned.has(chosen.id)?'取消固定':'固定位置'}</button></div>`:''}
-   ${paper&&this.expansionPaper===paper.id?this.literatureForm(paper):''}</div>
+   ${paper&&this.expansionPaper===paper.id?this.literatureForm(paper):''}
+   ${this.linkDraft?`<form class="kg-literature-form kg-link-form" data-kg-link-form>
+    <strong>${this.esc(this.node(this.linkDraft.source)?.label)} ↔ ${this.esc(this.node(this.linkDraft.target)?.label)}</strong>
+    <label>关系名称 <input name="label" maxlength="48" required value="${this.esc(this.linkDraft.label||'')}" placeholder="例如：扩展了实验方法"></label>
+    <label>备注 <textarea name="note" maxlength="360" rows="2">${this.esc(this.linkDraft.note||'')}</textarea></label>
+    <div class="kg-insp-actions"><button class="btn primary small" type="submit">保存联系</button><button class="btn small" type="button" data-kg-action="link-dismiss">取消</button></div>
+   </form>`:''}</div>
+   ${this.linkFeedback?`<div class="kg-search-progress kg-link-feedback ${this.linkFeedback.tone}" role="status">${this.esc(this.linkFeedback.text)}</div>`:''}
   ${this.searching?`<div class="kg-search-progress" role="status" aria-live="polite"><span>正在检索公开文献…</span><progress aria-label="公开文献检索进度"></progress></div>`:''}
   <button type="button" class="btn small kg-home-view" data-kg-action="home-view">${this.h.icon?.('home')||''}回到起始位置</button>`;
  }
@@ -126,76 +134,95 @@ export class KnowledgeGraphWorkspace{
  }
  placeDetailNodes(nodes,edges){
   const byId=new Map(nodes.map(node=>[node.id,node]));
-  const anchor=this.data?.focus_paper_id;
-  const fixed=new Set(nodes.filter(node=>this.pinned.has(node.id)||node.id===anchor).map(node=>node.id));
-  const neighbors=new Map(nodes.map(node=>[node.id,[]]));
-  for(const edge of edges){
-   const weight=this.relationEdge(edge)?3:1;
-   neighbors.get(edge.source)?.push({node:byId.get(edge.target),weight});
-   neighbors.get(edge.target)?.push({node:byId.get(edge.source),weight});
-  }
   const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-  const labelWidths=new Map(nodes.map(node=>[node.id,Math.min(112,Math.max(15,Array.from(node.label||'').slice(0,32)
-   .reduce((width,char)=>width+(char.codePointAt(0)>255?7:4),6)))]));
-  for(const node of nodes){
+  const fixed=nodes.filter(node=>node.node_type==='Paper'||this.pinned.has(node.id));
+  const fixedIds=new Set(fixed.map(node=>node.id));
+  const placed=new Map();
+  const targets=new Map();
+  const width=node=>Math.min(112,Math.max(15,Array.from(node.label||'').slice(0,32)
+   .reduce((sum,char)=>sum+(char.codePointAt(0)>255?7:4),6)));
+  const widths=new Map(nodes.map(node=>[node.id,width(node)]));
+  const separated=(node,point,other,position)=>distance(point,position)>=MIN_NODE_GAP&&
+   (Math.abs(point.y-position.y)>=34||Math.abs(point.x-position.x)>=widths.get(node.id)+widths.get(other.id)+8);
+  const fits=(node,point)=>[...placed].every(([id,position])=>id===node.id||separated(node,point,byId.get(id),position));
+  const settle=(node,preferred)=>{
+   if(fits(node,preferred)){placed.set(node.id,preferred);return;}
+   for(let radius=MIN_NODE_GAP; ;radius+=MIN_NODE_GAP/2){
+    for(let step=0;step<16;step++){
+     const angle=step*Math.PI/8;
+     const candidate={x:preferred.x+radius*Math.cos(angle),y:preferred.y+radius*Math.sin(angle)};
+     if(fits(node,candidate)){placed.set(node.id,candidate);return;}
+    }
+   }
+  };
+  const stableFixed=fixed.slice().sort((a,b)=>Number(b.node_type==='Paper')-Number(a.node_type==='Paper')||Number(this.pinned.has(b.id))-Number(this.pinned.has(a.id))||a.id.localeCompare(b.id));
+  for(const node of stableFixed){
    if(!this.initialPositions.has(node))this.initialPositions.set(node,{x:node.x,y:node.y});
-   if(!fixed.has(node.id))Object.assign(node,this.initialPositions.get(node));
+   const point=this.initialPositions.get(node);
+   if(node.node_type==='Paper'&&[...placed.values()].every(position=>distance(point,position)>=MIN_NODE_GAP))placed.set(node.id,point);
+   else settle(node,point);
   }
-  // Seed each connected group from its fixed nodes, so an expanded path
-  // starts compact even when its papers were far apart in the old layout.
-  const placed=new Set(fixed);
-  const queue=nodes.filter(node=>fixed.has(node.id));
-  for(const root of nodes){
-   if(!placed.has(root.id)&&!queue.length){
-    placed.add(root.id);
-    queue.push(root);
+  const pairs=[];
+  for(const edge of edges){
+   if(!this.relationEdge(edge))continue;
+   const left=byId.get(edge.source),right=byId.get(edge.target);
+   if(!left?.paper_id||!right?.paper_id||left.paper_id===right.paper_id)continue;
+   const start=placed.get(left.paper_id),end=placed.get(right.paper_id);
+   if(!start||!end)continue;
+   const gap=distance(start,end);
+   const inset=Math.min(0.33,Math.max(0.12,MIN_NODE_GAP/gap));
+   const along=t=>({x:start.x+(end.x-start.x)*t,y:start.y+(end.y-start.y)*t});
+   for(const [node,point] of [[left,along(inset)],[right,along(1-inset)]]){
+    const suggestions=targets.get(node.id)||[];
+    suggestions.push(point);
+    targets.set(node.id,suggestions);
    }
-   for(let index=0;index<queue.length;index++){
-    const parent=queue[index];
-    for(const {node} of neighbors.get(parent.id)){
-     if(placed.has(node.id))continue;
-     placed.add(node.id);
-     queue.push(node);
-     const gap=distance(node,parent);
-     if(gap>120){
-      node.x=parent.x+(node.x-parent.x)*120/gap;
-      node.y=parent.y+(node.y-parent.y)*120/gap;
+   pairs.push({left,right,start,end,along,inset});
+  }
+  const related=[...targets.keys()].filter(id=>!fixedIds.has(id));
+  for(const id of related){
+   const points=targets.get(id);
+   settle(byId.get(id),{x:points.reduce((sum,p)=>sum+p.x,0)/points.length,
+                        y:points.reduce((sum,p)=>sum+p.y,0)/points.length});
+  }
+  const relationCost=(node,point,paired,pairedPoint)=>pairs.reduce((sum,row)=>{
+   if(row.left===node)return sum+distance(row.start,point)+distance(point,row.right===paired?pairedPoint:placed.get(row.right.id));
+   if(row.right===node)return sum+distance(row.end,point)+distance(point,row.left===paired?pairedPoint:placed.get(row.left.id));
+   return sum;
+  },0);
+  for(let pass=0;pass<2;pass++){
+   for(const {left,right,start,end,along,inset} of pairs){
+    if(fixedIds.has(left.id)&&fixedIds.has(right.id))continue;
+    const first=placed.get(left.id),second=placed.get(right.id);
+    placed.delete(left.id);
+    placed.delete(right.id);
+    const offsets=[0,MIN_NODE_GAP,-MIN_NODE_GAP,MIN_NODE_GAP*2,-MIN_NODE_GAP*2];
+    const axis={x:end.x-start.x,y:end.y-start.y},length=distance(start,end);
+    const choices=(node,current,center)=>{
+     if(fixedIds.has(node.id))return [current];
+     return [current,...offsets.map(offset=>({x:center.x-axis.y*offset/length,y:center.y+axis.x*offset/length}))];
+    };
+    let best=[first,second];
+    let bestCost=relationCost(left,first,right,second)+relationCost(right,second,left,first)-distance(first,second);
+    for(const a of choices(left,first,along(inset))){
+     if(!fits(left,a))continue;
+     for(const b of choices(right,second,along(1-inset))){
+      if(!fits(right,b)||!separated(left,a,right,b))continue;
+      const cost=relationCost(left,a,right,b)+relationCost(right,b,left,a)-distance(a,b);
+      if(cost<bestCost-0.001){best=[a,b];bestCost=cost;}
      }
     }
-   }
-   queue.length=0;
-  }
-  const movable=nodes.filter(node=>!fixed.has(node.id)&&neighbors.get(node.id).length);
-  for(let pass=0;pass<5;pass++){
-   for(const node of movable){
-    const connected=neighbors.get(node.id);
-    const total=connected.reduce((sum,item)=>sum+item.weight,0);
-    const center={
-     x:connected.reduce((sum,item)=>sum+item.node.x*item.weight,0)/total,
-     y:connected.reduce((sum,item)=>sum+item.node.y*item.weight,0)/total,
-    };
-    const origins=[center,...connected.map(item=>item.node)
-     .sort((a,b)=>distance(a,center)-distance(b,center)).slice(0,4)];
-    let best=null,bestCost=Infinity;
-    const consider=point=>{
-     if(nodes.some(other=>other!==node&&(distance(point,other)<34||
-       Math.abs(point.y-other.y)<34&&Math.abs(point.x-other.x)<labelWidths.get(node.id)+labelWidths.get(other.id)+8)))return;
-     const cost=connected.reduce((sum,item)=>sum+item.weight*distance(point,item.node)**2,0);
-     if(cost<bestCost){best=point;bestCost=cost;}
-    };
-    consider(node);
-    consider(center);
-    for(const origin of origins){
-     for(let radius=36;radius<=186;radius+=25){
-      for(let step=0;step<12;step++){
-       const angle=step*Math.PI/6;
-       consider({x:origin.x+radius*Math.cos(angle),y:origin.y+radius*Math.sin(angle)});
-      }
-     }
-    }
-    if(best)Object.assign(node,best);
+    placed.set(left.id,best[0]);
+    placed.set(right.id,best[1]);
    }
   }
+  for(const node of nodes){
+   if(placed.has(node.id))continue;
+   const parent=placed.get(node.parent_id);
+   const preferred=parent?{x:parent.x,y:parent.y+MIN_NODE_GAP}:{x:node.x,y:node.y};
+   settle(node,preferred);
+  }
+  for(const node of nodes)Object.assign(node,placed.get(node.id));
  }
  canvasView(){
   const e=v=>this.esc(v),visible=this.visibleNodes(),ids=new Set(visible.map(n=>n.id));
@@ -290,12 +317,15 @@ export class KnowledgeGraphWorkspace{
    if(version!==this.generation)return;
    const data=await this.api(path,payload);
    if(version!==this.generation)return;
+   const paperPositions=new Map((this.data?.nodes||[]).filter(node=>node.node_type==='Paper').map(node=>[node.id,{x:node.x,y:node.y}]));
+   for(const node of data.nodes)if(node.node_type==='Paper'&&paperPositions.has(node.id))Object.assign(node,paperPositions.get(node.id));
    this.data=data;this.pinned=new Set(data.layout?.pinned||[]);
    this.notice=data.method_notice||'';
    if(!this.node(this.selected))this.selected=data.focus_paper_id||null;
    if(this.searching){
     this.pan={x:0,y:0};this.zoom=1;
    }
+   return true;
   }catch(error){if(version===this.generation)this.notice=error.message;}
   finally{if(version===this.generation){this.mutating=false;this.searching=false;this.h.render();}}
  }
@@ -304,11 +334,17 @@ export class KnowledgeGraphWorkspace{
   const pt=ev=>{const r=svg.getBoundingClientRect();return {x:(ev.clientX-r.left)*(1040/r.width),y:(ev.clientY-r.top)*(680/r.height)};};
   svg.addEventListener('wheel',ev=>{ev.preventDefault();const p=pt(ev),k=ev.deltaY<0?1.12:1/1.12,z=Math.min(3,Math.max(.35,this.zoom*k));this.pan.x=p.x-(p.x-this.pan.x)*(z/this.zoom);this.pan.y=p.y-(p.y-this.pan.y)*(z/this.zoom);this.zoom=z;this.applyTransform();},{passive:false});
   svg.addEventListener('pointerdown',ev=>{const g=ev.target.closest('[data-kg-node]'),p=pt(ev);if(ev.button===2)return;this.drag=g?{node:g.dataset.kgNode,start:p,moved:false}:{pan:true,start:p,origin:{...this.pan}};svg.setPointerCapture(ev.pointerId);});
-  svg.addEventListener('pointermove',ev=>{if(!this.drag)return;const p=pt(ev),dx=p.x-this.drag.start.x,dy=p.y-this.drag.start.y;if(Math.abs(dx)+Math.abs(dy)>3)this.drag.moved=true;if(this.drag.pan){this.pan={x:this.drag.origin.x+dx,y:this.drag.origin.y+dy};this.applyTransform();}else if(this.drag.moved){const n=this.node(this.drag.node);if(!n)return;n.x+=dx/this.zoom;n.y+=dy/this.zoom;this.drag.start=p;this.pinned.add(n.id);
+  svg.addEventListener('pointermove',ev=>{if(!this.drag)return;const p=pt(ev),dx=p.x-this.drag.start.x,dy=p.y-this.drag.start.y;if(Math.abs(dx)+Math.abs(dy)>3)this.drag.moved=true;if(this.drag.pan){this.pan={x:this.drag.origin.x+dx,y:this.drag.origin.y+dy};this.applyTransform();}else if(this.drag.moved){const n=this.node(this.drag.node);if(!n)return;const next={x:n.x+dx/this.zoom,y:n.y+dy/this.zoom};
+    this.drag.start=p;
+    if(this.data.nodes.some(other=>other!==n&&(other.node_type==='Paper'||this.pinned.has(other.id))&&Math.hypot(other.x-next.x,other.y-next.y)<MIN_NODE_GAP))return;
+    this.drag.positionChanged=true;
+    Object.assign(n,next);
+    this.initialPositions.set(n,next);
+    this.pinned.add(n.id);
     svg.querySelector(`[data-kg-node="${CSS.escape(n.id)}"]`)?.setAttribute('transform',`translate(${n.x} ${n.y})`);
    }});
-  svg.addEventListener('pointercancel',()=>{const d=this.drag;this.drag=null;if(d?.node&&d.moved){this.savePosition(d.node);this.redrawGraph();}});
-  svg.addEventListener('pointerup',()=>{const d=this.drag;this.drag=null;if(d?.node){if(d.moved){this.savePosition(d.node);this.redrawGraph();}else this.select(d.node);}});
+  svg.addEventListener('pointercancel',()=>{const d=this.drag;this.drag=null;if(d?.node&&d.positionChanged){this.savePosition(d.node);this.redrawGraph();}});
+  svg.addEventListener('pointerup',()=>{const d=this.drag;this.drag=null;if(d?.node){if(d.positionChanged){this.savePosition(d.node);this.redrawGraph();}else if(!d.moved)this.select(d.node);}});
   svg.addEventListener('keydown',ev=>{const node=ev.target.closest('[data-kg-node]');if(!node||!['Enter',' '].includes(ev.key))return;ev.preventDefault();this.select(node.dataset.kgNode);document.querySelector(`[data-kg-node="${CSS.escape(node.dataset.kgNode)}"]`)?.focus();});
   svg.addEventListener('contextmenu',ev=>{
    const target=ev.target.closest('[data-kg-node]');
@@ -357,12 +393,30 @@ export class KnowledgeGraphWorkspace{
    return;
   }
   this.linkSource=null;
-  await this.changeLiterature('/relations/edit',{source,target,action:'add'});
-  this.inspectorTab='relations';
+  this.linkDraft={source,target};
   this.h.render();
+  document.querySelector('[data-kg-link-form] input')?.focus();
+ }
+ async editRelation(payload){
+  if(this.mutating)return;
+  const generation=this.generation;
+  const removing=payload.action==='remove';
+  const names=[payload.source,payload.target].map(id=>this.node(id)?.label||'节点').join(' ↔ ');
+  this.linkFeedback={tone:removing?'remove':'add',text:(removing?'正在删除联系':'正在建立联系')+' · '+names};
+  this.linkDraft=null;
+  const saved=await this.changeLiterature('/relations/edit',payload);
+  if(generation!==this.generation)return;
+  this.linkFeedback={tone:saved?(removing?'remove':'add'):'error',text:(saved?(removing?'已删除联系':'已建立联系'):'联系更新失败')+' · '+names};
+  const feedback=this.linkFeedback;
+  if(saved)this.inspectorTab='relations';
+  else if(!removing)this.linkDraft=payload;
+  this.h.render();
+  setTimeout(()=>{if(this.linkFeedback===feedback){this.linkFeedback=null;this.h.render();}},3200);
  }
  async action(a){
+  if(a==='link-dismiss'){this.linkDraft=null;this.h.render();return;}
   if(a==='link-start'){
+   this.linkDraft=null;
    this.linkSource=this.linkSource?null:this.selected;
    this.contextNode=null;
    this.h.render();
@@ -397,6 +451,13 @@ export class KnowledgeGraphWorkspace{
  }
  bind(){
   document.addEventListener('submit',ev=>{
+   if(ev.target.matches('[data-kg-link-form]')){
+    ev.preventDefault();
+    if(!this.linkDraft)return;
+    const form=new FormData(ev.target),label=String(form.get('label')||'').trim();
+    if(!label){this.h.toast?.('请填写关系名称。');return;}
+    return this.editRelation({...this.linkDraft,action:'add',label,note:String(form.get('note')||'')});
+   }
    if(!ev.target.matches('[data-kg-literature]'))return;
    ev.preventDefault();
    const form=new FormData(ev.target),kinds=form.getAll('kind');
@@ -412,7 +473,7 @@ export class KnowledgeGraphWorkspace{
    if(ev.target.closest('[data-kg-expand-paper]'))return this.togglePaperDetails();
    const removal=ev.target.closest('[data-kg-remove-source]');
    if(removal&&confirm('删除这条联系？')){
-    return this.changeLiterature('/relations/edit',{source:removal.dataset.kgRemoveSource,target:removal.dataset.kgRemoveTarget,action:'remove'});
+    return this.editRelation({source:removal.dataset.kgRemoveSource,target:removal.dataset.kgRemoveTarget,action:'remove'});
    }
    if(removal)return;
    const t=ev.target.closest('[data-kg-action],[data-kg-tab],[data-kg-select],[data-kg-expand]');if(!t)return;

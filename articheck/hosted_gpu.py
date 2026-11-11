@@ -69,29 +69,27 @@ class OwnedGPUExecutor:
         if state=='queued' and time.time()>record['deadline']:
             self.store.command('SET',self.key(record['id'])+':cancel','1','EX','900')
             state='expired'
-        if state in {'completed','failed','expired'}:self.cleanup(record)
+        if state in {'queued', 'running'} and self.store.command('GET', self.key(record['id']) + ':cancel'):
+            state = 'cancelling'
+        if state in {'completed', 'failed', 'expired', 'cancelled'}:
+            self.cleanup(record)
         # Whitelist process-generated fields; source URLs remain in the private queue.
         fields=('stages','metrics','events','runtime','elapsed_seconds','execution_performed','needs_user','question','acceptance','failure_category')
         return {**execution,**{key:result[key] for key in fields if key in result},'status':state,
                 'scientific_validation':False,'notice':record.get('notice') or execution.get('notice','')}
-    def stop(self,execution):
-        record=self.record(execution)
-        if record['status'] not in {'completed','failed','cancelled'}:
-            self.store.command('SET',self.key(record['id'])+':cancel','1','EX','900')
-            try:
-                self.store.command('LREM',self.prefix+'queue','0',record['id'])
-            except Exception:
-                pass
-            record['status']='cancelled'
-            record['source_url']=None
-            record['notice']='用户停止执行，保留已产生的证据。'
-            if isinstance(record.get('result'),dict):
-                record['result']['status']='cancelled'
-                for stage in record['result'].get('stages',[]):
-                    if stage.get('status')=='running':
-                        stage.update(status='skipped',reason='任务已按请求停止。')
-            self.store.command('SET',self.key(record['id']),json.dumps(record,ensure_ascii=False),'EX','604800')
+    def stop(self, execution):
+        record = self.record(execution)
+        if record['status'] in {'completed', 'failed', 'cancelled', 'expired'}:
+            return True
+        self.store.command('SET', self.key(record['id']) + ':cancel', '1', 'EX', '900')
+        # Only jobs removed from the queue are guaranteed to have no workspace.
+        if not self.store.command('LREM', self.prefix + 'queue', '0', record['id']):
+            return False
+        record.update(status='cancelled', source_url=None, notice='用户停止执行，保留已产生的证据。')
+        self.store.command('SET', self.key(record['id']), json.dumps(record, ensure_ascii=False), 'EX', '604800')
+        self.cleanup(record)
         return True
+
     def cleanup(self,record):
         if record.get('staging_id'):
             from e2b import Sandbox

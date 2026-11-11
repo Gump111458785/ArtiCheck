@@ -64,10 +64,11 @@ export class ExecutionCenter {
    const totalStages=codeBound?stages.length:0;
    const verdict=r?.review?reportVerdict(r,p):null;
    const verdictKey=verdict?.label==='不适用'?'inapplicable':verdict?.state==='passed'?'passed':verdict?.state==='failed'?'failed':statusKey==='completed'&&r?.review?.findings?.length?'issues':'unassessed';
+   const active=['reviewing','queued','reproducing'].includes(statusKey);
    const statusTone=['waiting','interrupted','cancelling'].includes(statusKey)?'amber':
     statusKey==='completed'&&['failed','issues'].includes(verdictKey)?'red':statusKey==='completed'&&verdictKey==='passed'?'green':
-    statusKey==='queued'?'green':['reviewing','reproducing'].includes(statusKey)?'blue':'neutral';
-   const statusLabel=statusTone==='red'?'未通过':statusKey==='completed'&&statusTone!=='green'?(verdictKey==='inapplicable'?'不适用':'执行结束'):archiveStates[statusKey];
+    active?'green':'neutral';
+   const statusLabel=active?'执行中':statusTone==='red'?'未通过':statusKey==='completed'&&statusTone!=='green'?(verdictKey==='inapplicable'?'不适用':'执行结束'):archiveStates[statusKey];
    const materialKey=paperOnly?'paper_only':codeBound?(p.paper||r?.materials?.paper?'both':'code_only'):'none';
    const rawTime=p.updated_at||r?.updated_at||p.created_at||new Date().toISOString();
    const ts=Date.parse(rawTime)||0;
@@ -89,7 +90,7 @@ export class ExecutionCenter {
     statusKey,
     statusLabel,
     verdictKey,
-    statusTone, materialKey,
+    statusTone, active, materialKey,
     totalStages,
     completedCount,
     metricsCount:r?.review?.metrics?.length||0,
@@ -199,7 +200,7 @@ export class ExecutionCenter {
         <div class="archive-material-line" title="${e(item.codeName)}"><span class="mat-tag ${item.codeBound?'code':'nocode'}">代码</span><span class="mat-name">${e(item.codeName)}</span></div>
        </td>
        <td class="archive-col-status">
-        <span class="order-status-pill tone-${item.statusTone}">${e(item.statusLabel)}</span>
+        <span class="order-status-pill tone-${item.statusTone}${item.active?' status-in-progress':''}">${e(item.statusLabel)}</span>
        </td>
        <td class="archive-col-metrics">
         <div class="archive-metrics-inline">

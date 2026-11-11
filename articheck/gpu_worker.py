@@ -439,12 +439,6 @@ class GPUWorker:
         return self.prefix + 'job:' + job_id
 
     def save_record(self, record):
-        if record.get('status') == 'running' and self.is_cancelled(record['id']):
-            record['status'] = 'cancelled'
-            record['source_url'] = None
-            record['notice'] = '用户停止执行，保留已产生的证据。'
-            if isinstance(record.get('result'), dict):
-                record['result']['status'] = 'cancelled'
         self.store.command('SET', self.job_key(record['id']), json.dumps(record, ensure_ascii=False), 'EX', '604800')
 
     def is_cancelled(self, job_id):

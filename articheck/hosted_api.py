@@ -344,14 +344,20 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                 return jsonify(store.get(owner, job))
             try:
                 snapshot = executor.poll(execution)
-                stopped = executor.stop(execution)
-                if stopped is False:
-                    value['execution'] = {**snapshot, 'status': 'cancelling', 'notice': '已请求 GPU 执行器停止，等待进程退出确认。'}
-                    store.save(owner, value)
-                    return jsonify(value)
+                if snapshot['status'] not in {'completed', 'failed', 'expired', 'cancelled'}:
+                    stopped = executor.stop(execution)
+                    if stopped is False:
+                        value['execution'] = {**snapshot, 'status': 'cancelling', 'notice': '已请求 GPU 执行器停止，等待进程退出确认。'}
+                    else:
+                        stages = snapshot.get('stages') or []
+                        for stage in stages:
+                            if stage['status'] == 'running':
+                                stage.update(status='skipped', reason='任务已按请求停止。')
+                        value['execution'] = {**snapshot, 'status': 'cancelled', 'notice': '用户停止执行，保留已产生的证据。'}
+                else:
+                    value['execution'] = snapshot
             except Exception as exc:
                 raise ReviewError('cancel_pending', '暂时无法确认停止，请点击重试停止；实例仍受最长时限限制。', 502) from exc
-            value['execution'] = {**snapshot, 'status': 'cancelled', 'notice': '用户停止执行，保留已产生的证据。'}
             store.save(owner, value)
         return jsonify(value)
 
@@ -478,7 +484,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         payload = body()
         return jsonify(kg.edit_relation(owner, str(payload.get('source') or ''),
                                         str(payload.get('target') or ''), payload.get('action'),
-                                        payload.get('note', '')))
+                                        payload.get('note', ''), payload.get('label', '')))
 
     @app.post('/kg/literature/expand')
     def expand_kg_literature():

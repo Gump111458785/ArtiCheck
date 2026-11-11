@@ -224,8 +224,23 @@ def limits(address_space_mb=3072):
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
-def run_plan(plan, root, results, *, run_as='articheck'):
-    root = Path(root); results = Path(results)
+def run_plan(plan, root, results, *, run_as='articheck', disposable=False, venv=None):
+    root, results = Path(root), Path(results)
+    venv = Path(venv) if venv else None
+    cleanup = (root,) if disposable else (root / '.pydeps', root / '.cache')
+    if disposable and venv:
+        cleanup += (venv,)
+    if any(results.resolve().is_relative_to(path.resolve()) for path in cleanup):
+        raise ValueError('The execution report must be outside disposable directories')
+    try:
+        return _run_plan(plan, root, results, run_as, venv, cleanup)
+    except BaseException:
+        for path in cleanup:
+            shutil.rmtree(path, ignore_errors=True)
+        raise
+
+
+def _run_plan(plan, root, results, run_as, venv, cleanup):
     pydeps_dir = root / '.pydeps'
     cache_dir = root / '.cache'
     pydeps_dir.mkdir(parents=True, exist_ok=True)
@@ -247,7 +262,7 @@ def run_plan(plan, root, results, *, run_as='articheck'):
                        'release':platform.release(),'architecture':platform.machine(),
                        'disk_total_bytes':disk.total,'disk_free_before_bytes':disk.free,
                        'conda_env_created':False,
-                       'environment_kind':'python_venv' if Path('/home/articheck/venv/bin/python').is_file() else 'python_runtime',
+                       'environment_kind':'python_venv' if (venv and (venv / 'bin/python').is_file()) else 'python_runtime',
                        'inferred_dependencies':sorted(set(inferred_deps.values())),
                        'auto_provisioned_packages':[]}
     status_path = results / 'status.json'
@@ -262,7 +277,7 @@ def run_plan(plan, root, results, *, run_as='articheck'):
     fail_fast = plan.get('fail_fast', plan.get('policy') == 'frozen_api_plan')
     failed_stage_id = None
     stage_env = {
-        'PATH': f'{pydeps_dir}/bin:/home/articheck/venv/bin:/usr/local/bin:/usr/bin:/bin',
+        'PATH': ':'.join([str(pydeps_dir / 'bin'), *([str(venv / 'bin')] if venv else []), '/usr/local/bin', '/usr/bin', '/bin']),
         'HOME': str(root),
         'PYTHONUSERBASE': str(pydeps_dir),
         'PIP_USER': '1',
@@ -394,10 +409,10 @@ def run_plan(plan, root, results, *, run_as='articheck'):
     report['status'] = 'completed' if all(s['status'] == 'completed' for s in report['stages']) else 'failed'
     report['finished_at'] = time.time()
     report['elapsed_seconds'] = round(report['finished_at'] - started, 3)
-    shutil.rmtree(pydeps_dir, ignore_errors=True)
-    shutil.rmtree(cache_dir, ignore_errors=True)
-    report['runtime']['workspace_cleaned'] = not pydeps_dir.exists() and not cache_dir.exists()
-    report['runtime']['disk_free_after_bytes']=shutil.disk_usage(root).free
+    for path in cleanup:
+        shutil.rmtree(path, ignore_errors=True)
+    report['runtime']['workspace_cleaned'] = all(not path.exists() for path in cleanup)
+    report['runtime']['disk_free_after_bytes'] = shutil.disk_usage(root.parent).free
     usage=resource.getrusage(resource.RUSAGE_CHILDREN)
     report['runtime']['child_cpu_seconds']=round(usage.ru_utime+usage.ru_stime,3)
     failure_logs='\n'.join(s.get('output','') for s in report['stages'] if s['status']=='failed')
@@ -419,7 +434,7 @@ def run_plan(plan, root, results, *, run_as='articheck'):
 if __name__ == '__main__':
     config = json.loads(Path(sys.argv[1]).read_text())
     try:
-        run_plan(config, sys.argv[2], sys.argv[3])
+        run_plan(config, sys.argv[2], sys.argv[3], disposable=True, venv='/home/articheck/venv')
     except Exception as exc:
         atomic(Path(sys.argv[3]) / 'status.json', {'status': 'failed', 'error': type(exc).__name__,
                'execution_performed': False, 'scientific_validation': False, 'stages': [], 'metrics': []})

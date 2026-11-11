@@ -315,9 +315,13 @@ class HostedReviewTests(unittest.TestCase):
             contribution_pair = (relation['source'], relation['target'])
             restarted.edit_relation(OWNER, *contribution_pair, 'remove')
             self.assertFalse(any(edge['id'] == relation['id'] for edge in restarted.verify_related(OWNER, left)['edges']))
-            restarted.edit_relation(OWNER, left, right, 'add', 'Manual paper comparison')
-            self.assertTrue(any(edge['edge_type'] == 'MANUAL_RELATION'
-                                for edge in svc.build_graph_response(OWNER)['edges']))
+            coordinates = {n['id']: (n['x'], n['y']) for n in graph['nodes'] if n['node_type'] == 'Paper'}
+            restarted.edit_relation(OWNER, left, right, 'add', 'Uses the same shortcut', 'Method extension')
+            reopened = svc.build_graph_response(OWNER, focus_paper_id=right)
+            manual = next(edge for edge in reopened['edges'] if edge['edge_type'] == 'MANUAL_RELATION')
+            self.assertEqual((manual['label'], manual['description']), ('Method extension', 'Uses the same shortcut'))
+            self.assertEqual({n['id']: (n['x'], n['y']) for n in reopened['nodes'] if n['node_type'] == 'Paper'},
+                             coordinates)
             restarted.edit_relation(OWNER, left, right, 'remove')
             restarted.edit_relation(OWNER, *contribution_pair, 'add')
             self.assertEqual(sum(edge['edge_type'] == 'MANUAL_RELATION'
@@ -623,6 +627,27 @@ class HostedReviewTests(unittest.TestCase):
             self.assertFalse(value['scientific_validation'])
             self.assertEqual(json.loads((result/'status.json').read_text())['status'], 'failed')
 
+    def test_disposable_cpu_tasks_remove_environment_and_keep_logs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root, results, venv = (base / name for name in ('artifact', 'results', 'venv'))
+            for code, status in ((0, 'completed'), (7, 'failed')):
+                with self.subTest(status=status):
+                    root.mkdir()
+                    results.mkdir(exist_ok=True)
+                    (root / 'experiment-venv').mkdir()
+                    (venv / 'bin').mkdir(parents=True)
+                    plan = {'max_seconds': 30, 'stages': [{
+                        'id': 'S1', 'title': 'workspace cleanup', 'file': 'test.sh',
+                        'command': f': > experiment-venv/installed; : > .cache/task-cache; : > .pydeps/installed; echo retained; exit {code}',
+                    }]}
+                    report = run_plan(plan, root, results, run_as=None, disposable=True, venv=venv)
+                    self.assertEqual(report['status'], status)
+                    self.assertTrue(report['runtime']['workspace_cleaned'])
+                    self.assertFalse(root.exists())
+                    self.assertFalse(venv.exists())
+                    self.assertIn('retained', (results / 'S1.log').read_text())
+
     def test_cpu_supervisor_retries_transient_interruptions_three_times(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -885,8 +910,27 @@ class HostedReviewTests(unittest.TestCase):
                 worker.save_record(record)
                 failed = worker.poll_once()
                 self.assertEqual(failed['status'], 'failed')
+                self.assertTrue(failed['result']['runtime']['workspace_cleaned'])
+                self.assertEqual(list(Path(tmp).iterdir()), [])
                 self.assertEqual(failed['result']['stages'][0]['retry_count'], 3)
                 self.assertEqual([ev['retry'] for ev in failed['result']['events'] if ev['kind'] == 'stage_retry'], [1, 2, 3])
+
+                active = hybrid.launch(assessment, {'code': materials()['code']})
+                def cancel_during_stage(work_dir, log_path, command, deadline, job_id):
+                    (work_dir / '.pydeps' / 'task_only').touch()
+                    self.assertFalse(hybrid.stop(active))
+                    self.assertEqual(hybrid.poll(active)['status'], 'cancelling')
+                    self.assertTrue(work_dir.exists())
+                    log_path.write_text('retained progress')
+                    return -9, False, True
+                worker.run_stage_command = cancel_during_stage
+                cancelled = worker.poll_once()
+                self.assertEqual(cancelled['status'], 'cancelled')
+                self.assertTrue(cancelled['result']['runtime']['workspace_cleaned'])
+                self.assertIn('retained progress', cancelled['result']['stages'][0]['output'])
+                self.assertEqual(list(Path(tmp).iterdir()), [])
+                self.assertEqual(hybrid.poll(active)['status'], 'cancelled')
+                worker.run_stage_command = local_stage
 
                 launched4 = hybrid.launch(assessment, {'code': materials()['code']})
                 key = worker.job_key(launched4['gpu_job_id'])

@@ -73,7 +73,8 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  const {activityView}=await import('../../web/dist/review-activity.mjs');
  const {OnlineWorkspace}=await import('../../web/dist/online-workspace.mjs');
  const {executionNames}=await import('../../web/dist/online-core.mjs');
- assert.equal(executionNames.queued,'等待 GPU 执行器');
+ assert.equal(executionNames.queued,'执行中');
+ assert.equal(executionNames.running,'执行中');
  const failedReport={status:'completed',materials:{paper:'a',code:'b'},
   review:{paper_type:'empirical',task:'reproduction',summary:'summary',classification_reason:'reason',
    criteria:[],findings:[{severity:'high',title:'issue',detail:'d',suggestion:'s'}],
@@ -295,4 +296,31 @@ test('verified relationships collapse to paper edges and expansion never searche
  assert.deepEqual(graph.displayedEdges(new Set(['a','b','a1','b1'])),[edge]);
  graph.filters.direction='CV';
  assert.deepEqual(graph.matchingPapers().map(paper=>paper.paper_id),['a','b']);
+});
+
+test('paired contributions use the paper axis and preserve fixed papers and spacing',async()=>{
+ const {KnowledgeGraphWorkspace}=await import('../../web/dist/knowledge-graph.mjs');
+ const graph=new KnowledgeGraphWorkspace({esc:String,render(){}});
+ const a={id:'a',node_type:'Paper',x:100,y:200};
+ const b={id:'b',node_type:'Paper',x:780,y:200};
+ const c={id:'c',node_type:'Paper',x:440,y:340};
+ const left={id:'la',node_type:'Contribution',paper_id:'a',parent_id:'a',x:100,y:540};
+ const right={id:'rb',node_type:'Contribution',paper_id:'b',parent_id:'b',x:780,y:540};
+ const third={id:'rc',node_type:'Contribution',paper_id:'c',parent_id:'c',x:430,y:590};
+ const nodes=[a,b,c,left,right,third];
+ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+ const length=()=>distance(a,left)+distance(left,right)+distance(right,b)+distance(left,third)+distance(third,c);
+ const original=length();
+ const papers=[a,b,c].map(({x,y})=>[x,y]);
+ const relation=(source,target)=>({source,target,edge_type:'SIMILAR_CONTRIBUTION'});
+ const edges=[relation('la','rb'),relation('la','rc')];
+ graph.placeDetailNodes(nodes,edges);
+ assert.ok(left.x>a.x && right.x<b.x);
+ assert.ok(length()<original*.65);
+ for(let i=0;i<nodes.length;i++)for(const other of nodes.slice(i+1))assert.ok(distance(nodes[i],other)>=68-1e-8);
+ const placed=nodes.map(({x,y})=>[x,y]);
+ graph.placeDetailNodes([a,b,c],[]);
+ graph.placeDetailNodes(nodes,edges);
+ assert.deepEqual(nodes.map(({x,y})=>[x,y]),placed);
+ assert.deepEqual([a,b,c].map(({x,y})=>[x,y]),papers);
 });
