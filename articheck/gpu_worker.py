@@ -326,7 +326,7 @@ def extract_archive(raw, dest):
                 target.chmod(0o755)
 
 
-def bwrap_args(work_dir, command, runtime=RUNTIME_DIR):
+def bwrap_args(work_dir, command, runtime=RUNTIME_DIR, pip_launcher=None):
     args = ['/usr/bin/bwrap', '--unshare-all', '--share-net', '--new-session', '--die-with-parent',
             '--ro-bind', '/usr', '/usr', '--ro-bind', '/bin', '/bin',
             '--ro-bind', '/lib', '/lib', '--ro-bind', '/lib64', '/lib64',
@@ -335,6 +335,12 @@ def bwrap_args(work_dir, command, runtime=RUNTIME_DIR):
             '--tmpfs', runtime + '/conda-meta', '--tmpfs', runtime + '/etc',
             '--bind', str(work_dir), '/work', '--chdir', '/work',
             '--uid', '65534', '--gid', '65534', '--cap-drop', 'ALL']
+    if pip_launcher is not None:
+        args += ['--ro-bind', str(pip_launcher), '/articheck-tools/pip']
+        for entry in ('pip', 'pip3', 'pip3.11'):
+            path = Path(runtime) / 'bin' / entry
+            if path.is_file():
+                args += ['--ro-bind', str(pip_launcher), str(path)]
     resolv = Path('/etc/resolv.conf')
     if resolv.exists():
         args += ['--ro-bind', str(resolv.resolve()), '/etc/resolv.conf']
@@ -351,7 +357,7 @@ def bwrap_args(work_dir, command, runtime=RUNTIME_DIR):
 def bwrap_env(runtime=RUNTIME_DIR):
     ca_bundle = '/etc/ssl/certs/ca-certificates.crt'
     return {'PYTHONHOME': runtime,
-            'PATH': f'/work/.pydeps/bin:{runtime}/bin:/usr/local/bin:/usr/bin:/bin',
+            'PATH': f'/articheck-tools:/work/.pydeps/bin:{runtime}/bin:/usr/local/bin:/usr/bin:/bin',
             'HOME': '/work',
             'PYTHONUSERBASE': '/work/.pydeps',
             'PIP_USER': '1',
@@ -438,7 +444,13 @@ class GPUWorker:
         return bool(self.store.command('GET', self.job_key(job_id) + ':cancel'))
 
     def run_stage_command(self, work_dir, log_path, command, deadline, job_id):
-        args = bwrap_args(work_dir, command, self.runtime)
+        pip_launcher = log_path.parent / 'pip-launcher'
+        if not pip_launcher.exists():
+            pip_launcher.write_text(f'#!/bin/sh\nexec "{self.runtime}/bin/python" -m pip "$@"\n')
+            pip_launcher.chmod(0o755)
+        if re.search(r'\bpip(?:3(?:\.11)?)?\s+(?:install|download)\b', command):
+            command = f'pip --version >/dev/null && ({command})'
+        args = bwrap_args(work_dir, command, self.runtime, pip_launcher)
         env = bwrap_env(self.runtime)
         account = pwd.getpwnam(self.run_as) if self.run_as else None
 

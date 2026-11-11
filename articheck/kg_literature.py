@@ -229,6 +229,8 @@ class OpenAlex:
                 papers = [paper for paper in papers if not paper['year'] or paper['year'] >= year]
             return kind, papers[:limit]
 
+        if not kinds:
+            return metadata, {}
         with ThreadPoolExecutor(max_workers=len(kinds)) as pool:
             groups = dict(pool.map(group, sorted(kinds)))
         return metadata, groups

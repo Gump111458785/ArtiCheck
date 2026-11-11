@@ -416,7 +416,7 @@ return 1
         raise ReviewError('graph_changed', '文献条目正在更新，请重试。', 409)
 
     def expand_literature(self, owner, paper_id, *, kinds, limit):
-        if not isinstance(kinds, list) or not kinds or any(not isinstance(kind, str) or kind not in KINDS for kind in kinds):
+        if not isinstance(kinds, list) or any(not isinstance(kind, str) or kind not in KINDS for kind in kinds):
             raise ReviewError('invalid_literature_kind', '请选择需要查找的研究关系。')
         if type(limit) is not int or limit not in LIMITS:
             raise ReviewError('invalid_literature_limit', '请选择每类 3、5 或 8 篇。')

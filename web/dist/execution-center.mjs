@@ -4,7 +4,7 @@ import {reportVerdict} from './report-verdict.mjs';
 import {hasCode,taskNames} from './online-core.mjs';
 
 const date=value=>value?value.slice(0,16).replace('T',' '):'未记录时间';
-const archiveStates={draft:'待启动',reviewing:'正在审阅',queued:'等待执行',reproducing:'正在复现',cancelling:'正在中断',waiting:'等待资源',interrupted:'已中断',completed:'已完成',terminated:'已终止'};
+const archiveStates={draft:'待启动',reviewing:'正在审阅',queued:'执行中',reproducing:'正在复现',cancelling:'正在中断',waiting:'等待资源',interrupted:'已中断',completed:'已完成',terminated:'已终止'};
 const archiveInProgress=new Set(['reviewing','queued','reproducing','cancelling']);
 const archiveExecutionFilters={in_progress:'审查中',...Object.fromEntries(Object.entries(archiveStates).filter(([key])=>key!=='terminated'&&!archiveInProgress.has(key)))};
 const matchesStatus=(item,key)=>key==='in_progress'?archiveInProgress.has(item.statusKey):item.statusKey===key;
@@ -66,7 +66,7 @@ export class ExecutionCenter {
    const verdictKey=verdict?.label==='不适用'?'inapplicable':verdict?.state==='passed'?'passed':verdict?.state==='failed'?'failed':statusKey==='completed'&&r?.review?.findings?.length?'issues':'unassessed';
    const statusTone=['waiting','interrupted','cancelling'].includes(statusKey)?'amber':
     statusKey==='completed'&&['failed','issues'].includes(verdictKey)?'red':statusKey==='completed'&&verdictKey==='passed'?'green':
-    ['reviewing','queued','reproducing'].includes(statusKey)?'blue':'neutral';
+    statusKey==='queued'?'green':['reviewing','reproducing'].includes(statusKey)?'blue':'neutral';
    const statusLabel=statusTone==='red'?'未通过':statusKey==='completed'&&statusTone!=='green'?(verdictKey==='inapplicable'?'不适用':'执行结束'):archiveStates[statusKey];
    const materialKey=paperOnly?'paper_only':codeBound?(p.paper||r?.materials?.paper?'both':'code_only'):'none';
    const rawTime=p.updated_at||r?.updated_at||p.created_at||new Date().toISOString();

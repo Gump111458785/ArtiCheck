@@ -2314,12 +2314,6 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 }
 .online-rail { min-width: 0; }
 .online-rail.has-task-choice { display: block; }
-#online-task-choice { margin-top: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-.task-choice-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
-.task-choice-head h3 { font-size: 16px; color: var(--ink); }
-#online-task-choice .review-choice { gap: 8px; }
-#online-task-choice .review-choice button { width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px; }
-#online-task-choice .review-choice button span { font-size: 13px; line-height: 1.5; }
 .online-counts .count-card-head > span:last-child { font-size: 15px; font-weight: 600; color: var(--ink); }
 .online-counts .online-count-card .count-num-sub { font-size: 15px; color: #475569; }
 .online-count-card > strong { display: flex; gap: 5px; align-items: baseline; }
@@ -2351,3 +2345,13 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 @media (max-width: 760px) {
   .criterion-details-list { grid-template-columns: minmax(0,1fr); }
 }
+
+.online-toolbar .online-new-review,
+.online-toolbar .kg-entry-btn { min-height: 40px; }
+.online-toolbar .kg-entry-btn { display: inline-flex; align-items: center; gap: 8px; }
+#online-task-choice { min-width: 0; margin: 14px 0; padding: 12px 0 0; border: 0; border-top: 1px solid var(--line); }
+#online-task-choice legend { padding-right: 8px; font-weight: 600; color: var(--ink); }
+.review-task-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px 10px; }
+.review-task-options label { display: flex; align-items: center; gap: 6px; min-height: 28px; font-size: 13px; cursor: pointer; }
+.review-task-options input { margin: 0; accent-color: var(--green); }
+.start-case-footer { justify-content: flex-end; }

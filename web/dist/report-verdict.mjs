@@ -4,6 +4,7 @@ export function criteriaDecisions(report,project){
  return (report?.review?.criteria||[]).map(row=>row.status==='needs_review'&&reviewed.has(row.dimension)?{...row,status:'documented',manuallyReviewed:true}:row);
 }
 export function reportVerdict(report,project){
+ if(report?.terminated_at)return {state:'pending',label:'已终止',scope:'本次审查',reason:'可查看终止前取得的证据与执行记录。'};
  if(!report?.review)return {state:'pending',label:'待验收',scope:'审查尚未结束',reason:'等待材料审阅和执行记录。'};
  const v=report.review,x=report.execution,metrics=x?.metrics||[];
  if(['nonpaper','unknown'].includes(v.paper_type))return {state:'pending',label:v.paper_type==='nonpaper'?'不适用':'需确认',scope:'材料适用性',reason:v.classification_reason||'当前材料尚不支持论文验收，请查看报告范围。'};

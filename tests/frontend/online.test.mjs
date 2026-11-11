@@ -224,3 +224,50 @@ test('human criterion confirmations are report-specific and keep model evidence 
  assert.equal(reportVerdict({...report,id:'second'},project).state,'pending');
  assert.equal(criteria[0].status,'needs_review');
 });
+
+test('a review finishing in the background leaves the selected archived report open',async()=>{
+ const {OnlineWorkspace}=await import('../../web/dist/online-workspace.mjs');
+ const pending={id:'a',online_report:{id:'job-a',status:'completed',review:{},execution:{status:'failed'}}};
+ const history={id:'b',online_report:{id:'job-b',status:'completed',review:{}}};
+ const workspace=new OnlineWorkspace({projects:[pending,history],save:async()=>{},h:{page:()=> 'api-review'},esc:String});
+ workspace.selected=history.id;
+ workspace.tab='report';
+ workspace.operationProject=pending.id;
+ workspace.liveReport={id:'job-a',status:'reviewing'};
+ assert.equal(workspace.viewReport(history),history.online_report);
+ assert.equal(workspace.viewReport(pending),workspace.liveReport);
+ await workspace.notifyFinished(pending);
+ assert.equal(workspace.tab,'report');
+ assert.equal(workspace.selected,history.id);
+});
+
+test('terminated reports show historical criteria with no action to confirm them',async()=>{
+ const {OnlineWorkspace}=await import('../../web/dist/online-workspace.mjs');
+ const {reportVerdict}=await import('../../web/dist/report-verdict.mjs');
+ const workspace=new OnlineWorkspace({projects:[],h:{},esc:String});
+ const report={terminated_at:'now',review:{criteria:[{dimension:'data',status:'needs_review',note:'old'}]}};
+ assert.equal(reportVerdict(report).label,'已终止');
+ assert.match(workspace.criteriaSection(report,{}),/终止前未复核/);
+ assert.doesNotMatch(workspace.criteriaDetails(report,{}),/data-confirm-criterion|data-supply-criterion/);
+});
+
+test('detail expansion works without expanding literature and shortens available links',async()=>{
+ const {KnowledgeGraphWorkspace}=await import('../../web/dist/knowledge-graph.mjs');
+ const graph=new KnowledgeGraphWorkspace({esc:String,render(){}});
+ const paper={id:'p',node_type:'Paper',x:0,y:0};
+ const parent={id:'c',parent_id:'p',paper_id:'p',node_type:'Contribution',x:100,y:0};
+ const detail={id:'d',parent_id:'c',paper_id:'p',node_type:'Detail',x:230,y:0};
+ graph.selected='p';
+ graph.data={nodes:[paper,parent,detail]};
+ graph.api=()=>assert.fail('existing details must not trigger retrieval');
+ assert.match(graph.canvasControls(),/展开子贡献/);
+ await graph.togglePaperDetails();
+ assert.ok(graph.expanded.has('c'));
+ graph.placeDetailNodes(graph.data.nodes,[{source:'c',target:'d'}]);
+ assert.ok(Math.hypot(parent.x-detail.x,parent.y-detail.y)<130);
+ const fixed={x:detail.x,y:detail.y};
+ graph.pinned.add('d');
+ parent.x+=140;
+ graph.placeDetailNodes(graph.data.nodes,[{source:'c',target:'d'}]);
+ assert.deepEqual({x:detail.x,y:detail.y},fixed);
+});
