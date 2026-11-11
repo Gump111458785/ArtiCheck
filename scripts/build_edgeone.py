@@ -4,6 +4,7 @@ import json
 import hashlib
 from pathlib import Path
 import shutil
+import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +15,7 @@ MODULES = ('__init__.py', 'review_api.py', 'edgeone_review.py',
            'reproduction/paper_text.py', 'reproduction/pdf_extract.py', 'reproduction/protocol.py')
 
 
-def build(output):
+def build(output, *, esbuild=None):
     output = Path(output).resolve()
     # Only overwrite this builder's designated, ignored staging directory.
     expected = ROOT / '.edgeone-build'
@@ -36,6 +37,12 @@ def build(output):
                 path.write_text(text.replace('.mjs', '.js'))
     for path in modules:
         path.rename(path.with_suffix('.js'))
+    if esbuild:
+        entrypoint = output / 'app.js'
+        bundled = output / 'workbench.bundle.js'
+        subprocess.run([esbuild, str(entrypoint), '--bundle', '--platform=browser', '--format=esm',
+                        '--external:./vendor/pdfjs/*', f'--outfile={bundled}'], check=True)
+        bundled.replace(entrypoint)
     digest = hashlib.sha256()
     for path in sorted(output.rglob('*.js')):
         digest.update(path.relative_to(output).as_posix().encode())
@@ -67,4 +74,6 @@ def build(output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', default=str(ROOT / '.edgeone-build'))
-    print(build(parser.parse_args().output))
+    parser.add_argument('--esbuild', help='Bundle the workbench entry with this esbuild executable')
+    args = parser.parse_args()
+    print(build(args.output, esbuild=args.esbuild))

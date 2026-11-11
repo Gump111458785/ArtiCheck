@@ -7,12 +7,12 @@
 ## 1. 构建与上传
 
 ```bash
-python scripts/build_edgeone.py
+python scripts/build_edgeone.py --esbuild "$(command -v esbuild)"
 edgeone login --site global
 edgeone makers deploy .edgeone-build.zip -n articheck-workbench -e production --site global --area overseas --skip-ai-gateway-sync
 ```
 
-构建目录和 ZIP 只包含 `web/dist`、部署配置和白名单 Python 模块。构建时将 `.mjs` 与引用改成 `.js`，为入口生成内容指纹文件名，避免平台 MIME 类型与旧缓存导致空白页；源码保持原名。不要上传整个工作目录。
+构建目录和 ZIP 只包含 `web/dist`、部署配置和白名单 Python 模块。构建时将 `.mjs` 与引用改成 `.js`，并为入口生成内容指纹文件名。生产发布前安装 esbuild 并使用上面的参数，将启动脚本合并为一个文件，PDF 解析器仍按需加载。也可直接执行 `python scripts/build_edgeone.py` 生成分模块的本地预览包。
 
 云函数入口为 `cloud-functions/v1/index.py`，框架收到的路径已去掉 `/v1` 前缀。EdgeOne Python 运行环境为 3.10，使用兼容的 `e2b==2.55.1`；不能直接升级到要求 Python 3.11 的 SDK。依赖由 `cloud-functions/requirements.txt` 安装。[平台 Python 说明](https://pages.edgeone.ai/document/python)。
 

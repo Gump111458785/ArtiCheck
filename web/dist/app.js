@@ -73,8 +73,10 @@ function cancelExecutionRecord(row){if(row.source==='runtime')return request('/a
 function clearExampleRoute(){if(!state.ready)return;const url=new URL(location.href);for(const key of ['example','case','view','role'])url.searchParams.delete(key);history.replaceState(null,'',url);}
 async function init(){
  try{const deployment=await fetch('./deployment.json').then(r=>r.ok?r.json():{}).catch(()=>({}));if(deployment.login_required){const response=await fetch('/v1/auth/me',{headers:{'X-ArtiCheck-Client':'review-api'},credentials:'same-origin'});const auth=await response.json();if(!response.ok||!auth.user){location.replace('./login.html?next='+encodeURIComponent(location.pathname+location.search+location.hash));return;}initialIdentity=auth.user;}[seed,spec]=await Promise.all([fetch('./demo.json').then(r=>r.json()),fetch('./openapi.json').then(r=>r.json())]);
- try{if(new URLSearchParams(location.search).get('mode')==='demo')throw new Error('Demo selected');const health=await request('/api/health');if(health.service==='articheck'){state.mode='runtime';state.tasks=(await request('/api/tasks')).items;state.runs=(await request('/api/runs')).items;state.feedback=(await request('/api/feedback')).items}}
- catch{}
+ if(!deployment.login_required&&new URLSearchParams(location.search).get('mode')!=='demo'){
+  try{const health=await request('/api/health');if(health.service==='articheck'){state.mode='runtime';state.tasks=(await request('/api/tasks')).items;state.runs=(await request('/api/runs')).items;state.feedback=(await request('/api/feedback')).items}}
+  catch{}
+ }
  if(state.mode==='demo'){state.tasks=seed.samples.map(demoTask);state.runs=seed.samples.map(demoRun);state.feedback=readFeedback()}
  state.taskId=state.tasks[0]?.id;state.page=[...navItems.map(n=>n[0]),'project','trace','account'].includes(location.hash.slice(1))?location.hash.slice(1):'home';
  if(state.runs.length){state.run=state.mode==='demo'?state.runs[0]:await request('/api/runs/'+state.runs[0].id);state.taskId=state.run.task_id}
