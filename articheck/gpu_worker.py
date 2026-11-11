@@ -42,6 +42,12 @@ TRANSIENT_STAGE_ERROR = re.compile(
 )
 
 
+PIP_INSTALL_COMMAND = re.compile(
+    r'(?:^|[;&|])\s*(?:(?:[\w./-]*\bpython(?:3(?:\.\d+)?)?)\s+-m\s+pip|'
+    r'[\w./-]*\bpip(?:3(?:\.\d+)?)?)\s+install\b'
+)
+
+
 def stage_interrupted(code, output):
     # SIGKILL can mean OOM and must not repeatedly consume the same resources.
     return code in {-1, -2, -13, -15, 129, 130, 141, 143, 125} or (
@@ -375,6 +381,7 @@ def bwrap_env(runtime=RUNTIME_DIR):
             'MKL_NUM_THREADS': '4',
             'PYTHONUNBUFFERED': '1',
             'PIP_DISABLE_PIP_VERSION_CHECK': '1',
+            'PIP_NO_INPUT': '1',
             'CUDA_VISIBLE_DEVICES': '0'}
 
 
@@ -531,8 +538,8 @@ class GPUWorker:
 
         plan = record['plan']
         started = time.time()
-        deadline = time.monotonic() + min(int(plan.get('max_seconds') or 300),
-                                          max(0, record['deadline'] - time.time()))
+        # The submission deadline applies before a worker takes the job.
+        deadline = float('inf')
         report = {'status': 'running', 'started_at': started, 'stages': [], 'metrics': [],
                   'execution_performed': False, 'scientific_validation': False,
                   'hardware': {'cpu_count': self.capacity['cpu_count'], 'gpu': True,
@@ -565,7 +572,13 @@ class GPUWorker:
             inferred_deps = infer_project_dependencies(work_dir)
             auto_candidates = sorted({pkg for mod, pkg in inferred_deps.items() if mod not in PREINSTALLED_RUNTIME_MODULES})
             provisioned_pkgs = []
-            if auto_candidates and not self.is_cancelled(job_id):
+            stages = plan['stages']
+            installs_dependencies = bool(stages and PIP_INSTALL_COMMAND.search(stages[0]['command']))
+            record.update(status='running', source_url=None,
+                          notice='云端隔离执行器已接单，额外依赖安装到任务专用目录。',
+                          result=report)
+            self.save_record(record)
+            if auto_candidates and not installs_dependencies and not self.is_cancelled(job_id):
                 prep_log = results_dir / '_auto_deps.log'
                 probe_json = json.dumps({m: p for m, p in inferred_deps.items() if m not in PREINSTALLED_RUNTIME_MODULES})
                 prep_cmd = (
@@ -576,7 +589,7 @@ class GPUWorker:
                     f"sys.exit(subprocess.call([sys.executable, \"-m\", \"pip\", \"install\", \"--user\", \"--no-input\", \"--prefer-binary\", *missing]) if missing else 0)'"
                 )
                 try:
-                    p_code, _, _ = self.run_stage_command(work_dir, prep_log, prep_cmd, min(deadline, time.monotonic() + 180), job_id)
+                    p_code, _, _ = self.run_stage_command(work_dir, prep_log, prep_cmd, deadline, job_id)
                     if p_code == 0:
                         provisioned_pkgs = auto_candidates
                 except Exception:
@@ -590,10 +603,7 @@ class GPUWorker:
                                  'inferred_dependencies': sorted(set(inferred_deps.values())),
                                  'auto_provisioned_packages': provisioned_pkgs}
             event('planner', 'plan_scheduled', policy='frozen_api_plan', stages=len(plan['stages']), hardware='GPU')
-            record.update(status='running', source_url=None,
-                          notice='云端隔离执行器已接单，额外依赖安装到任务专用目录。',
-                          result=report)
-            self.save_record(record)
+
 
             all_logs = []
             stage_logs = {}
@@ -660,7 +670,7 @@ class GPUWorker:
                     self.save_record(record)
                     retry_log = results_dir / f"{stage['id']}_retry{retry}.log"
                     code, timed_out, stage_cancelled, log_text, truncated = run_command(stage['command'], retry_log)
-                if row.get('retry_count') and code != 0 and not stage_cancelled:
+                if row.get('retry_count') and code != 0 and not timed_out and not stage_cancelled:
                     row['reason'] = f"命令中断后已自动重试 {row['retry_count']} 次，仍未成功。"
                 if (code != 0 and not timed_out and not stage_cancelled and not row.get('retry_count')
                         and not self.is_cancelled(job_id) and time.monotonic() < deadline):
@@ -696,6 +706,8 @@ class GPUWorker:
                     row.update(status='completed' if code == 0 and not timed_out else 'failed',
                                exit_code=code, timed_out=timed_out, finished_at=time.time(),
                                output=log_text, live_tail=live_tail, output_truncated=truncated)
+                    if timed_out and not row.get('reason'):
+                        row['reason'] = '执行器在达到运行时限后终止了该阶段。'
                     if row['status'] == 'failed':
                         failed_stage_id = stage['id']
                 row['child_peak_rss_kib'] = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
@@ -714,7 +726,11 @@ class GPUWorker:
                 record['notice'] = '实验阶段计划已执行完毕。'
             else:
                 report['status'] = 'failed'
-                record['notice'] = f'阶段 {failed_stage_id or ""} 执行报错中断，请查看问题诊断与实际日志。'.strip()
+                timed_out_stage = next((row for row in report['stages'] if row.get('timed_out')), None)
+                if timed_out_stage:
+                    record['notice'] = f"阶段 {timed_out_stage['id']} 超时。{timed_out_stage['reason']}"
+                else:
+                    record['notice'] = f'阶段 {failed_stage_id or ""} 执行报错中断，请查看问题诊断与实际日志。'.strip()
             report['finished_at'] = time.time()
             report['elapsed_seconds'] = round(report['finished_at'] - started, 3)
             shutil.rmtree(work_dir, ignore_errors=True)
@@ -726,8 +742,10 @@ class GPUWorker:
             transient = failed and bool(re.search(
                 r'((?:HTTP(?:\s+Error|/[\d.]+)?|status(?:\s+code)?)\s*[:=]?\s*429\b|429\s+(?:Client Error|Too Many Requests)|too many requests|rate.?limit|temporary failure|connection timed out)',
                 failure_logs, re.I))
-            report['failure_category'] = 'transient_service' if transient else 'execution_blocked' if failed else None
-            report['needs_user'] = failed and not transient and bool(re.search(
+            timed_out_run = any(row.get('timed_out') for row in report['stages'])
+            report['failure_category'] = ('execution_timeout' if timed_out_run else 'transient_service' if transient
+                                          else 'execution_blocked' if failed else None)
+            report['needs_user'] = failed and not timed_out_run and not transient and bool(re.search(
                 r'(file not found|filenotfound|no such file|permission denied|HTTP(?:\s+Error|/[\d.]+)?\s*[:=]?\s*(?:401|403)\b|credentials|download|dataset|checkpoint|cuda|out of memory|modulenotfounderror|importerror)',
                 failure_logs, re.I))
             report['question'] = '自动下载或 GPU 执行遇到阻碍，请查看失败步骤日志。能否补充缺失的数据、权重或公开获取线索？' if report['needs_user'] else None

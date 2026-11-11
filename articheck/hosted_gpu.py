@@ -66,7 +66,7 @@ class OwnedGPUExecutor:
         record=self.record(execution)
         result=record.get('result') or {}
         state=record['status']
-        if time.time()>record['deadline'] and state not in {'completed','failed','cancelled'}:
+        if state=='queued' and time.time()>record['deadline']:
             self.store.command('SET',self.key(record['id'])+':cancel','1','EX','900')
             state='expired'
         if state in {'completed','failed','expired'}:self.cleanup(record)

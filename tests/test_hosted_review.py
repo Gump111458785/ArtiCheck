@@ -3,6 +3,7 @@ import copy
 import json
 from pathlib import Path
 import tempfile
+import time
 import io
 import unittest
 from unittest.mock import patch
@@ -811,6 +812,30 @@ class HostedReviewTests(unittest.TestCase):
                 self.assertEqual(failed['status'], 'failed')
                 self.assertEqual(failed['result']['stages'][0]['retry_count'], 3)
                 self.assertEqual([ev['retry'] for ev in failed['result']['events'] if ev['kind'] == 'stage_retry'], [1, 2, 3])
+
+                launched4 = hybrid.launch(assessment, {'code': materials()['code']})
+                key = worker.job_key(launched4['gpu_job_id'])
+                record = json.loads(store.kv[key])
+                record['plan']['stages'][0]['command'] = 'pip install -r requirements.txt'
+                worker.save_record(record)
+                calls = []
+
+                def install_stage(work_dir, log_path, command, deadline, job_id):
+                    self.assertEqual(deadline, float('inf'))
+                    calls.append(command)
+                    running = json.loads(store.kv[key])
+                    running['deadline'] = time.time() - 1
+                    store.kv[key] = json.dumps(running)
+                    self.assertEqual(hybrid.poll(launched4)['status'], 'running')
+                    self.assertFalse(worker.is_cancelled(job_id))
+                    return 0, False, False
+
+                with patch('articheck.gpu_worker.infer_project_dependencies',
+                           return_value={'sklearn': 'scikit-learn'}), \
+                     patch.object(worker, 'run_stage_command', side_effect=install_stage):
+                    result = worker.poll_once()
+                self.assertEqual(result['status'], 'completed')
+                self.assertEqual(calls, ['pip install -r requirements.txt'])
 
                 # Fifth-batch: AST/regex import dependency analysis and ModuleNotFoundError parser
                 from articheck.gpu_worker import infer_project_dependencies, parse_missing_modules_from_log
