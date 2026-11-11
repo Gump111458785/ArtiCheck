@@ -2357,7 +2357,8 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .start-case-footer { justify-content: flex-end; }
 
 .start-workspace .start-grid { grid-template-columns: minmax(0,1.3fr) minmax(0,1fr); }
-.start-workspace .start-runtime { justify-content: flex-start; }
+.start-repository { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.start-repository .btn { width: max-content; white-space: nowrap; }
 #online-task-choice .review-task-options { grid-template-columns: minmax(0,1fr); gap: 9px; }
 .review-task-options label { align-items: flex-start; padding: 3px 0; }
 .review-task-options label input { margin-top: 5px; }

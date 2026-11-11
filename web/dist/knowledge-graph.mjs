@@ -130,8 +130,9 @@ export class KnowledgeGraphWorkspace{
   const fixed=new Set(nodes.filter(node=>this.pinned.has(node.id)||node.id===anchor).map(node=>node.id));
   const neighbors=new Map(nodes.map(node=>[node.id,[]]));
   for(const edge of edges){
-   neighbors.get(edge.source)?.push(byId.get(edge.target));
-   neighbors.get(edge.target)?.push(byId.get(edge.source));
+   const weight=this.relationEdge(edge)?3:1;
+   neighbors.get(edge.source)?.push({node:byId.get(edge.target),weight});
+   neighbors.get(edge.target)?.push({node:byId.get(edge.source),weight});
   }
   const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
   const labelWidths=new Map(nodes.map(node=>[node.id,Math.min(112,Math.max(15,Array.from(node.label||'').slice(0,32)
@@ -141,20 +142,25 @@ export class KnowledgeGraphWorkspace{
    if(!fixed.has(node.id))Object.assign(node,this.initialPositions.get(node));
   }
   const movable=nodes.filter(node=>!fixed.has(node.id)&&neighbors.get(node.id).length);
-  for(let pass=0;pass<3;pass++){
+  for(let pass=0;pass<5;pass++){
    for(const node of movable){
     const connected=neighbors.get(node.id);
-    const center={x:connected.reduce((sum,p)=>sum+p.x,0)/connected.length,
-                  y:connected.reduce((sum,p)=>sum+p.y,0)/connected.length};
-    const origins=[center,...connected.slice().sort((a,b)=>distance(a,center)-distance(b,center)).slice(0,4)];
+    const total=connected.reduce((sum,item)=>sum+item.weight,0);
+    const center={
+     x:connected.reduce((sum,item)=>sum+item.node.x*item.weight,0)/total,
+     y:connected.reduce((sum,item)=>sum+item.node.y*item.weight,0)/total,
+    };
+    const origins=[center,...connected.map(item=>item.node)
+     .sort((a,b)=>distance(a,center)-distance(b,center)).slice(0,4)];
     let best=null,bestCost=Infinity;
     const consider=point=>{
      if(nodes.some(other=>other!==node&&(distance(point,other)<34||
        Math.abs(point.y-other.y)<34&&Math.abs(point.x-other.x)<labelWidths.get(node.id)+labelWidths.get(other.id)+8)))return;
-     const cost=connected.reduce((sum,other)=>sum+distance(point,other),0);
+     const cost=connected.reduce((sum,item)=>sum+item.weight*distance(point,item.node)**2,0);
      if(cost<bestCost){best=point;bestCost=cost;}
     };
     consider(node);
+    consider(center);
     for(const origin of origins){
      for(let radius=36;radius<=186;radius+=25){
       for(let step=0;step<12;step++){
