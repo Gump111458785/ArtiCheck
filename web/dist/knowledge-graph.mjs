@@ -141,6 +141,30 @@ export class KnowledgeGraphWorkspace{
    if(!this.initialPositions.has(node))this.initialPositions.set(node,{x:node.x,y:node.y});
    if(!fixed.has(node.id))Object.assign(node,this.initialPositions.get(node));
   }
+  // Seed each connected group from its fixed nodes, so an expanded path
+  // starts compact even when its papers were far apart in the old layout.
+  const placed=new Set(fixed);
+  const queue=nodes.filter(node=>fixed.has(node.id));
+  for(const root of nodes){
+   if(!placed.has(root.id)&&!queue.length){
+    placed.add(root.id);
+    queue.push(root);
+   }
+   for(let index=0;index<queue.length;index++){
+    const parent=queue[index];
+    for(const {node} of neighbors.get(parent.id)){
+     if(placed.has(node.id))continue;
+     placed.add(node.id);
+     queue.push(node);
+     const gap=distance(node,parent);
+     if(gap>120){
+      node.x=parent.x+(node.x-parent.x)*120/gap;
+      node.y=parent.y+(node.y-parent.y)*120/gap;
+     }
+    }
+   }
+   queue.length=0;
+  }
   const movable=nodes.filter(node=>!fixed.has(node.id)&&neighbors.get(node.id).length);
   for(let pass=0;pass<5;pass++){
    for(const node of movable){
