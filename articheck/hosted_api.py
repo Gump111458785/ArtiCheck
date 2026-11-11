@@ -467,6 +467,19 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             raise ReviewError('comparison_not_found', '当前报告没有这项候选冲突。', 404)
         return jsonify(kg.save_verification(owner, cmp_id, payload.get('decision'), payload.get('note', '')))
 
+    @app.post('/kg/relations/verify')
+    def verify_kg_relations():
+        owner = authorize()
+        return jsonify(kg.verify_related(owner, str(body().get('paper_id') or '')))
+
+    @app.post('/kg/relations/edit')
+    def edit_kg_relation():
+        owner = authorize()
+        payload = body()
+        return jsonify(kg.edit_relation(owner, str(payload.get('source') or ''),
+                                        str(payload.get('target') or ''), payload.get('action'),
+                                        payload.get('note', '')))
+
     @app.post('/kg/literature/expand')
     def expand_kg_literature():
         owner = authorize()

@@ -252,6 +252,81 @@ class HostedReviewTests(unittest.TestCase):
         self.assertEqual(store.get(OWNER, job)['review']['method_graph'][0], evidence)
         self.assertEqual(client.get('/kg/graph', headers=other).json['papers'], [])
 
+    def test_graph_relations_survive_new_service_and_manual_removal(self):
+        from articheck.kg_service import KnowledgeGraphService
+
+        class RedisFixture:
+            namespace = 'relation-durability'
+            url = token = 'test'
+
+            def __init__(self):
+                self.values = {}
+                self.expiries = set()
+
+            def command(self, command, *args):
+                if command == 'GET':
+                    return self.values.get(args[0])
+                if command == 'PERSIST':
+                    self.expiries.discard(args[0])
+                    return 1
+                if command == 'SET':
+                    self.values[args[0]] = args[1]
+                    if len(args) > 2:
+                        self.expiries.add(args[0])
+                    return 'OK'
+                if command == 'EVAL':
+                    _, _, key, expected, value = args
+                    if self.values.get(key, '') != expected:
+                        return 0
+                    self.values[key] = value
+                    self.expiries.discard(key)
+                    return 1
+                raise AssertionError(command)
+
+        store = RedisFixture()
+        svc = KnowledgeGraphService({}, store, reviewer=Reviewer(), budget=Budget())
+        evidence = {
+            'local_id': 'method', 'title': 'Residual shortcut normalization', 'section': 'Methods',
+            'quote': 'Residual shortcut normalization stabilizes model training across layers.',
+            'page': 3, 'method_grounded': True,
+        }
+        ids = []
+        for title in ('Study A', 'Study B'):
+            graph = svc.ingest_project(OWNER, {'project_id': title, 'report': {
+                'review': {'paper_title': title, 'method_graph': [evidence]}}})
+            ids.append(graph['focus_paper_id'])
+        left, right = ids
+        def grounded(_reviewer, _budget, papers, pairs):
+            methods = {paper['id']: paper['existing'][0]['local_id'] for paper in papers}
+            return {}, [{'left_paper': a, 'right_paper': b, 'left_id': methods[a],
+                         'right_id': methods[b], 'description': 'Both methods normalize residual shortcuts.'}
+                        for a, b in pairs]
+
+        with patch('articheck.kg_service.synthesize', side_effect=grounded) as verify:
+            graph = svc.verify_related(OWNER, left)
+            restarted = KnowledgeGraphService({}, store, reviewer=Reviewer(), budget=Budget())
+            restarted.verify_related(OWNER, left)
+            self.assertEqual(verify.call_count, 1)
+            relation = next(edge for edge in graph['edges'] if edge['edge_type'] == 'SIMILAR_CONTRIBUTION')
+            self.assertEqual(relation['excerpts'], [evidence['quote'], evidence['quote']])
+            self.assertTrue(any(edge['id'] == relation['id'] for edge in restarted.build_graph_response(OWNER)['edges']))
+            self.assertFalse(store.expiries)
+            self.assertFalse(restarted.build_graph_response('another-account')['nodes'])
+            contribution_pair = (relation['source'], relation['target'])
+            restarted.edit_relation(OWNER, *contribution_pair, 'remove')
+            self.assertFalse(any(edge['id'] == relation['id'] for edge in restarted.verify_related(OWNER, left)['edges']))
+            restarted.edit_relation(OWNER, left, right, 'add', 'Manual paper comparison')
+            self.assertTrue(any(edge['edge_type'] == 'MANUAL_RELATION'
+                                for edge in svc.build_graph_response(OWNER)['edges']))
+            restarted.edit_relation(OWNER, left, right, 'remove')
+            restarted.edit_relation(OWNER, *contribution_pair, 'add')
+            self.assertEqual(sum(edge['edge_type'] == 'MANUAL_RELATION'
+                                 for edge in svc.build_graph_response(OWNER)['edges']), 1)
+            restarted.edit_relation(OWNER, *contribution_pair, 'remove')
+            self.assertFalse(any(edge['edge_type'] in ('MANUAL_RELATION', 'SIMILAR_CONTRIBUTION')
+                                 for edge in restarted.verify_related(OWNER, left)['edges']))
+            self.assertEqual(verify.call_count, 1)
+
     def test_manual_public_read_status_survives_merging_into_owned_paper(self):
         from articheck.kg_service import KnowledgeGraphService
         store = MemoryStore()

@@ -143,7 +143,7 @@ def synthesize(reviewer, budget, papers, pairs):
         [row for row in rows if isinstance(row, dict) and row.get('paper_id') == paper['id']], paper['chunks'])
         for paper in papers if paper['chunks']}
     allowed = {frozenset(pair) for pair in pairs}
-    known = {paper['id']: {row['local_id']: method_key(row) for row in contributions.get(paper['id'], []) + paper['existing']}
+    known = {paper['id']: {row['local_id']: row.get('method_id') or method_key(row) for row in contributions.get(paper['id'], []) + paper['existing']}
              for paper in papers}
     relations = []
     rows = value.get('relations')

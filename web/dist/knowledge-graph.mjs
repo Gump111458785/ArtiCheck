@@ -4,12 +4,25 @@ import {sessionCapability} from './online-core.mjs';
 const NODE_TYPES={Paper:['论文','#2258b4'],Contribution:['主贡献','#7754ba'],Detail:['细分贡献','#157b78']};
 const RELATIONS={previous:'前序引用',next:'后续引用',similar:'相似研究'};
 
+function broadDirection(value){
+ const text=String(value||'').toLowerCase();
+ const categories=[
+  ['CV',/\bcv\b|computer vision|vision|image|segmentation|object detection|视觉|图像|目标检测|语义分割/],
+  ['NLP',/\bnlp\b|language|linguistic|text|自然语言|文本|语言模型/],
+  ['生物医学',/biolog|bioinformatics|protein|medical|clinical|生物|蛋白|医学/],
+  ['机器人',/robot|autonomous driv|机器人|自动驾驶/],
+  ['机器学习',/machine learning|deep learning|reinforcement|机器学习|深度学习|强化学习/],
+  ['系统与工程',/system|hardware|compiler|系统|硬件|编译/],
+ ];
+ return categories.find(([,pattern])=>pattern.test(text))?.[0]||(text?'其他':'未知');
+}
+
 export class KnowledgeGraphWorkspace{
- constructor(h){this.h=h;this.data=null;this.loading=false;this.error='';this.filters={year:'',direction:'',venue:''};this.generation=0;this.selected=null;this.inspectorTab='detail';this.expanded=new Set();this.pinned=new Set();this.zoom=1;this.pan={x:0,y:0};this.query='';this.focusMode=false;this.mutating=false;this.searching=false;this.expansionPaper=null;this.notice='';this.enableKg=true;this.focusProject=null;this.drag=null;this.layoutQueue=Promise.resolve();}
+ constructor(h){this.h=h;this.data=null;this.loading=false;this.error='';this.filters={year:'',direction:'',venue:''};this.generation=0;this.selected=null;this.inspectorTab='detail';this.expanded=new Set();this.pinned=new Set();this.zoom=1;this.pan={x:0,y:0};this.query='';this.focusMode=false;this.mutating=false;this.searching=false;this.expansionPaper=null;this.notice='';this.enableKg=true;this.focusProject=null;this.drag=null;this.layoutQueue=Promise.resolve();this.initialPositions=new WeakMap();}
  esc(v){return this.h.esc(v??'');}
  headers(json){let s='';try{s=sessionCapability();}catch{}return {'X-ArtiCheck-Client':'review-api',...(s?{'X-ArtiCheck-Session':s}:{}),...(json?{'Content-Type':'application/json'}:{})};}
  async api(path,payload){const res=await fetch('/v1/kg'+path,{method:payload===undefined?'GET':'POST',headers:this.headers(payload!==undefined),body:payload===undefined?undefined:JSON.stringify(payload),keepalive:path==='/layout',credentials:'same-origin'});let v;try{v=await res.json();}catch{throw Error('知识图谱服务暂未返回有效响应。');}if(!res.ok)throw Error(v?.error?.message||'知识图谱请求失败。');return v;}
- clear(){this.generation++;this.data=null;this.selected=null;this.mutating=false;this.searching=false;this.expansionPaper=null;this.notice='';this.loading=false;this.error='';this.expanded.clear();this.pinned.clear();this.query='';this.focusMode=false;this.inspectorTab='detail';this.zoom=1;this.pan={x:0,y:0};this.filters={year:'',direction:'',venue:''};}
+ clear(){this.generation++;this.data=null;this.selected=null;this.linkSource=null;this.contextNode=null;this.mutating=false;this.searching=false;this.expansionPaper=null;this.notice='';this.loading=false;this.error='';this.expanded.clear();this.pinned.clear();this.query='';this.focusMode=false;this.inspectorTab='detail';this.zoom=1;this.pan={x:0,y:0};this.filters={year:'',direction:'',venue:''};}
  async open(projectId){
   await this.layoutQueue;
   this.clear();
@@ -26,17 +39,18 @@ export class KnowledgeGraphWorkspace{
    if(version!==this.generation)return;
    this.data=data;this.pinned=new Set(data.layout?.pinned||[]);
    if(!this.node(this.selected))this.selected=data.focus_paper_id||null;
-   this.prioritizeContributions();
+
   }catch(error){if(version===this.generation){this.data=null;this.error=error.message;}}
   finally{if(version===this.generation){this.loading=false;this.h.render();}}
+  if(payload&&version===this.generation&&this.selected)await this.verifyRelations(this.selected);
  }
  matchingPapers(){
-  return (this.data?.timeline||[]).filter(p=>Object.entries(this.filters).every(([key,value])=>!value||value===String(p[key]||'unknown')));
+  return (this.data?.timeline||[]).filter(p=>Object.entries(this.filters).every(([key,value])=>!value||value===(key==='direction'?broadDirection(p.direction):String(p[key]||'unknown'))));
  }
  filterControls(){
   const e=v=>this.esc(v),papers=this.data?.timeline||[];
   return [['year','年份'],['direction','研究方向'],['venue','期刊 / 会议']].map(([key,label])=>{
-   const values=[...new Set(papers.map(p=>String(p[key]||'unknown')))].sort((a,b)=>key==='year'?Number(b)-Number(a):a.localeCompare(b,'zh'));
+   const values=[...new Set(papers.map(p=>(key==='direction'?broadDirection(p.direction):String(p[key]||'unknown'))))].sort((a,b)=>key==='year'?Number(b)-Number(a):a.localeCompare(b,'zh'));
    return `<label class="kg-filter"><span>${label}</span><select data-kg-filter="${key}"><option value="">全部</option>${values.map(v=>`<option value="${e(v)}" ${this.filters[key]===v?'selected':''}>${v==='unknown'?'未知':e(v)}</option>`).join('')}</select></label>`;
   }).join('');
  }
@@ -51,17 +65,6 @@ export class KnowledgeGraphWorkspace{
    return this.expanded.has(n.paper_id)&&this.expanded.has(n.parent_id);
   });
  }
- prioritizeContributions(){
-  for(const edge of this.data?.edges||[]){
-   if(edge.edge_type!=='SIMILAR_CONTRIBUTION')continue;
-   for(const id of [edge.source,edge.target]){
-    const node=this.node(id);
-    if(!node?.paper_id)continue;
-    this.expanded.add(node.paper_id);
-    if(node.node_type==='Detail')this.expanded.add(node.parent_id);
-   }
-  }
- }
  paperDetailsExpanded(paper){
   return Boolean(paper&&this.expanded.has(paper.id)&&this.data.nodes.some(node=>
    node.node_type==='Detail'&&node.paper_id===paper.id&&this.expanded.has(node.parent_id)));
@@ -69,11 +72,19 @@ export class KnowledgeGraphWorkspace{
  canvasControls(){
   const paper=this.node(this.selected);
   const expanded=this.paperDetailsExpanded(paper);
-  return `${paper?.node_type==='Paper'?`<div class="kg-canvas-tools"><div class="kg-canvas-actions"><button class="btn small" type="button" data-kg-expand-paper aria-expanded="${expanded}" ${this.mutating?'disabled':''}>${expanded?'收起子贡献':'展开子贡献'}</button><button class="btn small" type="button" data-kg-action="expand-literature" aria-expanded="${this.expansionPaper===paper.id}" ${this.mutating?'disabled':''}>扩展此论文</button></div>${this.expansionPaper===paper.id?this.literatureForm(paper):''}</div>`:''}
+  const chosen=paper;
+  return `<div class="kg-canvas-tools"><div class="kg-canvas-actions">
+   ${paper?.node_type==='Paper'?`<button class="btn small" type="button" data-kg-expand-paper aria-expanded="${expanded}">${expanded?'收起子贡献':'展开子贡献'}</button><button class="btn small" type="button" data-kg-action="expand-literature" aria-expanded="${this.expansionPaper===paper.id}" ${this.mutating?'disabled':''}>扩展此论文</button>`:''}
+   <button class="btn small" type="button" data-kg-action="link-start" ${!chosen||this.mutating?'disabled':''}>${this.linkSource?'取消连线':'建立联系'}</button>
+   <button class="btn small danger" type="button" data-kg-action="delete-node" ${!chosen||this.mutating?'disabled':''}>删除节点</button>
+   </div>
+   ${this.linkSource?'<small class="kg-link-instruction" role="status">请选择另一篇论文或另一个贡献节点</small>':''}
+   ${this.contextNode&&chosen?`<div class="kg-node-menu"><button class="btn small" data-kg-action="link-start">建立联系</button><button class="btn small" data-kg-tab="relations">查看或删除联系</button><button class="btn small" data-kg-action="pin">${this.pinned.has(chosen.id)?'取消固定':'固定位置'}</button></div>`:''}
+   ${paper&&this.expansionPaper===paper.id?this.literatureForm(paper):''}</div>
   ${this.searching?`<div class="kg-search-progress" role="status" aria-live="polite"><span>正在检索公开文献…</span><progress aria-label="公开文献检索进度"></progress></div>`:''}
   <button type="button" class="btn small kg-home-view" data-kg-action="home-view">${this.h.icon?.('home')||''}回到起始位置</button>`;
  }
- neighbors(id){const s=new Set([id]);for(const e of this.data?.edges||[]){if(e.source===id)s.add(e.target);if(e.target===id)s.add(e.source);}return s;}
+
  render(){
   const e=v=>this.esc(v),d=this.data;
   const toolbar=`<div class="kg-filters"><label class="kg-filter"><span>搜索</span><input type="search" aria-label="搜索论文名称" data-kg-search value="${e(this.query)}" placeholder="论文名称"></label>${this.filterControls()}</div>`;
@@ -82,48 +93,99 @@ export class KnowledgeGraphWorkspace{
   const count=this.matchingPapers().filter(p=>!p.hidden).length;
   return `<section class="kg-workspace">${toolbar}${this.notice?`<p class="kg-notice" role="alert">${e(this.notice)}</p>`:''}<div class="kg-stats"><span><strong>${count}</strong> / ${d.stats?.paper_count||0} 篇论文</span>${this.focusMode?'<button class="btn text small" data-kg-action="exit-focus">退出聚焦模式</button>':''}</div><div class="kg-main">${count?this.canvasView():'<div class="kg-empty">没有匹配的论文。可以调整筛选，或从论文报告打开一篇论文。</div>'}<aside class="kg-inspector">${this.inspector()}</aside></div></section>`;
  }
- placeDetailNodes(nodes,edges){
-  const moving=nodes.filter(node=>node.node_type==='Detail'&&!this.pinned.has(node.id));
-  if(!moving.length)return;
-  const byId=new Map(nodes.map(node=>[node.id,node]));
-  const occupied=nodes.filter(node=>node.node_type!=='Detail'||this.pinned.has(node.id));
-  const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-  const labelWidths=new Map(nodes.map(item=>{
-   const chars=Array.from(item.label||'').slice(0,32);
-   const width=chars.reduce((sum,char)=>sum+(char.codePointAt(0)>255?7:4),6);
-   return [item.id,Math.min(112,Math.max(15,width))];
-  }));
-  for(const node of moving){
-   const parent=byId.get(node.parent_id);
-   if(!parent)continue;
-   const neighbors=edges.filter(edge=>edge.source===node.id||edge.target===node.id)
-    .map(edge=>byId.get(edge.source===node.id?edge.target:edge.source));
-   let best=null,bestCost=Infinity;
-   for(let radius=42;radius<=280;radius+=28){
-    for(let slot=0;slot<16;slot++){
-     const angle=slot*Math.PI/8;
-     const candidate={x:parent.x+radius*Math.cos(angle),y:parent.y+radius*Math.sin(angle)};
-     if(occupied.some(other=>distance(candidate,other)<34||
-      Math.abs(candidate.y-other.y)<32&&Math.abs(candidate.x-other.x)<labelWidths.get(node.id)+labelWidths.get(other.id)+8))continue;
-     const cost=neighbors.reduce((sum,other)=>sum+distance(candidate,other),0);
-     if(cost<bestCost){best=candidate;bestCost=cost;}
-    }
+ paperId(id){
+  const node=this.node(id);
+  return node?.paper_id||node?.id;
+ }
+ relationEdge(edge){
+  return ['CITED_BY','SIMILAR_CONTRIBUTION','MANUAL_RELATION'].includes(edge.edge_type);
+ }
+ displayedEdges(ids){
+  const edges=[],projected=new Map();
+  const fullPairs=new Set();
+  for(const edge of this.data.edges||[]){
+   if(!this.relationEdge(edge)){
+    if(ids.has(edge.source)&&ids.has(edge.target))edges.push(edge);
+    continue;
    }
-   if(best)Object.assign(node,best);
-   occupied.push(node);
+   const source=this.paperId(edge.source),target=this.paperId(edge.target);
+   if(!ids.has(source)||!ids.has(target))continue;
+   const pair=[source,target].sort().join(':');
+   if(edge.edge_type!=='CITED_BY'&&source!==edge.source&&target!==edge.target&&ids.has(edge.source)&&ids.has(edge.target)){
+    edges.push(edge);
+    fullPairs.add(pair);
+   }else if(source!==target){
+    const prior=projected.get(pair);
+    if(!prior||prior.edge_type==='CITED_BY'&&edge.edge_type!=='CITED_BY'){
+     projected.set(pair,{...edge,source,target});
+    }
+   }else if(ids.has(edge.source)&&ids.has(edge.target))edges.push(edge);
+  }
+  for(const [pair,edge] of projected)if(!fullPairs.has(pair))edges.push(edge);
+  return edges;
+ }
+ placeDetailNodes(nodes,edges){
+  const byId=new Map(nodes.map(node=>[node.id,node]));
+  const anchor=this.data?.focus_paper_id;
+  const fixed=new Set(nodes.filter(node=>this.pinned.has(node.id)||node.id===anchor).map(node=>node.id));
+  const neighbors=new Map(nodes.map(node=>[node.id,[]]));
+  for(const edge of edges){
+   neighbors.get(edge.source)?.push(byId.get(edge.target));
+   neighbors.get(edge.target)?.push(byId.get(edge.source));
+  }
+  const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  const labelWidths=new Map(nodes.map(node=>[node.id,Math.min(112,Math.max(15,Array.from(node.label||'').slice(0,32)
+   .reduce((width,char)=>width+(char.codePointAt(0)>255?7:4),6)))]));
+  for(const node of nodes){
+   if(!this.initialPositions.has(node))this.initialPositions.set(node,{x:node.x,y:node.y});
+   if(!fixed.has(node.id))Object.assign(node,this.initialPositions.get(node));
+  }
+  const movable=nodes.filter(node=>!fixed.has(node.id)&&neighbors.get(node.id).length);
+  for(let pass=0;pass<3;pass++){
+   for(const node of movable){
+    const connected=neighbors.get(node.id);
+    const center={x:connected.reduce((sum,p)=>sum+p.x,0)/connected.length,
+                  y:connected.reduce((sum,p)=>sum+p.y,0)/connected.length};
+    const origins=[center,...connected.slice().sort((a,b)=>distance(a,center)-distance(b,center)).slice(0,4)];
+    let best=null,bestCost=Infinity;
+    const consider=point=>{
+     if(nodes.some(other=>other!==node&&(distance(point,other)<34||
+       Math.abs(point.y-other.y)<34&&Math.abs(point.x-other.x)<labelWidths.get(node.id)+labelWidths.get(other.id)+8)))return;
+     const cost=connected.reduce((sum,other)=>sum+distance(point,other),0);
+     if(cost<bestCost){best=point;bestCost=cost;}
+    };
+    consider(node);
+    for(const origin of origins){
+     for(let radius=36;radius<=186;radius+=25){
+      for(let step=0;step<12;step++){
+       const angle=step*Math.PI/6;
+       consider({x:origin.x+radius*Math.cos(angle),y:origin.y+radius*Math.sin(angle)});
+      }
+     }
+    }
+    if(best)Object.assign(node,best);
+   }
   }
  }
  canvasView(){
   const e=v=>this.esc(v),visible=this.visibleNodes(),ids=new Set(visible.map(n=>n.id));
-  const edges=(this.data.edges||[]).filter(edge=>edge.edge_type!=='CITED_BY'&&ids.has(edge.source)&&ids.has(edge.target));
+  const edges=this.displayedEdges(ids);
   this.placeDetailNodes(visible,edges);
   const similarityCount=edges.filter(edge=>edge.edge_type==='SIMILAR_CONTRIBUTION').length;
   const hasSimilarity=similarityCount>0;
   edges.sort((a,b)=>Number(a.edge_type==='SIMILAR_CONTRIBUTION')-Number(b.edge_type==='SIMILAR_CONTRIBUTION'));
-  const neighbors=this.selected?this.neighbors(this.selected):null,q=this.query.trim().toLowerCase();
+  const selectedPaper=this.paperId(this.selected),related=new Set([selectedPaper]);
+  for(const edge of this.data.edges){
+   if(!this.relationEdge(edge))continue;
+   const left=this.paperId(edge.source),right=this.paperId(edge.target);
+   if(left===selectedPaper)related.add(right);
+   if(right===selectedPaper)related.add(left);
+  }
+  const inFocus=id=>!this.focusMode||related.has(this.paperId(id));
+  const q=this.query.trim().toLowerCase();
   const hit=n=>!q||n.node_type==='Paper'&&[n.full_title,n.label].join(' ').toLowerCase().includes(q);
   const labels=new Map(),occupied=[];
-  const priority=n=>n.id===this.selected?0:n.node_type==='Paper'?1:neighbors?.has(n.id)?2:3;
+  const priority=n=>n.id===this.selected?0:n.node_type==='Paper'?1:inFocus(n.id)?2:3;
   for(const n of [...visible].sort((a,b)=>priority(a)-priority(b))){
    if(n.id!==this.selected&&!hit(n))continue;
    const label=Array.from(n.label||'').slice(0,32).join(''),w=Math.min(225,Math.max(30,Array.from(label).reduce((sum,char)=>sum+(char.codePointAt(0)>255?14:8),12)));
@@ -133,12 +195,12 @@ export class KnowledgeGraphWorkspace{
   }
   const nodes=[...visible].sort((a,b)=>priority(b)-priority(a));
   return `<div class="kg-canvas ${hasSimilarity?'has-similarity':''}" data-kg-canvas aria-busy="${this.searching}"><svg class="kg-svg" data-kg-svg viewBox="0 0 1040 680" role="group" aria-label="学术贡献知识图谱"><g data-kg-viewport transform="translate(${this.pan.x} ${this.pan.y}) scale(${this.zoom})">${edges.map(edge=>{
-   const a=this.node(edge.source),b=this.node(edge.target),active=edge.source===this.selected||edge.target===this.selected;
-   const similar=edge.edge_type==='SIMILAR_CONTRIBUTION';
-   return `<g class="kg-edge ${similar?'similar':''} ${active?'active':this.selected?'dim':''}"><line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/><title>${e(edge.description||edge.label)}</title>${(active||similar&&similarityCount<=3)?`<text x="${(a.x+b.x)/2}" y="${(a.y+b.y)/2-5}" class="kg-edge-label">${e(edge.label)}</text>`:''}</g>`;
+   const a=this.node(edge.source),b=this.node(edge.target),active=this.focusMode&&inFocus(edge.source)&&inFocus(edge.target);
+   const similar=edge.edge_type==='SIMILAR_CONTRIBUTION'||edge.edge_type==='MANUAL_RELATION';
+   return `<g class="kg-edge ${similar?'similar':''} ${active?'active':!inFocus(edge.source)||!inFocus(edge.target)?'dim':''}"><line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/><title>${e(edge.description||edge.label)}</title>${(active||similar&&similarityCount<=3)?`<text x="${(a.x+b.x)/2}" y="${(a.y+b.y)/2-5}" class="kg-edge-label">${e(edge.label)}</text>`:''}</g>`;
   }).join('')}${nodes.map(n=>{
    const r=n.node_type==='Paper'?11:n.node_type==='Contribution'?7:5,selected=n.id===this.selected;
-   return `<g class="kg-node ${n.node_type==='Paper'?(n.read?'read':'unread'):''} ${selected?'selected':!hit(n)||this.focusMode&&!neighbors?.has(n.id)?'dim':''}" data-kg-node="${e(n.id)}" transform="translate(${n.x} ${n.y})" tabindex="0" role="button" aria-pressed="${selected}" aria-label="${e(n.full_title||n.label)}">${selected?`<circle class="kg-node-halo" r="${r+4}"/>`:''}<circle class="kg-node-mark" r="${r}" fill="${n.node_type==='Paper'&&!n.read?'#b36b19':NODE_TYPES[n.node_type][1]}"/>${labels.has(n.id)?`<text y="25" text-anchor="middle">${e(labels.get(n.id))}</text>`:''}<title>${e(n.full_title||n.label)}</title></g>`;
+   return `<g class="kg-node ${n.node_type==='Paper'?(n.read?'read':'unread'):''} ${selected?'selected':!hit(n)||!inFocus(n.id)?'dim':''}" data-kg-node="${e(n.id)}" transform="translate(${n.x} ${n.y})" tabindex="0" role="button" aria-pressed="${selected}" aria-label="${e(n.full_title||n.label)}">${selected?`<circle class="kg-node-halo" r="${r+4}"/>`:''}<circle class="kg-node-mark" r="${r}" fill="${n.node_type==='Paper'&&!n.read?'#b36b19':NODE_TYPES[n.node_type][1]}"/>${labels.has(n.id)?`<text y="25" text-anchor="middle">${e(labels.get(n.id))}</text>`:''}<title>${e(n.full_title||n.label)}</title></g>`;
   }).join('')}</g></svg>${this.canvasControls()}<div class="kg-legend"><span><i style="background:#2258b4"></i>已读论文</span><span><i style="background:#b36b19"></i>未读论文</span>${Object.values(NODE_TYPES).slice(1).map(([name,color])=>`<span><i style="background:${color}"></i>${name}</span>`).join('')}</div></div>`;
  }
  paperManagement(paper){
@@ -159,11 +221,11 @@ export class KnowledgeGraphWorkspace{
    body='<p class="kg-notice">选择论文或贡献，查看完整标题和依据。</p>';
   }else if(this.inspectorTab==='relations'){
    const belongs=id=>id===n.id||(n.node_type==='Paper'&&this.node(id)?.paper_id===n.id);
-   const edges=this.data.edges.filter(edge=>['CITED_BY','SIMILAR_CONTRIBUTION'].includes(edge.edge_type)&&(belongs(edge.source)||belongs(edge.target)))
+   const edges=this.data.edges.filter(edge=>this.relationEdge(edge)&&(belongs(edge.source)||belongs(edge.target)))
     .sort((a,b)=>Number(b.edge_type==='SIMILAR_CONTRIBUTION')-Number(a.edge_type==='SIMILAR_CONTRIBUTION'));
-   body=(!edges.some(edge=>edge.edge_type==='SIMILAR_CONTRIBUTION')&&edges.length?'<p class="kg-notice">现有来源只核实了论文引用，尚未找到足够的贡献相似依据。</p>':'')+edges.map(edge=>{
+   body=(edges.length&&edges.every(edge=>edge.edge_type==='CITED_BY')?'<p class="kg-notice">现有来源只核实了论文引用，尚未找到足够的贡献相似依据。</p>':'')+edges.map(edge=>{
     const from=this.node(edge.source),to=this.node(edge.target),other=belongs(edge.source)?to:from;
-    return `<article class="kg-cmp-card"><h3>${e(edge.label)}</h3><p>${e(from.full_title)} ${edge.edge_type==='CITED_BY'?'→':'↔'} ${e(to.full_title)}</p><p>${e(edge.description)}</p>${edge.excerpts?.length?`<details><summary>查看双方依据</summary>${edge.excerpts.map((quote,index)=>`<p class="kg-meta">${e((index?to:from).paper_title||'')}</p><blockquote>${e(quote)}</blockquote><p class="kg-meta">${e(edge.evidence?.[index]?.section||'')} ${edge.evidence?.[index]?.page?' · 第 '+e(edge.evidence[index].page)+' 页':''} ${edge.evidence?.[index]?.source_url?`<a href="${e(edge.evidence[index].source_url)}" target="_blank" rel="noopener noreferrer">原文</a>`:''}</p>`).join('')}</details>`:''}<div class="kg-insp-actions"><button class="btn small" data-kg-select="${e(other.id)}">定位关联节点</button>${edge.source_url?`<a class="btn small" href="${e(edge.source_url)}" target="_blank" rel="noopener noreferrer">公开出处</a>`:''}</div></article>`;
+    return `<article class="kg-cmp-card"><h3>${e(edge.label)}</h3><p>${e(from.full_title)} ${edge.edge_type==='CITED_BY'?'→':'↔'} ${e(to.full_title)}</p><p>${e(edge.description)}</p>${edge.excerpts?.length?`<details><summary>查看双方依据</summary>${edge.excerpts.map((quote,index)=>`<p class="kg-meta">${e((index?to:from).paper_title||'')}</p><blockquote>${e(quote)}</blockquote><p class="kg-meta">${e(edge.evidence?.[index]?.section||'')} ${edge.evidence?.[index]?.page?' · 第 '+e(edge.evidence[index].page)+' 页':''} ${edge.evidence?.[index]?.source_url?`<a href="${e(edge.evidence[index].source_url)}" target="_blank" rel="noopener noreferrer">原文</a>`:''}</p>`).join('')}</details>`:''}<div class="kg-insp-actions"><button class="btn small" data-kg-select="${e(other.id)}">定位关联节点</button>${edge.source_url?`<a class="btn small" href="${e(edge.source_url)}" target="_blank" rel="noopener noreferrer">公开出处</a>`:''}<button class="btn small danger" data-kg-remove-source="${e(edge.source)}" data-kg-remove-target="${e(edge.target)}">删除联系</button></div></article>`;
    }).join('')||'<p class="kg-notice">此节点暂无可展示的引用或相似依据。可从论文节点检索公开脉络。</p>';
   }else if(n.node_type==='Paper'){
    const metadata=[['year','年份'],['direction','研究方向'],['venue','期刊 / 会议']];
@@ -174,7 +236,7 @@ export class KnowledgeGraphWorkspace{
   }else{
    body=`<h3>${e(n.full_title)}</h3><p class="kg-meta">${e(n.paper_title)}</p>${n.quote?`<blockquote>${e(n.quote)}</blockquote><p>${e(n.section||'方法正文')}${n.page?' · PDF 第 '+e(n.page)+' 页':''}</p>`:''}${n.source_url?`<a href="${e(n.source_url)}" target="_blank" rel="noopener noreferrer">方法正文来源</a>`:''}${this.data.nodes.some(child=>child.parent_id===n.id)?`<div class="kg-insp-actions"><button class="btn small" data-kg-expand="${e(n.id)}">${this.expanded.has(n.id)?'收起细分贡献':'展开细分贡献'}</button></div>`:''}`;
   }
-  return `<div class="kg-insp-tabs">${tabs.map(([key,label])=>`<button type="button" class="${this.inspectorTab===key?'active':''}" data-kg-tab="${key}">${label}</button>`).join('')}</div><div class="kg-insp-body">${body}${n?`<div class="kg-delete-actions"><button type="button" class="btn small danger" data-kg-action="delete-node" ${this.mutating?'disabled':''}>删除节点</button></div>`:''}</div>`;
+  return `<div class="kg-insp-tabs">${tabs.map(([key,label])=>`<button type="button" class="${this.inspectorTab===key?'active':''}" data-kg-tab="${key}">${label}</button>`).join('')}</div><div class="kg-insp-body">${body}</div>`;
  }
  savePosition(id){
   const node=this.node(id);
@@ -202,7 +264,6 @@ export class KnowledgeGraphWorkspace{
    this.notice=data.method_notice||'';
    if(!this.node(this.selected))this.selected=data.focus_paper_id||null;
    if(this.searching){
-    this.prioritizeContributions();
     this.pan={x:0,y:0};this.zoom=1;
    }
   }catch(error){if(version===this.generation)this.notice=error.message;}
@@ -219,11 +280,20 @@ export class KnowledgeGraphWorkspace{
   svg.addEventListener('pointercancel',()=>{const d=this.drag;this.drag=null;if(d?.node&&d.moved){this.savePosition(d.node);this.redrawGraph();}});
   svg.addEventListener('pointerup',()=>{const d=this.drag;this.drag=null;if(d?.node){if(d.moved){this.savePosition(d.node);this.redrawGraph();}else this.select(d.node);}});
   svg.addEventListener('keydown',ev=>{const node=ev.target.closest('[data-kg-node]');if(!node||!['Enter',' '].includes(ev.key))return;ev.preventDefault();this.select(node.dataset.kgNode);document.querySelector(`[data-kg-node="${CSS.escape(node.dataset.kgNode)}"]`)?.focus();});
-  svg.addEventListener('contextmenu',ev=>{const g=ev.target.closest('[data-kg-node]');if(!g)return;ev.preventDefault();const id=g.dataset.kgNode;this.pinned.has(id)?this.pinned.delete(id):this.pinned.add(id);this.savePosition(id);this.h.toast?.(this.pinned.has(id)?'节点已固定':'节点已取消固定');this.redrawGraph();});
+  svg.addEventListener('contextmenu',ev=>{
+   const target=ev.target.closest('[data-kg-node]');
+   if(!target)return;
+   ev.preventDefault();
+   this.linkSource=null;
+   this.selected=target.dataset.kgNode;
+   this.contextNode=this.selected;
+   this.focusMode=true;
+   this.h.render();
+  });
  }
  applyTransform(){const v=document.querySelector('[data-kg-viewport]');if(v)v.setAttribute('transform',`translate(${this.pan.x} ${this.pan.y}) scale(${this.zoom})`);}
  redrawGraph(){const c=document.querySelector('[data-kg-canvas]');if(!c){this.h.render();return;}const t=document.createElement('template');t.innerHTML=this.canvasView();const next=t.content.firstElementChild;c.replaceWith(next);this.afterRender();}
- select(id,center=false){const n=this.node(id);if(!n)return;if(this.selected!==id)this.expansionPaper=null;this.selected=id;this.inspectorTab='detail';
+ select(id,center=false){const n=this.node(id);if(!n)return;if(this.linkSource&&id!==this.linkSource)return this.addRelation(id);this.focusMode=true;this.contextNode=null;if(this.selected!==id)this.expansionPaper=null;this.selected=id;this.inspectorTab='detail';
   if(n.node_type!=='Paper'){this.expanded.add(n.paper_id);if(n.node_type==='Detail')this.expanded.add(n.parent_id);}
   if(center){this.pan={x:520-n.x*this.zoom,y:340-n.y*this.zoom};}this.h.render();}
  async togglePaperDetails(){
@@ -234,23 +304,48 @@ export class KnowledgeGraphWorkspace{
    this.h.render();
    return;
   }
-  const version=this.generation;
-  if(!this.data.nodes.some(node=>node.parent_id===paper.id)){
-   await this.changeLiterature('/literature/expand',{paper_id:paper.id,kinds:[],limit:3});
-  }
-  if(version!==this.generation||this.selected!==paper.id)return;
   const children=this.data.nodes.filter(node=>node.parent_id===paper.id);
-  if(children.length){
-   this.expanded.add(paper.id);
-   for(const child of children)this.expanded.add(child.id);
-  }
   if(!children.some(child=>this.data.nodes.some(node=>node.parent_id===child.id))){
-   this.notice=this.notice||'这篇论文暂无可展示的子贡献。';
+   this.h.toast?.('这篇论文暂无可展示的子贡献。');
+   return;
   }
+  this.expanded.add(paper.id);
+  for(const child of children)this.expanded.add(child.id);
   this.h.render();
  }
  toggleExpand(id){this.expanded.has(id)?this.expanded.delete(id):this.expanded.add(id);this.selected=id;this.h.render();}
+ async verifyRelations(paperId){
+  if(this.node(paperId)?.node_type!=='Paper')return;
+  return this.changeLiterature('/relations/verify',{paper_id:paperId});
+ }
+ async addRelation(target){
+  if(this.mutating)return;
+  const source=this.linkSource;
+  const left=this.node(source),right=this.node(target);
+  if(!left||!right||(left.node_type==='Paper')!==(right.node_type==='Paper')){
+   this.h.toast?.('请选择同类节点建立联系。');
+   return;
+  }
+  this.linkSource=null;
+  await this.changeLiterature('/relations/edit',{source,target,action:'add'});
+  this.inspectorTab='relations';
+  this.h.render();
+ }
  async action(a){
+  if(a==='link-start'){
+   this.linkSource=this.linkSource?null:this.selected;
+   this.contextNode=null;
+   this.h.render();
+   return;
+  }
+  if(a==='pin'){
+   const id=this.selected;
+   this.pinned.has(id)?this.pinned.delete(id):this.pinned.add(id);
+   this.contextNode=null;
+   this.savePosition(id);
+   this.h.render();
+   return;
+  }
   if(a==='load')return this.open(null);
   if(a==='home-view'){this.zoom=1;this.pan={x:0,y:0};this.focusMode=false;this.h.render();return;}
   if(a==='expand-literature'){this.expansionPaper=this.expansionPaper===this.selected?null:this.selected;this.h.render();return;}
@@ -285,8 +380,13 @@ export class KnowledgeGraphWorkspace{
    const copy=ev.target.closest('[data-copy-cmd]');if(copy){try{await navigator.clipboard.writeText(copy.dataset.copyCmd);this.h.toast?.('命令已复制');}catch{this.h.toast?.('复制失败，请手动选择命令');}return;}
    const kg=ev.target.closest('[data-open-kg]');if(kg){ev.preventDefault();ev.stopPropagation();this.open(kg.dataset.openKg);return;}
    if(ev.target.closest('[data-kg-expand-paper]'))return this.togglePaperDetails();
+   const removal=ev.target.closest('[data-kg-remove-source]');
+   if(removal&&confirm('删除这条联系？')){
+    return this.changeLiterature('/relations/edit',{source:removal.dataset.kgRemoveSource,target:removal.dataset.kgRemoveTarget,action:'remove'});
+   }
+   if(removal)return;
    const t=ev.target.closest('[data-kg-action],[data-kg-tab],[data-kg-select],[data-kg-expand]');if(!t)return;
-   if(t.dataset.kgTab){this.inspectorTab=t.dataset.kgTab;return this.h.render();}
+   if(t.dataset.kgTab){this.contextNode=null;this.inspectorTab=t.dataset.kgTab;return this.h.render();}
    if(t.dataset.kgSelect){return this.select(t.dataset.kgSelect,true);}
    if(t.dataset.kgExpand)return this.toggleExpand(t.dataset.kgExpand);
    if(t.dataset.kgAction)return this.action(t.dataset.kgAction);

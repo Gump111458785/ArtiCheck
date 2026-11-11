@@ -271,3 +271,28 @@ test('detail expansion works without expanding literature and shortens available
  graph.placeDetailNodes(graph.data.nodes,[{source:'c',target:'d'}]);
  assert.deepEqual({x:detail.x,y:detail.y},fixed);
 });
+
+test('verified relationships collapse to paper edges and expansion never searches public sources',async()=>{
+ const {KnowledgeGraphWorkspace}=await import('../../web/dist/knowledge-graph.mjs');
+ const messages=[];
+ const graph=new KnowledgeGraphWorkspace({esc:String,render(){},toast:message=>messages.push(message)});
+ const nodes=[
+  {id:'a',node_type:'Paper'}, {id:'b',node_type:'Paper'}, {id:'c',node_type:'Paper'},
+  {id:'a1',paper_id:'a',parent_id:'a',node_type:'Contribution'},
+  {id:'a2',paper_id:'a',parent_id:'a1',node_type:'Detail'},
+  {id:'b1',paper_id:'b',parent_id:'b',node_type:'Contribution'},
+ ];
+ const edge={source:'a1',target:'b1',edge_type:'SIMILAR_CONTRIBUTION'};
+ graph.data={nodes,edges:[edge],timeline:[
+  {paper_id:'a',direction:'Computer Vision'},{paper_id:'b',direction:'Semantic Segmentation'},
+  {paper_id:'c',direction:'Natural language processing'},
+ ]};
+ graph.selected='c';
+ graph.api=()=>assert.fail('expansion must not call any endpoint');
+ await graph.togglePaperDetails();
+ assert.deepEqual(messages,['这篇论文暂无可展示的子贡献。']);
+ assert.deepEqual(graph.displayedEdges(new Set(['a','b','c'])),[{...edge,source:'a',target:'b'}]);
+ assert.deepEqual(graph.displayedEdges(new Set(['a','b','a1','b1'])),[edge]);
+ graph.filters.direction='CV';
+ assert.deepEqual(graph.matchingPapers().map(paper=>paper.paper_id),['a','b']);
+});

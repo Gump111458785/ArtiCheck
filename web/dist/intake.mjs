@@ -1,3 +1,4 @@
+import {PROJECT_REPOSITORY,repositoryButton} from './home.mjs';
 import {PresentationReview} from './presentation.mjs';
 import {currentExecution,archiveExecution} from './review-core.mjs';
 import {ReproductionWorkspace} from './reproduction-workspace.mjs';
@@ -40,19 +41,19 @@ export class IntakeWorkspace {
  render(){return this.h.page()==='projects'?this.home():this.project();}
  notices(){return `${this.storageError?`<div class="error-box">${this.esc(this.storageError)}</div>`:''}${this.error?`<div class="error-box" role="alert">${this.esc(this.error)}</div>`:''}${this.busy?`<div class="intake-progress" role="status">${this.icon('clock')}${this.esc(this.busy)}</div>`:''}`;}
  home(){
-  const repo='https://github.com/Gump111458785/ArtiCheck';
+  const repo=PROJECT_REPOSITORY;
   const clone=`git clone ${repo}.git`;
   const setup=[clone,'cd ArtiCheck','python3 -m venv .venv','source .venv/bin/activate','python -m pip install -e .','python -m articheck.workbench --port 8787'].join('\n');
   return `${this.notices()}<div class="local-setup-guide">
    <section class="local-repo-hero">
     <div class="local-repo-hero-main"><span class="online-kicker">项目源码</span><h2>ArtiCheck</h2>
      <p>把论文主张、实现代码和实验输出放在同一个工作台里核对。材料需要留在自己的电脑上时，可以运行本地工作台。</p>
-     <div class="local-repo-hero-cta"><a class="btn primary" href="${repo}" target="_blank" rel="noopener noreferrer">${this.icon('external')}查看 GitHub 仓库</a><button class="btn" type="button" data-copy-cmd="${this.esc(clone)}">${this.icon('copy')}复制克隆命令</button></div>
+     <div class="local-repo-hero-cta">${repositoryButton(name=>this.icon(name))}<button class="btn" type="button" data-copy-cmd="${this.esc(clone)}">${this.icon('copy')}复制克隆命令</button></div>
     </div>
-    <dl class="local-repo-facts"><div><dt>源码访问</dt><dd>私有仓库，需 GitHub 授权</dd></div><div><dt>运行环境</dt><dd>Python 3.10+，Docker 用于隔离执行</dd></div><div><dt>工作台</dt><dd><code>127.0.0.1:8787</code></dd></div></dl>
+    <dl class="local-repo-facts"><div><dt>源码访问</dt><dd>公开 GitHub 仓库</dd></div><div><dt>运行环境</dt><dd>Python 3.10+，Docker 用于隔离执行</dd></div><div><dt>工作台</dt><dd><code>127.0.0.1:8787</code></dd></div></dl>
    </section>
    <section class="local-project-overview" aria-label="项目能力"><article><h3>整理复现材料</h3><p>将论文、代码和待核对的实验主张集中在一个项目里。</p></article><article><h3>运行指定检查</h3><p>按实验配置在隔离环境中执行，记录命令、输出和指标。</p></article><article><h3>回看判断依据</h3><p>从报告返回对应主张和执行证据，核对结果与论文是否一致。</p></article></section>
-   <details class="local-setup-details"><summary>本地启动步骤</summary><p>先确认仓库访问权限。安装完成后，在浏览器打开 <code>http://127.0.0.1:8787</code>。</p><div class="local-cmd-block"><pre><code>${this.esc(setup)}</code></pre><button type="button" class="btn small" data-copy-cmd="${this.esc(setup)}">复制命令</button></div><p>模型配置和执行示例见 <a href="${repo}#quickstart" target="_blank" rel="noopener noreferrer">仓库 README</a>。</p></details>
+   <details class="local-setup-details"><summary>本地启动步骤</summary><p>安装完成后，在浏览器打开 <code>http://127.0.0.1:8787</code>。</p><div class="local-cmd-block"><pre><code>${this.esc(setup)}</code></pre><button type="button" class="btn small" data-copy-cmd="${this.esc(setup)}">复制命令</button></div><p>模型配置和执行示例见 <a href="${repo}#quickstart" target="_blank" rel="noopener noreferrer">仓库 README</a>。</p></details>
   </div>`;
  }
  project(){const p=this.current();return `${this.notices()}<nav class="project-steps" aria-label="项目评估阶段">${steps.filter(([id])=>this.step!=='demo'||['materials','demo'].includes(id)).map(([id,label])=>`<button class="${this.step===id?'active':''}" data-intake="step" data-step="${id}" aria-current="${this.step===id?'step':'false'}">${label}${id==='claims'?` <span>${p.claims.filter(c=>c.selected&&c.confirmed).length}/${p.claims.filter(c=>c.selected).length}</span>`:''}</button>`).join('')}</nav>${this.step==='demo'?'':this.versionStrip(p)}${this.step==='demo'?this.presentation.render(p):this.step==='materials'?this.materials(p):this.step==='plan'?this.assessor.plan(p):this.step==='criteria'?this.assessor.criteria(p):this.step==='resources'?this.resourceInspector.render(p):this.step==='reproduction'?this.reproduction.render(p):this.step==='claims'?this.claims(p):this.step==='readiness'?this.readiness(p):this.results(p)}`;}

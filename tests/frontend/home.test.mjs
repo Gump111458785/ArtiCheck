@@ -9,4 +9,11 @@ test('home keeps sample projects out of the personal project count and omits the
 test('case facts and four acceptance levels come from the archived report and support multi-case carousel',()=>{const c=homeModel([],report).case;assert.equal(c.runs,15);assert.equal(c.stages,60);assert.equal(c.accuracy,'96.76');assert.equal(c.levels.conclusion,false);const html=render();assert.equal((html.match(/尚未满足/g)||[]).length,2);assert.match(html,/start-case-carousel/);const htmlCase1=render({caseIndex:1});assert.match(htmlCase1,/ResNet-110/);assert.doesNotMatch(htmlCase1,/start-case-source/);const htmlCase2=render({caseIndex:2});assert.match(htmlCase2,/TextCNN/);assert.doesNotMatch(htmlCase2,/start-case-source/);});
 test('recent projects in homeModel are capped and ordered by actual update while start page links to order list',()=>{const projects=[{id:'a',title:'<img src=x>',updated_at:'2026-10-30',claims:[]},{id:'b',updated_at:'2026-11-01',run_id:'r',claims:[]},{id:'c',updated_at:'2026-10-31',claims:[{confirmed:true,selected:true}]},{id:'d',updated_at:'2026-10-29',claims:[]}];assert.deepEqual(homeModel(projects).recent.map(x=>x.id),['b','c','a']);const html=render({projects});assert.match(html,/查看复现项目列表 \(4\)/);});
 test('unavailable case and unsupported metrics remain unknown without borrowed values',()=>{assert.equal(homeModel([]).case,null);assert.match(render({report:null}),/公开案例暂未读取成功/);const copy=structuredClone(report);copy.experiments=[];copy.levels={};const html=render({report:copy});assert.match(html,/未测/);assert.equal((html.match(/<strong class="">未知<\/strong>/g)||[]).length,4);assert.doesNotMatch(html,/96.76/);});
-test('execution mode and browser storage failure are explicit and never imply a connected server',()=>{assert.match(render(),/在线 API 工作台/);assert.match(render({mode:'runtime'}),/本地执行已连接/);assert.doesNotMatch(render(),/可通过当前工作台提交真实核查/);assert.match(render({storageError:'<blocked>'}),/&lt;blocked&gt;/);});
+test('home links to the project source and exposes storage errors',()=>{
+ const repository=/href="https:\/\/github\.com\/Gump111458785\/ArtiCheck"/;
+ assert.match(render(),repository);
+ assert.match(render({mode:'runtime'}),repository);
+ assert.doesNotMatch(render(),/连接方式|在线 API 工作台/);
+ assert.match(render({storageError:'<blocked>'}),/&lt;blocked&gt;/);
+ assert.doesNotMatch(render({caseIndex:2}),/卷积神经网络句子分类实验复现|阶段 S2 在加载/);
+});

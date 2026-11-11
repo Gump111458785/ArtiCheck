@@ -214,7 +214,7 @@ export class ExecutionCenter {
        <td class="archive-col-actions">
         <div class="order-actions-col">
          ${item.statusKey==='cancelling'?'<button type="button" class="btn small" disabled>正在中断</button>':
-          ['reviewing','queued','reproducing'].includes(item.statusKey)?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看进度</button><button type="button" class="btn small" data-order-cancel="${e(item.id)}">中断运行</button>`:
+          ['reviewing','queued','reproducing'].includes(item.statusKey)?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看进度</button><button type="button" class="btn small danger" data-order-cancel="${e(item.id)}">中断运行</button>`:
           ['waiting','interrupted'].includes(item.statusKey)?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看诊断</button><button type="button" class="btn danger small" data-order-terminate="${e(item.id)}">终止审查</button>`:
           item.statusKey==='terminated'?`<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="process">查看记录</button>`:
           item.hasReport?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="report">查看报告</button>`:
