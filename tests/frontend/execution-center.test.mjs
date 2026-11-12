@@ -73,7 +73,7 @@ test('archive treats each execution state and review verdict as an independent f
  center.archiveFilters.execution='waiting';
  assert.deepEqual(Object.values(byId).filter(item=>center.matchesArchiveFilter(item)).map(item=>item.id),['waiting']);
  center.archiveFilters.execution='all';center.archiveFilters.verdict='failed';
- assert.deepEqual(Object.values(byId).filter(item=>center.matchesArchiveFilter(item)).map(item=>item.id),['red']);
+ assert.deepEqual(Object.values(byId).filter(item=>center.matchesArchiveFilter(item)).map(item=>item.id).sort(),['interrupted','red','waiting']);
  center.archiveFilters.verdict='all';
  const html=center.renderOrderCenter();
  assert.match(html,/data-order-terminate="interrupted"/);

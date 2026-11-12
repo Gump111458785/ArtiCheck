@@ -45,24 +45,41 @@ export function visibleRoles(report){
  });
 }
 
-export function activityView(report,esc,{open=true,showLog=true,activeRole=null,cancelling=false}={}){
- const events=activityEvents(report);if(!events.length)return '';
- const isCancelling=Boolean(cancelling||report?.status==='cancelling'||report?.execution?.status==='cancelling');
- const isCancelledOrDone=['cancelled','failed','completed'].includes(report?.status)&&!['running','starting','queued','cancelling'].includes(report?.execution?.status)||['cancelled','failed','expired','completed'].includes(report?.execution?.status);
- const active=events.filter(x=>x.status==='running'),last=active.at(-1)||events.at(-1);
- const roles=visibleRoles(report);
- const running=!isCancelledOrDone&&(isCancelling||report.status==='reviewing'||['running','starting','queued','cancelling'].includes(report.execution?.status));
- const states=roles.map(([id])=>{
-  const rows=events.filter(x=>(x.roles||[]).includes(id));
-  const isRun=rows.some(x=>x.status==='running');
-  const isFail=rows.some(x=>x.status==='failed');
-  const isDone=rows.some(x=>x.status==='completed');
-  if(isRun){
-   if(isCancelling)return 'cancelling';
-   if(isCancelledOrDone)return report?.status==='completed'&&report?.execution?.status!=='failed'&&report?.execution?.status!=='cancelled'?'completed':'failed';
-   return 'running';
+export function timelineStates(report,roles=visibleRoles(report),events=activityEvents(report),cancelling=false){
+ const run=report?.execution?.status;
+ const executionActive=['queued','starting','running','cancelling'].includes(run);
+ const active=executionActive||report?.status==='reviewing';
+ return roles.map(([id])=>{
+  if(id==='experiment_runner'){
+   if(cancelling||run==='cancelling')return 'cancelling';
+   if(executionActive)return 'running';
+   if(run==='completed')return 'completed';
+   if(['failed','expired','cancelled'].includes(run))return 'failed';
+   if(!active&&!report?.review?.plan?.stages?.length)return 'skipped';
+   return 'idle';
   }
-  return isFail?'failed':isDone?'completed':'idle';
+  if(executionActive&&['cross_auditor','reporter'].includes(id))return 'idle';
+  const latest=events.findLast(event=>event.roles?.includes(id));
+  if(latest?.status==='running')return cancelling?'cancelling':active?'running':'idle';
+  return latest?.status||'idle';
+ });
+}
+
+export function activityView(report,esc,{open=true,showLog=true,activeRole=null,cancelling=false,sequence=null}={}){
+ const events=activityEvents(report);
+ if(!events.length&&!report?.execution)return '';
+ const isCancelling=Boolean(cancelling||report?.status==='cancelling'||report?.execution?.status==='cancelling');
+ const active=events.filter(x=>x.status==='running'),last=active.at(-1)||events.at(-1)||{title:'实验执行'};
+ const roles=visibleRoles(report);
+ const running=isCancelling||report.status==='reviewing'||['running','starting','queued','cancelling'].includes(report.execution?.status);
+ const actual=timelineStates(report,roles,events,isCancelling);
+ const firstUnfinished=actual.findIndex(state=>['idle','running','cancelling'].includes(state));
+ const states=actual.map((state,index)=>{
+  if(sequence){
+   if(index>sequence.cursor)return 'idle';
+   if(index===sequence.cursor&&sequence.intro)return 'running';
+  }
+  return (running&&firstUnfinished!==-1&&index>firstUnfinished)?'idle':state;
  });
  let furthest=-1;
  states.forEach((st,idx)=>{if(st==='completed'||st==='running'||st==='cancelling'||st==='failed')furthest=idx;});
@@ -70,9 +87,8 @@ export function activityView(report,esc,{open=true,showLog=true,activeRole=null,
  const progressPct=allDone?100:roles.length<=1?100:furthest<0?8:Math.min(100,Math.round(((furthest+(states[furthest]==='running'||states[furthest]==='cancelling'?0.5:1))/roles.length)*100));
 
  return `<section class="review-activity ${allDone?'all-completed':''} ${isCancelling?'is-cancelling':running?'is-running':'is-static'}" aria-label="审查协作进度"><header><div>${isCancelling?'<h2 class="live-heading cancelling-heading"><span class="live-heading-text">正在安全中断审查</span><span class="cancelling-anim" aria-hidden="true"><i></i><i></i><i></i></span></h2>':running?'<h2 class="live-heading"><span class="live-heading-text">正在协作审查</span><span class="live-dots" aria-hidden="true"><i></i><i></i><i></i></span></h2>':'<h2>审查协作时间轴</h2>'}<p role="status" aria-live="polite">${isCancelling?'正在向执行环境发送中断信号并保存已完成阶段记录…':esc(last.title)+(last.detail?' · '+esc(last.detail):'')}</p></div><div class="review-activity-actions">${isCancelling?'<span class="activity-done-pill cancelling"><span class="cancelling-anim" aria-hidden="true"><i></i><i></i><i></i></span>正在中断…</span><button type="button" class="btn danger small online-abort-btn" data-online="cancel" disabled>中断中…</button>':running?'<span class="activity-done-pill live"><span class="online-spinner" aria-hidden="true"></span>正在运行</span><button type="button" class="btn danger small online-abort-btn" data-online="cancel">临时终止</button>':`<span class="activity-done-pill">${report.status==='cancelled'||report.execution?.status==='cancelled'?'已临时终止':states.includes('failed')?'已报错中断':'过程已记录'}</span>`}</div></header><div class="review-role-lanes review-timeline-axis" style="--timeline-cols:${roles.length};--timeline-progress:${progressPct}%"><div class="timeline-track" aria-hidden="true"><div class="timeline-track-fill ${allDone?'done':''}" style="width:${progressPct}%"></div></div>${roles.map(([id,label],idx)=>{
-  const rows=events.filter(x=>(x.roles||[]).includes(id));
   const state=states[idx];
-  const statusText=state==='cancelling'?'正在中断…':state==='running'?'进行中':state==='failed'?'已中断':state==='completed'?'已执行':rows.some(x=>x.status==='skipped')?'本次跳过':report.status==='reviewing'?'等待中':'待执行';
+  const statusText={cancelling:'正在中断…',running:id==='experiment_runner'?'执行中':'进行中',failed:'已中断',completed:'已执行',skipped:'本次跳过',idle:running?'等待中':'未执行'}[state];
   const jump=ROLE_HINTS[id]?.jump||'查看详情';
   const isActive=activeRole===id;
   return `<button type="button" class="review-role-lane timeline-node ${state} ${isActive?'active-node':''}" data-role-jump="${id}" aria-expanded="${isActive?'true':'false'}" title="点击展开或收起${label}总结（${jump}）"><span class="timeline-step-num">0${idx+1}</span><span class="review-role-dot timeline-dot" aria-hidden="true">${state==='completed'?'✓':state==='failed'||state==='cancelling'?'!':ROLE_ICONS[id]||''}</span><span class="timeline-stem" aria-hidden="true"></span><span class="timeline-callout"><strong>${label}</strong><small class="timeline-state-tag">${statusText}</small><span class="timeline-jump-hint">${isActive?'再次点击收起 ▲':jump+' ↘'}</span></span></button>`;

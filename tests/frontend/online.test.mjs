@@ -102,8 +102,7 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
    {id:'S2',title:'Stage 2',command:'python s2.py',file:'s2.py'}]}},
   execution:{...failedReport.execution,status:'running',stages:[{id:'S1',status:'running',live_tail:['Epoch 1/10 loss=0.42','Epoch 2/10 loss=0.31','Epoch 3/10 acc=91.4%'],output:'Epoch 1/10 loss=0.42\nEpoch 2/10 loss=0.31\nEpoch 3/10 acc=91.4%'}]}};
  const execHtml=ws.execution(multiStageReport,false);
- assert.match(execHtml,/云端隔离执行/);
- assert.match(execHtml,/意外中断最多重试 3 次/);
+ assert.doesNotMatch(execHtml,/云端隔离执行|意外中断最多重试 3 次|terminal-abort-btn/);
  assert.doesNotMatch(execHtml,/展开完整日志|实时动态输出|来源 s1/);
  assert.match(execHtml,/中断运行/);
  assert.doesNotMatch(execHtml,/NVIDIA GeForce RTX 4090/);
@@ -139,23 +138,26 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  assert.doesNotMatch(paperTimeline,/实验执行/);
 
  const finalHtml=ws.finalReport(paperOnlyReport,{title:'我的 ResNet 审查项目',paper:{name:'1512.03385v1.pdf',pages:[{text:'Deep Residual Learning'}]}});
- const idxVerdict=finalHtml.indexOf('review-verdict');
+ const idxVerdict=finalHtml.indexOf('最终结果');
  const idxProject=finalHtml.indexOf('我的 ResNet 审查项目');
  const idxPaper=finalHtml.indexOf('Deep Residual Learning for Image Recognition');
  const idxContrib=finalHtml.indexOf('提出残差学习框架解决深层网络退化问题');
  assert.ok(idxVerdict>=0 && idxVerdict<idxProject && idxProject<idxPaper && idxPaper<idxContrib);
- assert.match(finalHtml,/editorial-verdict/);
+ assert.match(finalHtml,/阶段结果/);
+ assert.match(finalHtml,/详细报告/);
  assert.match(finalHtml,/论文审查/);
  assert.match(finalHtml,/代码审查/);
  assert.match(finalHtml,/论文与代码核对/);
  assert.doesNotMatch(finalHtml,/trainer\.py · train 核心定义/);
  const external={...completedMismatch,review:{...completedMismatch.review,purpose:'reproduce_other'}};
- assert.match(ws.finalReport(external,{title:'复现项目'}),/目标 90 % · 实测 70 %/);
+ assert.match(ws.finalReport(external,{title:'复现项目'}),/目标 90 %\s+实测 70 %/);
  assert.doesNotMatch(ws.finalReport(external,{title:'复现项目'}),/反馈建议|修正建议/);
  external.execution={...external.execution,execution_performed:true,metrics:[{...external.execution.metrics[0],observed:90,status:'within_tolerance'}]};
+ assert.equal(reportVerdict(external).state,'pending');
+ external.review.findings=[];
  assert.equal(reportVerdict(external).state,'passed');
  external.execution.metrics=[];
- assert.equal(reportVerdict(external).label,'未验证');
+ assert.equal(reportVerdict(external).label,'待核查');
  assert.doesNotMatch(finalHtml,/查看计划与执行条件/);
 
  // Fourth-batch UI requirements:
@@ -247,12 +249,28 @@ test('a review finishing in the background leaves the selected archived report o
  assert.equal(workspace.selected,history.id);
 });
 
+test('the running experiment masks later roles and follows the terminal state',async()=>{
+ const {activityView}=await import('../../web/dist/review-activity.mjs');
+ const complete=role=>({title:'Complete',roles:[role],status:'completed'});
+ const report={id:'job',status:'completed',materials:{paper:'p',code:'c'},
+  review:{plan:{stages:[{id:'S1'}]}},execution:{status:'queued'},
+  activity:['literature_reader','code_inspector','planner','cross_auditor','reporter'].map(complete)};
+ const html=activityView(report,String);
+ assert.equal((html.match(/timeline-node running/g)||[]).length,1);
+ assert.match(html,/timeline-node running[^>]+data-role-jump="experiment_runner".*?执行中/);
+ assert.match(html,/timeline-node idle[^>]+data-role-jump="reporter"/);
+ assert.doesNotMatch(html,/待执行/);
+ const replay=activityView(report,String,{sequence:{cursor:1,intro:true}});
+ assert.equal((replay.match(/timeline-node running/g)||[]).length,1);
+ assert.match(replay,/timeline-node running[^>]+data-role-jump="code_inspector"/);
+});
+
 test('terminated reports show historical criteria with no action to confirm them',async()=>{
  const {OnlineWorkspace}=await import('../../web/dist/online-workspace.mjs');
  const {reportVerdict}=await import('../../web/dist/report-verdict.mjs');
  const workspace=new OnlineWorkspace({projects:[],h:{},esc:String});
  const report={terminated_at:'now',review:{criteria:[{dimension:'data',status:'needs_review',note:'old'}]}};
- assert.equal(reportVerdict(report).label,'已终止');
+ assert.equal(reportVerdict(report).label,'待核查');
  assert.match(workspace.criteriaSection(report,{}),/终止前未复核/);
  assert.doesNotMatch(workspace.criteriaDetails(report,{}),/data-confirm-criterion|data-supply-criterion/);
 });

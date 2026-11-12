@@ -2458,3 +2458,50 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .verdict-mismatches{padding-inline-start:1.3rem;line-height:1.7}
 #new-review-form .review-task-options{margin-block:1rem;padding:0;border:0}
 #new-review-form .review-task-options legend{margin-bottom:.5rem;font-weight:650}
+
+/* Card surfaces share square corners. Controls and status markers keep their own shapes. */
+:is(.card,.start-intro,.start-case,.start-repository,.sidebar-review,.online-form,.online-rail,
+    .online-upload,.review-activity,.timeline-callout,.online-terminal-box,.role-node-summary-panel,
+    .report-review-group,.report-finding,.report-code-item,.kg-cmp-card,.kg-inspector,.kg-empty,
+    .kg-canvas,.help-card,.account-card,.order-card,.order-row,.criterion-detail){border-radius:0!important}
+.role-node-summary-panel:has(>#online-execution-section)>.role-node-panel-head{border-bottom:0}
+.review-purpose{margin-top:1rem;padding-top:1rem;border:0;border-top:1px solid #dce4ee}
+.review-purpose label{cursor:pointer}
+.report-result-sheet{background:#fff;color:#172236;border-top:1px solid #dce4ee}
+.report-result-head{display:flex;justify-content:space-between;gap:1rem;padding:1.3rem 1.5rem;border-left:5px solid #a15f10;background:#fffaf0}
+.report-result-head.passed{border-color:#087050;background:#f1fbf6}
+.report-result-head.failed{border-color:#b82831;background:#fff5f4}
+.report-result-caption{font-weight:700;font-size:.82rem;margin:0 0 .2rem}
+.report-result-head h2{font-size:clamp(1.9rem,3vw,2.7rem);line-height:1.2;margin:0 0 .5rem}
+.report-result-head p:last-child{margin:0}
+.report-metadata{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));margin:0;border-bottom:1px solid #dce4ee}
+.report-metadata>div{padding:1rem;border-right:1px solid #e7edf4;min-width:0}
+.report-metadata dt{font-size:.78rem;color:#52627a;font-weight:650}
+.report-metadata dd{margin:.25rem 0 0;font-weight:650;overflow-wrap:anywhere}
+.report-stage-results,.report-failure-details{padding:1rem 0}
+.report-stage-results h2,.report-failure-details h2{font-size:1.08rem;margin:0 0 .65rem}
+.report-stage-results tbody th{text-align:left;font-weight:550}
+.report-stage-status{font-weight:700;color:#52627a}
+.report-stage-status.passed{color:#087050}
+.report-stage-status.failed,.report-failure-details h2{color:#a81f2b}
+.report-stage-status.pending{color:#865006}
+.report-failure-details{border-top:2px solid #f4d1d0}
+.report-failure-details li{margin-bottom:.4rem}
+.report-details>summary{padding:.2rem 0}
+:is(.archive-filter-panel,.archive-table-card,.claim-editor-panel,.help-info-card,.help-step-card,
+    .interruption-diagnosis-panel,.login-panel,.online-count-card,.report-paper-card,.repro-order-card,
+    .review-metrics-panel,.role-event-panel,.runtime-panel,.timeline-card){border-radius:0!important}
+.kg-expand-options{background:#f7f9fc;border:1px solid #dce4ee;padding:1rem;margin:0 0 .8rem}
+.kg-expand-options .kg-insp-actions{margin-top:.65rem}
+.kg-import-paper{display:flex;align-items:center;gap:.5rem;margin-left:auto}
+.kg-import-paper input{min-width:12rem}
+.kg-insp-footer{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.kg-pdf-upload{position:relative;cursor:pointer}
+.kg-pdf-upload input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.kg-pdf-upload:focus-within{outline:2px solid #3265df;outline-offset:2px}
+.kg-import-paper{grid-column:1/4;margin:0}
+.kg-import-paper input{flex:1;min-width:0}
+.kg-filters>[data-kg-action="index"]{justify-self:end}
+@media(max-width:900px){.kg-import-paper{grid-column:1/-1}}
+:is(.kg-filters,.account-access-note,.account-auth>aside,.process-ready-banner,.interruption-remedy-box,
+    .interruption-cmd-box,.order-card-body,.online-notice,.role-node-block,.start-acceptance){border-radius:0!important}

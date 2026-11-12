@@ -85,6 +85,7 @@ async function init(){
 
 function pendingReview(){const reviewed=new Set(state.feedback.filter(f=>f.run_id===state.run?.report_id).map(f=>f.claim_id));return (state.run?.findings||[]).filter(f=>f.verdict==='issue'&&!reviewed.has(f.claim_id)).length}
 function render(){
+ const previousDetails=app.querySelector('details[data-report-details][open]');
  const previousTerminal=app.querySelector('[data-terminal-key]');
  const terminalPosition=previousTerminal&&{
   key:previousTerminal.dataset.terminalKey,
@@ -108,6 +109,8 @@ function render(){
  <div class="content"><header class="topbar"><div class="breadcrumbs"><button class="icon-btn menu-toggle" data-action="toggle-nav" aria-label="打开导航" aria-expanded="${state.navOpen}">${icon('menu')}</button></div><div class="top-actions"><button class="icon-btn" data-action="help" aria-label="使用帮助">${icon('info')}</button>${account?.topbar()||''}</div></header>
  <main id="main" class="page" data-view="${state.page}"><div class="page-title between"><div><h1 title="${esc(pageName)}">${esc(pageName)}</h1><p class="subtitle">${state.page==='home'?'从材料准备到执行审查，开始或继续一项复现评估。':projectPage?esc(intake.subtitle()):centerPage?esc(execution.subtitle(state.page)):pageSubtitle()}</p></div><div class="title-actions">${projectPage?intake.actions():centerPage?execution.actions(state.page):state.page==='evaluation'?'':state.page==='contracts'?`<button class="btn" data-action="download-spec">${icon('download')}OpenAPI</button>`:''}</div></div>
  ${renderPage()}<footer class="page-footer"><span>${projectPage?'论文材料 · 实验计划 · 可追溯证据':centerPage?'任务 → 角色与阶段 → 证据复核':state.page==='evaluation'?'系统评测 · 与论文项目独立':'ArtiCheck 研究工作空间'}</span><span>ArtiCheck</span></footer></main></div></div>`;
+ const details=app.querySelector('details[data-report-details]');
+ if(details&&previousDetails?.dataset.reportDetails===details.dataset.reportDetails)details.open=true;
  bindInputs();account?.afterRender();intake?.afterRender();execution?.afterRender();apiReview?.afterRender();if(state.page==='http-api')legacyAPI?.afterRender();if(state.page==='knowledge-graph')knowledgeGraph?.afterRender();
  if(terminalPosition){
   const terminal=app.querySelector('[data-terminal-key]');

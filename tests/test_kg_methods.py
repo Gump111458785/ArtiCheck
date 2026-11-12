@@ -1,11 +1,13 @@
 import base64
 import hashlib
 import json
+from pathlib import Path
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from articheck.kg_literature import OpenAlex, allowed_pdf, pdf_text_status, retrieve_public_methods
+from articheck.kg_literature import OpenAlex, allowed_pdf, paper_reference, pdf_text_status, retrieve_public_methods, verify_public_fulltext
 from articheck.kg_methods import grounded_contributions, method_key, retrieve_methods
 from articheck.kg_service import KnowledgeGraphService
 from articheck.review_api import ReviewError
@@ -128,6 +130,43 @@ class ContributionExtractionTests(unittest.TestCase):
         self.assertNotIn(('relations', 'W4'), events)
         self.assertEqual(next(row for row in result['papers'] if row['paper_id'] == 'W2')['fulltext_status'], 'no_full_text')
         self.assertIn('W5', {row['paper_id'] for row in result['papers']})
+
+    def test_download_source_order_and_identifiers(self):
+        self.assertEqual(paper_reference('https://arxiv.org/pdf/1706.03762v2.pdf'), ('arxiv','1706.03762v2'))
+        self.assertEqual(paper_reference('https://doi.org/10.1000/example'), ('doi','10.1000/example'))
+        self.assertEqual(paper_reference('Learning residual routes'), ('title','Learning residual routes'))
+        self.assertEqual(paper_reference('https://example.org/paper'), ('url','https://example.org/paper'))
+        urls = ['https://arxiv.org/pdf/1706.03762','https://pdfs.semanticscholar.org/sample.pdf',
+                'https://openaccess.thecvf.com/routing.pdf','https://aclanthology.org/routing.pdf']
+        sources = SimpleNamespace(arxiv=lambda **kw:{'arxiv_id':'1706.03762'},
+            semantic=lambda **kw:{'title':'Routing','openAccessPdf':{'url':urls[1]}},
+            unpaywall=lambda doi, deadline:[urls[3]])
+        paper = {'title':'Routing','doi':'10.1000/example','pdf_sources':[urls[2]]}
+        seen = []
+        def try_pdf(record, query, deadline, **kwargs):
+            seen.extend(record['pdf_sources'])
+            return ([], 'verified' if seen[-1]==urls[3] else 'download_failed')
+        with patch('articheck.kg_literature.fetch_method_chunks',side_effect=try_pdf):
+            self.assertEqual(verify_public_fulltext(paper,OpenAlex(),time.monotonic()+30,sources=sources),([], 'verified'))
+        self.assertEqual(seen,urls)
+
+    def test_pdf_attachment_is_account_scoped_and_indexed(self):
+        graph = KnowledgeGraphService({},SimpleNamespace(namespace='test'))
+        owner = 'a'*64
+        raw = (Path(__file__).resolve().parents[1]/'web/dist/samples/articheck-method-note.pdf').read_bytes()
+        paper = {'id':'W1','title':'A Routing Study','author_names':['Alice Example'],'year':2026,'source_url':'https://openalex.org/W1'}
+        graph.update_literature(owner,lambda state:state['papers'].update({'W1':paper}))
+        material = {'name':'sample.pdf','content_base64':base64.b64encode(raw).decode()}
+        pages = [{'number':1,'text':paper['title']+'\n'+METHOD_QUOTE*8}]
+        with patch('articheck.kg_service.extract_paper',return_value=(pages,{})):
+            result = graph.retry_contributions(owner,'W1',material)
+        self.assertTrue(result['papers'][0]['pdf_available'])
+        self.assertEqual(graph.paper_file(owner,'W1')[0],raw)
+        self.assertEqual(graph.paper_file(owner,'W1',offset=17,size=501)[0],raw[17:518])
+        self.assertIn('2026_Alice Example_A Routing Study.pdf',graph.paper_index(owner))
+        self.assertIn('已插入',graph.paper_index(owner))
+        with self.assertRaises(ReviewError):
+            graph.paper_file('b'*64,'W1')
 
     def test_public_retrieval_tries_attributed_open_edition_after_unusable_link(self):
         source = 'https://arxiv.org/pdf/1512.03385'

@@ -1,6 +1,7 @@
 """Small durable reports and atomic launch locks, scoped to browser capabilities.
 
-Raw PDF/ZIP bytes are never stored in Redis. Reports expire after seven days.
+Review records contain material fingerprints. Graph PDF storage is managed separately.
+Reports expire after seven days.
 """
 import hashlib
 import json

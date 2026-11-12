@@ -15,8 +15,10 @@ import tempfile
 from threading import Lock
 import time
 import uuid
+from urllib.parse import quote
 
-from .kg_literature import KINDS, LIMITS, OpenAlex, normalize_title, pdf_text_status, retrieve_public_methods, verify_public_fulltext
+from .kg_literature import KINDS, LIMITS, OpenAlex, OpenPDFSources, normalize_title, paper_reference, pdf_text_status, retrieve_public_methods, verify_public_fulltext, work_metadata
+from .kg_pdfs import PaperPDFs, markdown_index
 from .kg_methods import extract_contributions, method_key, retrieve_methods, synthesize
 from .reproduction.paper_text import extract_paper
 from .review_api import ReviewError, decode_material, now
@@ -275,6 +277,8 @@ class KnowledgeGraphService:
         self._extraction_lock = Lock()
         self._memory_operations = {}
         self.literature = OpenAlex(env.get('OPENALEX_API_KEY', ''))
+        self.open_pdf_sources = OpenPDFSources(env)
+        self.pdfs = PaperPDFs(store)
 
     def _redis_get(self, key, default, *, permanent=False):
         if not getattr(self.store, 'url', '') or not getattr(self.store, 'token', ''):
@@ -547,6 +551,106 @@ return 1
             except ReviewError:
                 pass  # The lease expires after the request lifetime.
 
+    def acquire_paper_pdf(self, owner, paper, deadline, *, progress=lambda phase: None):
+        downloaded = []
+        chunks, status = verify_public_fulltext(paper, self.literature, deadline, progress=progress,
+                                               sources=self.open_pdf_sources,
+                                               save_pdf=lambda raw, source: downloaded.append((raw, source)))
+        file = self.pdfs.save(self._owner_hash(owner), downloaded[0][0], paper, downloaded[0][1]) if downloaded else None
+        return chunks, status, file
+
+    def methods_from_saved_pdf(self, owner, file, deadline):
+        if time.monotonic()>=deadline:
+            return []
+        try:
+            raw = self.pdfs.read(self._owner_hash(owner),file)
+            with tempfile.TemporaryDirectory(prefix='articheck-saved-paper-') as directory:
+                path=Path(directory)/'paper.pdf'
+                path.write_bytes(raw)
+                pages,_=extract_paper(path,timeout=max(1,min(12,deadline-time.monotonic())))
+            return [{**row,**({'source_url':file['source']} if file.get('source') else {})}
+                    for row in retrieve_methods(pages,query='architecture design algorithm implementation',limit=4)]
+        except (OSError, ValueError):
+            return []
+
+    def paper_file_record(self, owner, paper_id):
+        _, state = self.literature_state(owner)
+        files = state.get('pdf_files', {})
+        canonical = state['matches'].get(paper_id)
+        if paper_id not in files and not canonical:
+            own = next((paper for paper in self.owned_papers(owner) if paper['id']==paper_id),None)
+            matches = [wid for wid,paper in state['papers'].items()
+                       if own and normalize_title(paper['title'])==normalize_title(own['title'])]
+            canonical = matches[0] if len(matches)==1 else None
+        record = files.get(paper_id) or files.get(canonical)
+        if not record or state['choices'].get(paper_id, {}).get('removed'):
+            raise ReviewError('paper_file_missing','这篇论文尚未保存 PDF。',404)
+        return record
+
+    def paper_file(self, owner, paper_id, *, offset=0, size=None):
+        record = self.paper_file_record(owner,paper_id)
+        return self.pdfs.read(self._owner_hash(owner),record,offset=offset,size=size), record
+
+    def paper_index(self, owner):
+        _, state = self.literature_state(owner)
+        papers = {**state['papers'], **{paper['id']:paper for paper in self.owned_papers(owner)}}
+        files = state.get('pdf_files', {})
+        attempts = state.get('pdf_attempts', {})
+        return markdown_index((paper, ('已下载' if files[wid].get('source') else '已插入') if files.get(wid) else FULLTEXT_LABELS.get(attempts.get(wid) or paper.get('fulltext_status'),'未获取'),
+                               files.get(wid)) for wid, paper in papers.items()
+                              if not state['choices'].get(wid, {}).get('removed'))
+
+    def import_public_paper(self, owner, reference):
+        if not isinstance(reference,str) or not reference.strip() or len(reference)>600:
+            raise ReviewError('invalid_paper_reference','请填写论文标题、DOI、arXiv ID 或论文链接。')
+        try:
+            kind, value = paper_reference(reference)
+        except ValueError as exc:
+            raise ReviewError('invalid_paper_reference','论文链接格式无效。') from exc
+        deadline = time.monotonic()+38
+        edition = self.open_pdf_sources.arxiv(identifier=value, deadline=deadline) if kind=='arxiv' else {}
+        semantic = self.open_pdf_sources.semantic(reference='URL:'+value,deadline=deadline) if kind=='url' else {}
+        if kind=='url' and not semantic.get('title'):
+            raise ReviewError('literature_unmatched','未能从链接识别论文，请输入标题、DOI 或 arXiv ID。',404)
+        title = edition.get('title') or semantic.get('title') or (value if kind=='title' else '')
+        doi = edition.get('doi') or (semantic.get('externalIds') or {}).get('DOI') or (value if kind=='doi' else '')
+        if kind=='arxiv' and not doi:
+            doi='10.48550/arxiv.'+re.sub(r'v[0-9]+$','',value)
+        try:
+            raw = self.literature.identify(title=title, doi=doi, identifier=value if kind=='openalex' else '')
+            paper = work_metadata(raw)
+        except ReviewError:
+            if not edition:
+                raise
+            paper = {**edition,'id':'P'+hashlib.sha256(value.encode()).hexdigest()[:20],
+                     'pdf_sources':[],'authors':[]}
+
+        if not paper:
+            raise ReviewError('literature_unmatched','未能定位论文书目。',404)
+        if kind=='arxiv':
+            paper['arxiv_id']=value
+        _, state = self.literature_state(owner)
+        prior = state['papers'].get(paper['id'],{})
+        if not prior and len(state['papers'])>=75:
+            raise ReviewError('literature_capacity','图谱的公开条目已达上限，请先移除部分条目。',409)
+        file = state.get('pdf_files',{}).get(paper['id'])
+        status = 'verified' if file else 'not_checked'
+        if not file:
+            _, status, file = self.acquire_paper_pdf(owner,paper,deadline)
+        def save(current):
+            if paper['id'] not in current['papers'] and len(current['papers'])>=75:
+                raise ReviewError('literature_capacity','图谱的公开条目已达上限，请先移除部分条目。',409)
+            existing = current['papers'].get(paper['id'],prior)
+            current['papers'][paper['id']]={**existing,**paper,'fulltext_status':status}
+            if file:
+                current['papers'][paper['id']].update(self.method_fields(existing.get('contributions',[]),'pending'))
+            current['choices'].setdefault(paper['id'],{}).pop('removed',None)
+            if file:
+                current.setdefault('pdf_files',{})[paper['id']]=file
+        self.update_literature(owner,save)
+        return {**self.build_graph_response(owner,focus_paper_id=paper['id']),
+                'method_notice': '' if file else FULLTEXT_LABELS.get(status,'开放 PDF 暂不可用。')}
+
     def discover_literature(self, metadata, groups, *, kinds, depth, total, state, deadline, check=lambda: None, gate=None):
         anchor = metadata['id']
         papers, links = {}, {}
@@ -611,7 +715,7 @@ return 1
         operation_key = self.graph_operation_key(owner, operation_id)
         check = self.operation_checkpoint(operation_key)
         check()
-        fulltext_results = {}
+        fulltext_results, downloaded_files = {}, {}
         deadline = time.monotonic() + 38
 
         def progress(phase):
@@ -623,14 +727,22 @@ return 1
             prior = state['papers'].get(wid, {})
             uploaded = record['id'] == anchor_id[0] and paper_id in own and (
                 paper.get('method_graph') or state.get('private_methods', {}).get(paper_id, {}).get('fulltext_status') == 'verified')
-            if uploaded or prior.get('fulltext_status') == 'verified':
-                fulltext_results[wid] = ([], 'verified')
+            files = state.get('pdf_files', {})
+            cached = files.get(wid) or (files.get(paper_id) if wid==anchor_id[0] else None)
+            if cached:
+                has_methods = prior.get('contributions') or (paper.get('method_graph') if wid==anchor_id[0] else [])
+                fulltext_results[wid] = ([] if has_methods else self.methods_from_saved_pdf(owner,cached,deadline), 'verified')
             else:
-                fulltext_results[wid] = verify_public_fulltext(record, self.literature, deadline, progress=progress)
+                rows, status, file = self.acquire_paper_pdf(owner, record, deadline, progress=progress)
+                if file:
+                    downloaded_files[wid] = file
+                fulltext_results[wid] = (rows, 'verified' if uploaded or prior.get('fulltext_status')=='verified' else status)
             check()
             status = fulltext_results[wid][1]
             if status != 'verified':
-                raise ReviewError('literature_fulltext_required', FULLTEXT_LABELS[status] +
+                if wid==anchor_id[0]:
+                    self.update_literature(owner,lambda current:current.setdefault('pdf_attempts',{}).update({paper_id:status}))
+                raise ReviewError('literature_fulltext_required', FULLTEXT_LABELS.get(status,FULLTEXT_LABELS['download_failed']) +
                                   '。可重试或补充这篇论文的原始 PDF。', 422)
 
         anchor_id = ['']
@@ -672,12 +784,17 @@ return 1
         fetch = [item for wid, item in available.items() if not existing[wid] and wid not in fulltext_results]
         check()
         if gate:
-            fetch = [item for item in fetch if state['papers'].get(item['id'], {}).get('fulltext_status') != 'verified']
+            fetch = [item for item in fetch if not state.get('pdf_files', {}).get(item['id'])]
             if fetch and time.monotonic() < deadline:
                 with ThreadPoolExecutor(max_workers=min(3, len(fetch))) as pool:
-                    results = pool.map(lambda item: verify_public_fulltext(item, self.literature, deadline,
-                                                                          progress=progress), fetch[:6])
-                    fulltext_results.update(zip((item['id'] for item in fetch), results))
+                    def acquire(item):
+                        check()
+                        return self.acquire_paper_pdf(owner,item,deadline,progress=progress)
+                    for item, (rows,status,file) in zip(fetch,pool.map(acquire,fetch[:6])):
+                        wid = item['id']
+                        fulltext_results[wid]=(rows,status)
+                        if file:
+                            downloaded_files[wid]=file
             evidence = {wid: (rows, 'pending' if rows else 'insufficient_evidence')
                         for wid, (rows, status) in fulltext_results.items() if status == 'verified'}
         else:
@@ -720,6 +837,12 @@ return 1
                 raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
             identifier = metadata['id']
             current['matches'][paper_id] = identifier
+            files = current.setdefault('pdf_files', {})
+            for wid, file in downloaded_files.items():
+                if not current['choices'].get(wid,{}).get('removed'):
+                    files.setdefault(wid,file)
+            if identifier in files:
+                files.setdefault(paper_id,files[identifier])
             def save_public(item):
                 wid = item['id']
                 prior = current['papers'].get(wid, {})
@@ -824,6 +947,7 @@ return 1
         existing = cached.get('contributions') or paper.get('method_graph') or []
         existing = [{**row, 'local_id': method_key(row)} for row in existing if row.get('method_grounded')]
         notice = ''
+        file = None
         fulltext_status = cached.get('fulltext_status', 'not_checked')
         with self.extraction_slot(owner, paper_id):
             if material is not None:
@@ -842,8 +966,13 @@ return 1
                 if fulltext_status != 'verified':
                     raise ReviewError('literature_fulltext_required', FULLTEXT_LABELS[fulltext_status], 422)
                 status = 'pending' if chunks else 'insufficient_evidence'
+                file = self.pdfs.save(self._owner_hash(owner),pdf,public or paper)
+            elif (saved := state.get('pdf_files',{}).get(paper_id) or
+                  (state.get('pdf_files',{}).get(public['id']) if public else None)):
+                chunks = self.methods_from_saved_pdf(owner,saved,time.monotonic()+20)
+                fulltext_status, status = 'verified', 'pending' if chunks else 'insufficient_evidence'
             elif public and isinstance(self.literature, OpenAlex):
-                chunks, fulltext_status = verify_public_fulltext(public, self.literature, time.monotonic() + 28)
+                chunks, fulltext_status, file = self.acquire_paper_pdf(owner,public,time.monotonic()+28)
                 status = ('pending' if chunks else 'insufficient_evidence') if fulltext_status == 'verified' else fulltext_status
                 notice = FULLTEXT_LABELS.get(fulltext_status, '') if fulltext_status != 'verified' else ''
             elif public:
@@ -866,6 +995,10 @@ return 1
             def save(current):
                 if current['choices'].get(paper_id, {}).get('removed'):
                     raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
+                if file:
+                    current.setdefault('pdf_files', {})[paper_id] = file
+                    if public:
+                        current['pdf_files'].setdefault(public['id'],file)
                 bucket = current.setdefault(storage, {})
                 record = bucket.get(paper_id, {})
                 contributions = self.merge_contributions(record.get('contributions') or existing, extracted)
@@ -1150,7 +1283,9 @@ return 1
                              ('pending' if contributions or paper.get('paper_sha256') else public.get('method_status', 'unavailable')))
             papers.append({
                 'id': paper['id'], 'title': paper['title'], 'project_id': paper['project_id'],
-                'source_type': 'USER_UPLOAD', 'source_url': public.get('source_url', ''), 'canonical': matched or paper['id'],
+                'source_type': 'USER_UPLOAD', 'source_url': public.get('source_url', ''),
+                'fallback_url': public.get('fallback_url') or ('https://doi.org/'+quote(paper['doi'],safe='/') if paper.get('doi') else
+                                 'https://openalex.org/works?page=1&search='+quote(paper['title'])), 'canonical': matched or paper['id'],
                 'review_status': paper['review_status'], 'contributions': contributions,
                 'abstract': paper['abstract'], 'metadata': self.metadata(paper, public),
                 'fulltext_status': private_methods.get('fulltext_status') or ('verified' if paper.get('method_graph') else public.get('fulltext_status')),
@@ -1203,9 +1338,12 @@ return 1
                     'venue': paper['metadata']['venue']['value'], 'source_type': paper['source_type'],
                     'visibility': 'PRIVATE', 'read': bool(flags.get('read', paper['source_type'] == 'USER_UPLOAD')),
                     'hidden': bool(flags.get('hidden')), 'source_url': paper.get('source_url', ''),
+                    'fallback_url': paper.get('fallback_url') or paper.get('source_url',''),
                     **{key: paper[key] for key in ('method_status', 'method_detail_status', 'method_reason', 'detail_count')},
-                    'fulltext_status': paper.get('fulltext_status') or 'not_checked',
-                    'fulltext_label': FULLTEXT_LABELS.get(paper.get('fulltext_status'), FULLTEXT_LABELS['not_checked']),
+                    'pdf_available': bool(library.get('pdf_files',{}).get(paper_id) or library.get('pdf_files',{}).get(paper['canonical'])),
+                    'fulltext_status': paper.get('fulltext_status') or library.get('pdf_attempts',{}).get(paper_id) or 'not_checked',
+                    'fulltext_label': FULLTEXT_LABELS.get(paper.get('fulltext_status') or library.get('pdf_attempts',{}).get(paper_id),
+                                                         FULLTEXT_LABELS['not_checked']),
                     'can_supply_original_pdf': paper['source_type'] == 'PUBLIC_LITERATURE' or paper.get('can_supply_original_pdf', False), 'project_id': paper.get('project_id', '')}
             timeline.append(item)
             px, py = append_node({**item, 'id': paper_id, 'node_type': 'Paper', 'layer': 1,

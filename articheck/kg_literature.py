@@ -6,8 +6,9 @@ from pathlib import Path
 import tempfile
 import time
 import re
+import xml.etree.ElementTree as ET
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlsplit
 from urllib.request import urlopen, build_opener, HTTPRedirectHandler, Request
 
 from .kg_methods import retrieve_methods
@@ -20,7 +21,11 @@ KINDS = {'previous', 'next', 'similar'}
 LIMITS = {3, 5, 8}
 PDF_HOSTS = {'arxiv.org', 'export.arxiv.org', 'openaccess.thecvf.com', 'aclanthology.org',
              'proceedings.mlr.press', 'jmlr.org', 'www.jmlr.org', 'proceedings.neurips.cc',
-             'papers.nips.cc', 'pmc.ncbi.nlm.nih.gov'}
+             'papers.nips.cc', 'pmc.ncbi.nlm.nih.gov', 'europepmc.org', 'www.biorxiv.org',
+             'www.medrxiv.org', 'www.frontiersin.org', 'www.mdpi.com', 'www.nature.com',
+             'link.springer.com', 'dl.acm.org', 'ieeexplore.ieee.org', 'hal.science', 'eprint.iacr.org',
+             'www.usenix.org', 'drops.dagstuhl.de', 'pdfs.semanticscholar.org', 'www.semanticscholar.org',
+             'zenodo.org', 'journals.plos.org'}
 OPENREVIEW_ID = re.compile(r'id=[A-Za-z0-9_-]{1,64}\Z')
 PDF_LIMIT = 12 * 1024**2
 
@@ -61,7 +66,10 @@ def work_metadata(work):
         if left == right:
             venue = left
     url = 'https://openalex.org/' + identifier
+    landing = location.get('landing_page_url')
+    fallback = landing if isinstance(landing,str) and re.fullmatch(r'https://[^/@]+/[^\s]*',landing) else url
     urls = []
+    names = [str((row.get('author') or {}).get('display_name') or '')[:140] for row in work.get('authorships', [])[:40]]
     for location in [work.get('best_oa_location'), *(work.get('locations') or [])[:24]]:
         if not isinstance(location, dict) or not location.get('is_oa'):
             continue
@@ -80,7 +88,7 @@ def work_metadata(work):
         urls.append('https://arxiv.org/pdf/' + preprint[1])
     return {'id': identifier, 'title': title[:350], 'year': year if type(year) is int else None,
             'venue': venue, 'direction': str(topic.get('display_name') or '')[:180],
-            'source_url': url, 'pdf_sources': list(dict.fromkeys(urls))[:2], 'authors': sorted(author_ids(work))[:30]}
+            'source_url': url, 'fallback_url': fallback, 'doi': doi, 'author_names': [name for name in names if name], 'pdf_sources': list(dict.fromkeys(urls))[:2], 'authors': sorted(author_ids(work))[:30]}
 
 
 def allowed_pdf(value):
@@ -92,6 +100,11 @@ def allowed_pdf(value):
             return False
         if url.hostname == 'openreview.net':
             return url.path == '/pdf' and OPENREVIEW_ID.fullmatch(url.query) is not None
+        if url.hostname=='journals.plos.org' and re.fullmatch(r'/[a-z]+/article/file',url.path):
+            params=parse_qs(url.query)
+            return (set(params)=={'id','type'} and len(params['id'])==1 and
+                    re.fullmatch(r'10\.1371/journal\.[a-z]+\.[0-9]+',params['id'][0]) is not None and
+                    params['type']==['printable'])
         return (url.hostname in PDF_HOSTS and not url.query and bool(url.path)
                 and (url.path.endswith('.pdf') or url.hostname == 'aclanthology.org'
                      or url.hostname in {'arxiv.org','export.arxiv.org'} and url.path.startswith('/pdf/')))
@@ -108,7 +121,7 @@ def pdf_text_status(pages, title):
     return 'verified' if title and title in normalize_title(first_page) else 'identity_mismatch'
 
 
-def fetch_method_chunks(paper, query, deadline, *, verify=False, progress=lambda phase: None):
+def fetch_method_chunks(paper, query, deadline, *, verify=False, progress=lambda phase: None, save_pdf=None):
     class PublicPDFRedirects(HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
             if not allowed_pdf(newurl):
@@ -133,7 +146,7 @@ def fetch_method_chunks(paper, query, deadline, *, verify=False, progress=lambda
                     data.extend(block)
                 else:
                     if deadline - time.monotonic() <= 1 and status != 'insufficient_evidence':
-                        status = 'pending'
+                        status = 'download_failed' if verify else 'pending'
                     continue
                 raw = bytes(data)
                 source = response.geturl()
@@ -152,6 +165,8 @@ def fetch_method_chunks(paper, query, deadline, *, verify=False, progress=lambda
                     continue
             chunks = retrieve_methods(pages, query=query, limit=4)
             if verify:
+                if save_pdf:
+                    save_pdf(raw, source)
                 return [{**chunk, 'source_url': source} for chunk in chunks], 'verified'
             if chunks:
                 return [{**chunk, 'source_url': source} for chunk in chunks], 'pending'
@@ -169,22 +184,152 @@ def fetch_method_chunks(paper, query, deadline, *, verify=False, progress=lambda
     return [], status
 
 
-def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: None):
-    progress('downloading')
-    chunks, status = fetch_method_chunks(paper, paper['title'], deadline, verify=True, progress=progress)
-    if status == 'verified' or not paper.get('authors') or deadline - time.monotonic() < 4:
-        return chunks, status
-    try:
-        tried = set(paper.get('pdf_sources', []))
-        sources = [url for url in provider.find_open_editions(paper) if url not in tried]
-    except (ReviewError, OSError, ValueError):
-        return chunks, status
-    if sources:
+ARXIV_ID = re.compile(r'(?:[a-z-]+(?:\.[a-z-]+)?/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?', re.I)
+DOI = re.compile(r'10\.\d{4,9}/[^\s?#]+', re.I)
+
+
+def paper_reference(value):
+    text = value.strip()
+    url = urlsplit(text) if text.startswith(('https://', 'http://')) else None
+    if url and (url.username or url.password):
+        raise ReviewError('invalid_paper_reference', '请填写公开论文链接。')
+    if url and url.hostname in {'arxiv.org','export.arxiv.org'}:
+        text = re.sub(r'^/(?:abs|pdf)/', '', url.path).removesuffix('.pdf')
+    identifier = re.sub(r'^(?:arxiv:|10\.48550/arxiv\.)', '', text, flags=re.I)
+    if ARXIV_ID.fullmatch(identifier):
+        return 'arxiv', identifier
+    if url and url.hostname == 'openalex.org' and work_id(url.path.lstrip('/')):
+        return 'openalex', url.path.lstrip('/')
+    doi = unquote(url.path.lstrip('/')) if url and url.hostname in {'doi.org','dx.doi.org'} else re.sub(r'^doi:', '', text, flags=re.I)
+    if DOI.fullmatch(doi):
+        arxiv = re.sub(r'^10\.48550/arxiv\.', '', doi, flags=re.I)
+        return ('arxiv', arxiv) if ARXIV_ID.fullmatch(arxiv) else ('doi', doi)
+    return ('url', value.strip()) if url else ('title', text)
+
+
+class OpenPDFSources:
+    def __init__(self, env):
+        self.key = env.get('SEMANTIC_SCHOLAR_API_KEY', '')
+        self.email = env.get('UNPAYWALL_EMAIL', '')
+
+    @staticmethod
+    def get(url, deadline, headers=None):
+        remaining = deadline - time.monotonic()
+        if remaining < 1:
+            return b''
+        try:
+            req = Request(url, headers={'User-Agent':'ArtiCheck/1.0 public paper lookup', **(headers or {})})
+            with urlopen(req, timeout=min(4, remaining)) as response:
+                return response.read(384_000)
+        except (OSError, ValueError):
+            return b''
+
+    def json(self, url, deadline, headers=None):
+        try:
+            value = json.loads(self.get(url, deadline, headers))
+            return value if isinstance(value, dict) else {}
+        except (ValueError, UnicodeError):
+            return {}
+
+    def arxiv(self, *, deadline, title='', identifier=''):
+        params = {'max_results': 5}
+        if identifier:
+            params['id_list'] = identifier
+        else:
+            params['search_query'] = 'ti:"'+title.replace('"', ' ')[:280]+'"'
+        raw = self.get('https://export.arxiv.org/api/query?'+urlencode(params), deadline)
+        try:
+            feed = ET.fromstring(raw)
+        except ET.ParseError:
+            return {}
+        ns = {'a':'http://www.w3.org/2005/Atom','arxiv':'http://arxiv.org/schemas/atom'}
+        for entry in feed.findall('a:entry', ns):
+            candidate = entry.findtext('a:id', '', ns).split('/abs/')[-1]
+            name = ' '.join(entry.findtext('a:title', '', ns).split())
+            if not ARXIV_ID.fullmatch(candidate) or (identifier and re.sub(r'v\d+$','',candidate)!=re.sub(r'v\d+$','',identifier)):
+                continue
+            if not identifier and normalize_title(title)!=normalize_title(name):
+                continue
+            year = entry.findtext('a:published', '', ns)[:4]
+            return {'arxiv_id':candidate,'title':name,'author_names':[el.text for el in entry.findall('a:author/a:name', ns)[:40] if el.text],
+                    'year':int(year) if year.isdigit() else None,'doi':entry.findtext('arxiv:doi','',ns),
+                    'source_url':'https://arxiv.org/abs/'+candidate}
+        return {}
+
+    def semantic(self, *, deadline, title='', reference=''):
+        base = 'https://api.semanticscholar.org/graph/v1/paper/'
+        fields = 'title,externalIds,openAccessPdf,authors,year,url,isOpenAccess'
+        headers = {'x-api-key':self.key} if self.key else {}
+        if reference:
+            return self.json(base+quote(reference,safe='')+'?'+urlencode({'fields':fields}),deadline,headers)
+        result = self.json(base+'search?'+urlencode({'query':title,'limit':5,'fields':fields}),deadline,headers)
+        exact = [row for row in result.get('data', []) if normalize_title(row.get('title') or '')==normalize_title(title)]
+        return exact[0] if len(exact)==1 else {}
+
+    def unpaywall(self, doi, deadline):
+        if not self.email or not DOI.fullmatch(doi or ''):
+            return []
+        data = self.json('https://api.unpaywall.org/v2/'+quote(doi,safe='/')+'?'+urlencode({'email':self.email}),deadline)
+        if data.get('is_oa') is not True:
+            return []
+        locations = [data.get('best_oa_location'), *(data.get('oa_locations') or [])]
+        return list(dict.fromkeys(row['url_for_pdf'] for row in locations if row and allowed_pdf(row.get('url_for_pdf'))))[:2]
+
+
+def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: None, sources=None, save_pdf=None):
+    sources = sources or OpenPDFSources({})
+    tried, status = set(), 'no_full_text'
+
+    def attempt(urls):
+        nonlocal status
+        candidates = [url for url in dict.fromkeys(urls) if allowed_pdf(url) and url not in tried]
+        if not candidates:
+            return []
+        tried.update(candidates)
         progress('downloading')
-        alternate, alternate_status = fetch_method_chunks({**paper, 'pdf_sources': sources}, paper['title'], deadline,
-                                                           verify=True, progress=progress)
-        if alternate_status == 'verified' or status == 'no_full_text':
-            return alternate, alternate_status
+        chunks, candidate_status = fetch_method_chunks({**paper,'pdf_sources':candidates}, paper['title'], deadline,
+                                                        verify=True, progress=progress, save_pdf=save_pdf)
+        if candidate_status == 'verified' or status in {'no_full_text','download_failed'}:
+            status = candidate_status
+        return chunks
+
+    indexed = paper.get('pdf_sources', [])
+    arxiv = [url for url in indexed if urlsplit(url).hostname in {'arxiv.org','export.arxiv.org'}]
+    if paper.get('arxiv_id'):
+        arxiv.insert(0,'https://arxiv.org/pdf/'+paper['arxiv_id'])
+    if not arxiv:
+        edition = sources.arxiv(title=paper['title'],deadline=deadline)
+        if edition:
+            arxiv = ['https://arxiv.org/pdf/'+edition['arxiv_id']]
+    chunks = attempt(arxiv)
+    if status == 'verified':
+        return chunks, status
+    doi = (paper.get('doi') or '').removeprefix('https://doi.org/')
+    semantic = sources.semantic(title=paper['title'], reference='DOI:'+doi if DOI.fullmatch(doi) else '',deadline=deadline)
+    if not semantic and doi:
+        semantic = sources.semantic(title=paper['title'],deadline=deadline)
+    if normalize_title(semantic.get('title') or '') == normalize_title(paper['title']):
+        ext = semantic.get('externalIds') or {}
+        doi = doi or ext.get('DOI') or ''
+        arxiv_id = ext.get('ArXiv') or ''
+        if ARXIV_ID.fullmatch(arxiv_id):
+            chunks = attempt(['https://arxiv.org/pdf/'+arxiv_id])
+            if status == 'verified':
+                return chunks, status
+        chunks = attempt([(semantic.get('openAccessPdf') or {}).get('url')])
+        if status == 'verified':
+            return chunks, status
+    chunks = attempt(indexed)
+    if status == 'verified':
+        return chunks, status
+    if paper.get('authors') and deadline-time.monotonic()>4:
+        try:
+            chunks = attempt(provider.find_open_editions(paper))
+        except (ReviewError, OSError, ValueError):
+            pass
+        if status == 'verified':
+            return chunks, status
+    chunks = attempt(sources.unpaywall(doi, deadline))
     return chunks, status
 
 

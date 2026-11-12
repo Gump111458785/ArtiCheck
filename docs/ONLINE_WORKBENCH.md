@@ -32,7 +32,7 @@
 ## 存储与费用
 
 - PDF 与 ZIP 保存在当前浏览器。大文件另经临时 E2B 文件通道传输，最长保留 15 分钟后实例自动回收；提交时由服务端校验大小与 SHA256 后解析；有执行任务时将代码放入隔离实例，不向实例注入模型、Redis、EdgeOne 或 E2B 密钥。
-- Redis 保存账户或浏览器身份隔离的审查报告、计划、执行状态与费用预留，保留 7 天；不保存原始 PDF/ZIP。报告可能包含材料中的引用、源码路径和执行输出。
+- Redis 保存账户或浏览器身份隔离的审查报告、计划、执行状态与费用预留，保留 7 天；审查报告只保存材料指纹。知识图谱中自动下载或用户插入的 PDF 独立按账号保存。报告可能包含材料中的引用、源码路径和执行输出。
 - 浏览器生成随机身份凭据。其他浏览器不能仅凭任务编号读取报告；清除浏览器存储后原身份不能自动恢复，应先导出报告。
 - 主审、公开资料检索与交叉复核共用原费用计数，合计最多 60 次，每次保守预留 1 元；隔离实例最多创建 20 次（包含大文件暂存与 CPU 实验执行），每次预留 1 元。总预留 80 元，低于本轮 100 元授权；余额查询/日志/报告读取不新建实例。
 - 预留在外部调用之前原子完成，失败不退回。供应商不可用时不自动重试；重复提交同一 `request_id` 不重复请求模型，重复执行同一冻结计划不重复创建实例。实际失败、停止或超时后可主动重试，同一报告最多三次执行，每次单独预留并保留历史。
@@ -113,8 +113,9 @@ EdgeOne 的 Python 3.10 环境使用 `e2b==2.55.1`；新版本 SDK 的 Python �
 
 ### 图谱原文与方法贡献
 
-图谱先用 OpenAlex 确定书目及开放版本，再通过受限的下载入口获取 PDF。系统核对首页标题与正文可读性，保存核验状态。多级扩展对每一层起点执行相同检查。用户补充原始 PDF 后，自己的论文用文件指纹匹配原始审查，公开文献用书目标题匹配。只有书目的节点会标明正文状态。
+图谱接受标题、DOI、arXiv ID 或论文链接。定位书目后按 arXiv、Semantic Scholar、OpenAlex、Unpaywall 的顺序尝试开放 PDF，核对文件格式、首页标题和正文可读性。多级扩展对每一层起点执行同样的检查，已有 PDF 的节点复用保存记录。手动插入时，自己的论文用文件指纹匹配原始审查，公开文献用书目标题匹配。无可下载版本时节点提供原文来源入口。
 
-- 开放版本发现采用现有 OpenAlex 来源。开放获取位置与 PDF 地址的设计可参考 [Unpaywall 开放位置字段](https://unpaywall.org/data-format)。
+- [arXiv 查询 API](https://github.com/arXiv/arxiv-docs/blob/develop/source/help/api/user-manual.md)、[Semantic Scholar Graph API](https://api.semanticscholar.org/api-docs)、OpenAlex 和 [Unpaywall](https://unpaywall.org/api) 用于开放版本发现。可配置 `SEMANTIC_SCHOLAR_API_KEY` 提高该来源的请求可用性。使用 Unpaywall 需要 `UNPAYWALL_EMAIL`。
+- 账号内下载索引通过 `GET /v1/kg/papers/index.md` 导出。保存的文件按 `年份_第一作者_论文标题.pdf` 命名；书目缺失的字段标为未知。
 - 线上沿用隔离的 pypdf 解析。章节结构和双栏阅读顺序可参考 [GROBID 全文解析](https://grobid.readthedocs.io/en/latest/training/fulltext/) 与 [Docling](https://github.com/docling-project/docling)。当前扫描件无可提取正文时显示解析失败并允许补充文件。
 - 贡献提取保留方法章节、页码和引文。Related Work 用于归属判断，主贡献与子贡献由方法证据支持。可用 [NLPContributionGraph](https://aclanthology.org/2021.semeval-1.44/) 的贡献句、短语和关系标注作为后续评测参考。

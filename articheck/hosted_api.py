@@ -1,5 +1,6 @@
 """Hosted v2 routes. v1 remains available for existing API clients."""
 import hmac
+import io
 import json
 import re
 import time
@@ -19,7 +20,7 @@ from .review_api import ReviewError, now
 
 
 def register(app, env, reviewer, budget, *, store=None, executor=None):
-    from flask import jsonify, request
+    from flask import Response, jsonify, request, send_file
     store = store or HostedStore(env)
     executor = executor or HybridExecutor(env,store)
     uploads = HostedUploads(env,store)
@@ -560,7 +561,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
 
     def self_review_report(owner, job):
         report = store.get(owner, job)
-        if (report.get('review') or {}).get('task') != 'self_review':
+        review = report.get('review') or {}
+        if (review.get('purpose') or review.get('task')) != 'self_review':
             raise ReviewError('report_type', '只有论文自查报告提供潜在冲突核对。', 404)
         return report
 
@@ -592,6 +594,33 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         return jsonify(kg.edit_relation(owner, str(payload.get('source') or ''),
                                         str(payload.get('target') or ''), payload.get('action'),
                                         payload.get('note', ''), payload.get('label', '')))
+
+    @app.post('/kg/papers/import')
+    def import_kg_paper():
+        owner = authorize()
+        with kg.public_work_slot(owner):
+            return jsonify(kg.import_public_paper(owner, body().get('reference')))
+
+    @app.get('/kg/papers/<paper_id>/pdf')
+    def view_kg_paper_pdf(paper_id):
+        owner=authorize()
+        chunk=request.args.get('chunk',type=int)
+        if chunk is not None:
+            raw, record = kg.paper_file(owner,paper_id,offset=chunk*2_000_000,size=2_000_000)
+            response=Response(raw,mimetype='application/octet-stream',
+                              headers={'X-ArtiCheck-Paper-Bytes':str(record['bytes']),
+                                       'X-ArtiCheck-Paper-SHA256':record['sha256']})
+        else:
+            raw, record = kg.paper_file(owner,paper_id)
+            response=send_file(io.BytesIO(raw),mimetype='application/pdf',download_name=record['filename'],max_age=0)
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        return response
+
+    @app.get('/kg/papers/index.md')
+    def export_kg_paper_index():
+        return Response(kg.paper_index(authorize()), content_type='text/markdown; charset=utf-8',
+                        headers={'Content-Disposition':'attachment; filename="index.md"','Cache-Control':'private, no-store'})
 
     @app.post('/kg/literature/expand')
     def expand_kg_literature():

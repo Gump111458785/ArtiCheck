@@ -526,7 +526,7 @@ def validate_assessment(value, context):
               'findings': clean_findings, 'metrics': sorted(clean_metrics, key=lambda m: not m['author_method']),
               'core_code_snippets': core_code_snippets,
               'visual_observations':visual_observations,'web_checks':web_checks,
-              'coverage': {**context['coverage'], 'gaps': list(dict.fromkeys(gaps + rejected + citation_gaps)), 'note': text(coverage, 'note')},
+              'coverage': {**context['coverage'], 'total_paper_pages': context['paper_pages'], 'gaps': list(dict.fromkeys(gaps + rejected + citation_gaps)), 'note': text(coverage, 'note')},
               'plan': {'purpose': text(plan, 'purpose'), 'blocked_reason': optional_text(plan, 'blocked_reason'),
                        'stages': stages, 'needs': needs, 'metric_patterns': patterns,
                        'max_seconds': context['max_seconds'], 'policy': 'frozen_api_plan', 'fail_fast': True,
