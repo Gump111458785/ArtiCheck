@@ -2505,3 +2505,7 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 @media(max-width:900px){.kg-import-paper{grid-column:1/-1}}
 :is(.kg-filters,.account-access-note,.account-auth>aside,.process-ready-banner,.interruption-remedy-box,
     .interruption-cmd-box,.order-card-body,.online-notice,.role-node-block,.start-acceptance){border-radius:0!important}
+:is(.probe-verdict-summary,.sidebar-resource,.review-ended,.archive-table-center,
+    .report-stage-results .online-table-wrap,.kg-notice){border-radius:0!important}
+.report-result-head.failed h2{color:#a81f2b}
+.report-result-head.passed h2{color:#087050}
