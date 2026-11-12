@@ -17,17 +17,26 @@ def main():
     if reader.is_encrypted or not 1 <= len(reader.pages) <= 150:
         raise ValueError('PDF must be unencrypted and contain 1–150 pages')
     pages=[];total=0
+    layout = '--layout' in sys.argv
+    method_context = '--method-context' in sys.argv
+    method_pages, method_chars = [], 0
     for number,page in enumerate(reader.pages,1):
-        text=((page.extract_text(extraction_mode='layout') if '--layout' in sys.argv else page.extract_text()) or '') if '/Contents' in page else ''
+        has_contents = '/Contents' in page
+        ordinary = (page.extract_text() or '') if has_contents and (not layout or number == 1 or method_context) else ''
+        text = (page.extract_text(extraction_mode='layout') or ordinary) if has_contents and layout else ordinary
         if len(text)>60000:raise ValueError('Page text exceeds limit; no partial inventory is certified')
         total+=len(text)
         if total>1_500_000:raise ValueError('Extracted PDF text exceeds limit')
         item={'number':number,'text':text}
-        if '--layout' in sys.argv:
+        if method_context and ordinary and method_chars < 400_000:
+            method_text = ordinary[:min(60_000, 400_000 - method_chars)]
+            method_pages.append({'number': number, 'text': method_text})
+            method_chars += len(method_text)
+        if layout:
             if number == 1:
                 # Layout extraction drops rotated arXiv margin identifiers.
                 # Read only the first page header in ordinary extraction mode.
-                header=((page.extract_text() or '') if '/Contents' in page else '')[:2500]
+                header=ordinary[:2500]
                 item['public_ids']=re.findall(r'arxiv\s*:\s*(\d{4}\.\d{4,5})(?:v\d+)?',header,re.I)
             links=[]
             for annotation in list(page.get('/Annots', []))[:100]:
@@ -42,6 +51,8 @@ def main():
     raw=(json.dumps(pages,ensure_ascii=False,indent=2)+'\n').encode('utf-8')
     if len(raw)>2_000_000:raise ValueError('Extracted PDF text exceeds 2 MB')
     Path(sys.argv[2]).write_bytes(raw)
+    if method_context:
+        Path(sys.argv[2]).with_suffix('.methods.json').write_text(json.dumps(method_pages, ensure_ascii=False), encoding='utf-8')
 
 if __name__=='__main__':
     try:main()

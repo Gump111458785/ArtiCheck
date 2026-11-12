@@ -38,3 +38,5 @@ export function sessionCapability(storage=localStorage){
  }
  return value;
 }
+
+export async function encoded(blob){const bytes=new Uint8Array(await blob.arrayBuffer());let s='';for(let n=0;n<bytes.length;n+=32768)s+=String.fromCharCode(...bytes.subarray(n,n+32768));return btoa(s);}

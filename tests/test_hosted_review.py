@@ -225,7 +225,7 @@ class HostedReviewTests(unittest.TestCase):
                             and edge['source_url'] for edge in graph['edges']))
         self.assertTrue(by_id[root]['read'])
         self.assertFalse(by_id['W33']['read'])
-        self.assertEqual(by_id['W22']['method_status'], 'unavailable')
+        self.assertEqual(by_id['W22']['method_status'], 'no_full_text')
         self.assertNotIn('legacy abstract', json.dumps(graph))
         edge = next(edge for edge in graph['edges'] if edge['edge_type'] == 'SIMILAR_CONTRIBUTION')
         self.assertEqual(edge['evidence'][0]['section'], '3. Residual Learning')
@@ -766,17 +766,15 @@ class HostedReviewTests(unittest.TestCase):
         app=Flask(__name__);store=MemoryStore();executor=Executor();budget=Budget()
         register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), budget, store=store, executor=executor)
         client=app.test_client();job='e'*32
-        # Unclaimed request: cancel succeeds without touching the store.
-        early=client.post('/assessments/'+job+'/cancel',json={},headers=HEADERS)
-        self.assertEqual(early.status_code,200);self.assertEqual(early.json['status'],'cancelled')
         real_assess=__import__('articheck.hosted_api',fromlist=['assess']).assess
         def cancel_mid_review(*args,**kwargs):
             stopped=client.post('/assessments/'+job+'/cancel',json={},headers=HEADERS).json
             self.assertEqual(stopped['status'],'cancelled')
             self.assertEqual(stopped['activity'][-1]['title'],'审查已手动中止')
             return real_assess(*args,**kwargs)
-        with patch('articheck.hosted_api.assess',side_effect=cancel_mid_review):
+        with patch('articheck.hosted_api.assess',side_effect=cancel_mid_review) as model:
             late=client.post('/assessments',json={**materials(),'request_id':job},headers=HEADERS)
+        model.assert_called_once()
         self.assertEqual(late.json['status'],'cancelled')
         self.assertEqual(client.get('/assessments/'+job,headers=HEADERS).json['status'],'cancelled')
         self.assertEqual(executor.launches,0)

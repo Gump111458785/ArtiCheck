@@ -90,7 +90,7 @@ def prepare_context(body, *, partial=False):
             raise ReviewError('invalid_pdf','Paper is not a PDF')
         with tempfile.TemporaryDirectory(prefix='articheck-api-paper-') as tmp:
             path=Path(tmp)/'paper.pdf';path.write_bytes(pdf)
-            pages,parser=extract_paper(path, layout=partial)
+            pages,parser=extract_paper(path, layout=partial, method_context=partial)
     if body.get('code') or not partial:
         code,archive=decode_material(body.get('code'),'.zip',MAX_CODE_BYTES)
     files=[];excerpts=[];seen=set();budget=60000 if partial else 50000;unpacked=0
@@ -133,8 +133,7 @@ def prepare_context(body, *, partial=False):
     context={'paper':paper,'code':archive,'paper_pages':len(pages),'files':files,'paper_excerpts':paper_excerpts,'code_excerpts':excerpts,'parser':parser,
             'coverage':{'paper_pages_in_context':len(paper_excerpts),'code_files_in_context':len(excerpts),'total_code_files':len(files),'file_list_in_context':min(len(files),500),'file_list_truncated':len(files)>500,'paper_text_truncated':len(paper_excerpts)<len(pages) or any(p['truncated'] for p in paper_excerpts),'scope':'Bounded excerpts, not a complete repository audit'}}
     if partial:
-        from .kg_methods import retrieve_methods
-        context['method_chunks']=retrieve_methods(pages, query='architecture design algorithm implementation')
+        context['method_chunks'] = parser.pop('method_chunks', []) if parser else []
         context['paper_links']=list(dict.fromkeys(link for page in pages for link in page.get('links',[])))[:100]
         context['public_paper_ids']=pages[0].get('public_ids',[]) if pages else []
     return context,str(body.get('scope',''))[:2000]

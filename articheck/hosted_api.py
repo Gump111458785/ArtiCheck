@@ -89,6 +89,9 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         payload=body()
         name=repository(payload.get('url'))
         assessment=store.get(owner,payload['assessment_id']) if payload.get('assessment_id') else None
+        prior_assessment = copy.deepcopy(assessment)
+        if assessment and (assessment.get('terminated_at') or assessment.get('termination_requested')):
+            raise ReviewError('assessment_terminated', '本次审查已终止。', 409)
         if assessment and assessment['review'].get('repository_hint')!='https://github.com/'+name:
             raise ReviewError('source_mismatch','自动获取的仓库必须对应本次报告中的来源线索。',409)
         cached=None
@@ -102,7 +105,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             if assessment:
                 assessment['source_discovery']={'status':'failed','url':'https://github.com/'+name,
                                                 'error':exc.code,'reason':str(exc),'attempted_at':now()}
-                store.save(owner,assessment)
+                store.replace(owner, prior_assessment, assessment)
             raise
         fetched_at=cached.get('fetched_at') if cached else time.time()
         if not cached:
@@ -111,7 +114,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         if assessment:
             assessment['source_discovery']={'status':'downloaded','url':result['url'],
                                             'commit':result['commit'],'sha256':result['sha256'],'attempted_at':now()}
-            store.save(owner,assessment)
+            if not store.replace(owner, prior_assessment, assessment):
+                assessment = store.get(owner, assessment['id'])
         return jsonify({**result,'cached_reference':bool(cached),'fetched_at':fetched_at,
                         **({'assessment':assessment} if assessment else {})})
 
@@ -119,7 +123,19 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     def create_assessment():
         started=time.monotonic()
         owner = authorize()
-        payload = material_body(body())
+        payload = body()
+        job = payload.get('request_id') or uuid.uuid4().hex
+        if not isinstance(job, str) or not re.fullmatch(r'[a-f0-9]{32}', job):
+            raise ReviewError('invalid_request_id', '请求编号无效。')
+        try:
+            existing = store.get(owner, job)
+        except ReviewError as exc:
+            if exc.code != 'not_found':
+                raise
+        else:
+            if existing.get('status') == 'cancelled':
+                return jsonify(existing)
+        payload = material_body(payload)
         try:
             context, scope = prepare_assessment(payload)
             context['execution_environment']=getattr(executor,'capacity',context['execution_environment'])
@@ -131,9 +147,6 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             context['method_chunks'].pop()
         if len(json.dumps(text_materials(context), ensure_ascii=False).encode()) > 175_000:
             raise ReviewError('context_too_large', '材料解析后的内容过大，请缩小代码包或论文范围。', 413)
-        job = payload.get('request_id') or uuid.uuid4().hex
-        if not isinstance(job, str) or not re.fullmatch(r'[a-f0-9]{32}', job):
-            raise ReviewError('invalid_request_id', '请求编号无效。')
         identity = digest({'materials': material_identity(context), 'task': context['task'],
                            'scope': scope, 'max_seconds': context['max_seconds'],'supplement':context['supplement']})
         pending = {'id': job, 'status': 'reviewing', 'created_at': now(), 'started_at': time.time(),
@@ -142,32 +155,37 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                    'execution': None, 'execution_performed': False, 'scientific_validation': False}
         if not store.claim(owner, pending):
             existing = store.get(owner, job)
-            if existing.get('input_sha256') != identity:
+            if existing.get('status') != 'cancelled' and existing.get('input_sha256') != identity:
                 raise ReviewError('request_changed', '同一请求编号不能替换材料或审查范围。', 409)
             return jsonify(existing)
-        # Observable workflow facts only; no model reasoning or fabricated agent turns.
+        published = copy.deepcopy(pending)
         pending['activity'] = []
-        def cancelled():
-            # A user stop is durable: later progress or results never overwrite it.
-            try:return store.get(owner,job).get('status')=='cancelled'
-            except Exception:return False
+
+        def stopped():
+            return store.get(owner, job).get('status') != 'reviewing'
+
+        def publish(value):
+            nonlocal published
+            if not store.replace(owner, published, value):
+                return False
+            published = copy.deepcopy(value)
+            return True
+
         def activity(title, roles, detail='', status='running'):
             for event in pending['activity']:
                 if event['status']=='running':event['status']='failed' if status in {'failed','skipped'} else 'completed'
             pending['activity'].append({'title':title,'roles':roles,'detail':detail,
                                         'status':status,'time':time.time()})
-            if cancelled():return
-            try:store.save(owner,pending)
-            except ReviewError:pass  # Progress telemetry must not change the assessment.
+            return publish(pending)
         activity('材料解析完成',[role for role,present in [('literature_reader',context.get('paper')),('code_inspector',context.get('code'))] if present],
                  '论文与源码已按输入预算解析；仅处理实际提供的材料。','completed')
         # Material parsing and the durable idempotency claim precede reservation.
         try:
-            if cancelled():
+            if stopped():
                 return jsonify(store.get(owner, job))
             activity('核对公开来源',['literature_reader' if context.get('paper') else 'code_inspector'],'正在识别可核对的公开出处；无有效标识时仅核对导入材料。')
             lookup(context,budget,store)
-            if cancelled():
+            if stopped():
                 return jsonify(store.get(owner, job))
             while len(json.dumps(text_materials(context),ensure_ascii=False).encode())>175_000 and context.get('web_sources'):
                 sources=context['web_sources']
@@ -177,23 +195,28 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                     for source in sources:source['summary']=''
                 else:sources.pop()
                 context['source_lookup']['context_truncated']=True
-            attempt = budget.reserve()
             has_code = bool(context.get('code'))
             activity('联合审阅与计划编排' if has_code else '论文审阅与指标核查',
                      [role for role,present in [('literature_reader',context.get('paper')),('code_inspector',has_code),('planner',has_code and context.get('task')!='self_review')] if present],
                      '主审模型正在核对图表、实现与实验条件，并生成结构化建议和执行计划。' if has_code else '主审模型正在深度核对论文图表、指标出处与论证一致性。')
+            if stopped():
+                return jsonify(store.get(owner, job))
+            attempt = budget.reserve()
+            if stopped():
+                return jsonify(store.get(owner, job))
             value = assess(reviewer, context, scope, request_timeout=max(5,min(80,108-(time.monotonic()-started))))
         except Exception as exc:
-            if cancelled():
+            if stopped():
                 return jsonify(store.get(owner, job))
             activity('主审请求未完成',['reporter'],'保留已取得的活动记录，不自动重试。','failed')
             pending.update(status='failed', error=exc.code if isinstance(exc, ReviewError) else 'provider_failed',
                            error_message=str(exc)[:300] if isinstance(exc, ReviewError) else f'模型请求未完成（{type(exc).__name__}），请稍后重试。')
-            store.save(owner, pending)
+            if not publish(pending):
+                return jsonify(store.get(owner, job))
             if isinstance(exc, ReviewError):
                 raise
             raise ReviewError('provider_failed', '模型请求失败，调用额度已预留；未自动重试。', 502) from exc
-        if cancelled():
+        if stopped():
             return jsonify(store.get(owner, job))
         return_roles = [role for role,present in [('literature_reader',context.get('paper')),('code_inspector',context.get('code')),('planner',bool(context.get('code') and value['review']['plan']['stages']))] if present] or ['literature_reader']
         activity('主审结果已返回',return_roles,'图表与代码核查结果、执行计划已完成结构化校验。' if context.get('code') else '论文图表与材料核查结果已完成结构化校验。','completed')
@@ -201,8 +224,11 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         if context['paper'] and value['review']['paper_type'] in {'empirical','diagnostic','survey'} and (value['review']['findings'] or value['review']['metrics']):
             if remaining>=8:
                 try:
+                    if not activity('交叉核查依据',['cross_auditor'],'独立复核建议与图表数字，撤回依据不足的条目。'):
+                        return jsonify(store.get(owner, job))
                     attempt=budget.reserve()
-                    activity('交叉核查依据',['cross_auditor'],'独立复核建议与图表数字，撤回依据不足的条目。')
+                    if stopped():
+                        return jsonify(store.get(owner, job))
                     value=cross_audit(reviewer,context,value,request_timeout=min(25,remaining))
                 except Exception as exc:
                     value['audit']={'status':'not_completed','reason':exc.code if isinstance(exc,ReviewError) else 'cross_audit_failed'}
@@ -217,9 +243,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         if identifier := public_identifier(context):
             value['public_paper_identifier'] = identifier
         value['budget'] = {'model_reserved_attempts': attempt, 'model_max_attempts': getattr(budget,'max_attempts',10)}
-        if cancelled():
+        if not publish(value):
             return jsonify(store.get(owner, job))
-        store.save(owner, value)
         return jsonify(value)
 
     @app.get('/assessments/<job>')
@@ -227,18 +252,27 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         owner = authorize()
         value = store.get(owner, job)
         previous = copy.deepcopy(value)
+        if value.get('terminated_at'):
+            return jsonify(value)
         if value.get('status') == 'reviewing' and time.time() - value['started_at'] > 125:
             value.update(status='failed', error='review_response_unavailable')
             if not store.replace(owner, previous, value):
                 return jsonify(store.get(owner, job))
         execution = value.get('execution')
-        if execution and execution['status'] == 'starting' and time.time() > execution.get('deadline', float('inf')):
-            value['execution'] = {**execution, 'status': 'expired', 'notice': '未能确认实例启动结果，保留未验收状态。'}
-            store.replace(owner, previous, value)
-            return jsonify(store.get(owner, job))
+        if execution and (execution['status'] == 'starting' or execution.get('awaiting_launch')):
+            if time.time() > execution.get('deadline', float('inf')):
+                value['execution'] = {**execution, 'status': 'expired', 'notice': '未能确认实例启动结果，保留未验收状态。'}
+                value['execution'].pop('awaiting_launch', None)
+                complete_termination(value)
+                store.replace(owner, previous, value)
+                value = store.get(owner, job)
+            return jsonify(value)
         if execution and execution['status'] in {'queued', 'running', 'cancelling'}:
             try:
                 value['execution'] = executor.poll(execution)
+                if execution['status'] == 'cancelling' and value['execution']['status'] in {'queued', 'running'}:
+                    value['execution']['status'] = 'cancelling'
+                complete_termination(value)
             except ReviewError:
                 raise
             except Exception as exc:
@@ -256,7 +290,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     def execute(job):
         owner = authorize()
         value = store.get(owner, job)
-        if value.get('terminated_at'):
+        if value.get('terminated_at') or value.get('termination_requested'):
             raise ReviewError('assessment_terminated', '本次审查已终止。', 409)
         payload = body()
         if not value.get('review'):
@@ -294,72 +328,140 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         if not store.replace(owner, previous, value):
             store.unlock_before_launch(owner, job, attempt_number)
             raise ReviewError('execution_changed', '任务状态已更新，请刷新。', 409)
+        starting = copy.deepcopy(value)
         try:
+            if store.get(owner, job) != starting:
+                return jsonify(finish_unlaunched_cancel(owner, job, attempt_id))
             attempt = store.reserve_compute()
         except ReviewError:
-            store.replace(owner, value, previous)
+            store.replace(owner, starting, previous)
             store.unlock_before_launch(owner, job, attempt_number)
             raise
-        value['execution']['reserved_attempt'] = attempt
+        if store.get(owner, job) != starting:
+            return jsonify(finish_unlaunched_cancel(owner, job, attempt_id))
         try:
-            value['execution'] = {**executor.launch(value, payload), 'reserved_attempt': attempt,'attempt_id':attempt_id}
+            launched = {**executor.launch(value, payload), 'reserved_attempt': attempt, 'attempt_id': attempt_id}
         except Exception as exc:
-            value['execution'] = {**value['execution'], 'status': 'failed',
+            value['execution'] = {**starting['execution'], 'reserved_attempt': attempt, 'status': 'failed',
                                   'notice': '云端实例启动失败，本次预留保留；请联系管理员，避免反复提交。'}
-            store.save(owner, value)
+            if not store.replace(owner, starting, value):
+                return jsonify(finish_unlaunched_cancel(owner, job, attempt_id))
             if isinstance(exc, ReviewError):
                 raise
             raise ReviewError('sandbox_launch_failed', value['execution']['notice'], 502) from exc
-        store.save(owner, value)
-        return jsonify(value)
+        value['execution'] = launched
+        if store.replace(owner, starting, value):
+            return jsonify(value)
+        current = store.get(owner, job)
+        if (current.get('execution') or {}).get('attempt_id') == attempt_id:
+            # Expose the handle before stopping, so a transient stop failure can be retried.
+            updated = {**current, 'execution': {**launched, 'status': 'cancelling'}}
+            if store.replace(owner, current, updated):
+                return jsonify(stop_execution(owner, job, updated))
+        executor.stop(launched)
+        return jsonify(store.get(owner, job))
+
+    def finish_unlaunched_cancel(owner, job, attempt_id):
+        current = store.get(owner, job)
+        execution = current.get('execution') or {}
+        if execution.get('attempt_id') == attempt_id and execution.get('awaiting_launch'):
+            updated = {**current, 'execution': {**execution, 'status': 'cancelled'}}
+            updated['execution'].pop('awaiting_launch')
+            complete_termination(updated)
+            if store.replace(owner, current, updated):
+                return updated
+        return store.get(owner, job)
+
+    def complete_termination(value):
+        if value.get('termination_requested') and (value.get('execution') or {}).get('status') not in {
+            'queued', 'starting', 'running', 'cancelling'
+        } and value.get('status') != 'reviewing':
+            value['terminated_at'] = now()
+            value['notice'] = '本次审查已终止，已取得的证据保留。'
+
+    def stop_execution(owner, job, current):
+        execution = current['execution']
+        try:
+            snapshot = executor.poll(execution)
+        except Exception:
+            # A log retrieval failure must not prevent a stop request.
+            snapshot = copy.deepcopy(execution)
+        if snapshot['status'] not in {'expired', 'cancelled'}:
+            try:
+                stopped = executor.stop(execution)
+            except Exception as exc:
+                raise ReviewError('cancel_pending', '暂时无法确认停止，请点击重试停止。', 502) from exc
+            if snapshot['status'] not in {'completed', 'failed'}:
+                if stopped is False:
+                    snapshot = {**snapshot, 'status': 'cancelling', 'notice': '已请求停止，正在等待执行器确认。'}
+                else:
+                    for stage in snapshot.get('stages', []):
+                        if stage.get('status') == 'running':
+                            stage.update(status='skipped', reason='任务已按请求停止。')
+                    snapshot = {**snapshot, 'status': 'cancelled', 'notice': '用户停止执行，保留已产生的证据。'}
+        for _ in range(6):
+            updated = {**current, 'execution': snapshot}
+            complete_termination(updated)
+            if store.replace(owner, current, updated):
+                return updated
+            current = store.get(owner, job)
+            live = current.get('execution') or {}
+            if live.get('attempt_id') != execution.get('attempt_id') or live.get('status') != 'cancelling':
+                return current
+        raise ReviewError('cancel_pending', '任务状态正在更新，请重试中断。', 409)
 
     @app.post('/assessments/<job>/cancel')
     def cancel(job):
         owner = authorize()
-        try:
-            value = store.get(owner, job)
-        except ReviewError as exc:
-            if exc.code != 'not_found':
-                raise
-            # The request may not be claimed yet (still parsing); nothing to stop server-side.
-            return jsonify({'id': job, 'status': 'cancelled', 'review': None, 'execution': None,
-                            'format': 'articheck-online-assessment-v2', 'source': 'model_api_review',
-                            'execution_performed': False, 'scientific_validation': False,
-                            'notice': '审查已按请求中止。', 'activity': []})
-        previous = copy.deepcopy(value)
-        if value.get('status') == 'reviewing':
-            for event in value.get('activity') or []:
-                if event.get('status') == 'running':
-                    event['status'] = 'failed'
-            value['activity'] = (value.get('activity') or []) + [{'title': '审查已手动中止', 'roles': ['reporter'],
-                                 'detail': '用户主动中止；已取得的活动记录保留，可重新审查。', 'status': 'failed', 'time': time.time()}]
-            value.update(status='cancelled', error='user_cancelled', notice='用户已主动中止本次审查。')
-            if not store.replace(owner, previous, value):
-                return jsonify(store.get(owner, job))
-            return jsonify(value)
-        execution = value.get('execution')
-        if execution and execution['status'] in {'queued', 'running', 'cancelling'}:
-            value['execution'] = {**execution, 'status': 'cancelling'}
-            if not store.replace(owner, previous, value):
-                return jsonify(store.get(owner, job))
+        payload = body() if request.is_json else {}
+        for _ in range(6):
             try:
-                snapshot = executor.poll(execution)
-                if snapshot['status'] not in {'completed', 'failed', 'expired', 'cancelled'}:
-                    stopped = executor.stop(execution)
-                    if stopped is False:
-                        value['execution'] = {**snapshot, 'status': 'cancelling', 'notice': '已请求 GPU 执行器停止，等待进程退出确认。'}
-                    else:
-                        stages = snapshot.get('stages') or []
-                        for stage in stages:
-                            if stage['status'] == 'running':
-                                stage.update(status='skipped', reason='任务已按请求停止。')
-                        value['execution'] = {**snapshot, 'status': 'cancelled', 'notice': '用户停止执行，保留已产生的证据。'}
-                else:
-                    value['execution'] = snapshot
-            except Exception as exc:
-                raise ReviewError('cancel_pending', '暂时无法确认停止，请点击重试停止；实例仍受最长时限限制。', 502) from exc
-            store.save(owner, value)
-        return jsonify(value)
+                value = store.get(owner, job)
+            except ReviewError as exc:
+                if exc.code != 'not_found':
+                    raise
+                tombstone = {'id': job, 'status': 'cancelled', 'review': None, 'execution': None,
+                             'format': 'articheck-online-assessment-v2', 'source': 'model_api_review',
+                             'execution_performed': False, 'scientific_validation': False,
+                             'notice': '审查已按请求中止。', 'activity': []}
+                if payload.get('terminate') is True:
+                    tombstone['termination_requested'] = True
+                    complete_termination(tombstone)
+                if store.claim(owner, tombstone):
+                    return jsonify(tombstone)
+                continue
+            previous = copy.deepcopy(value)
+            if value.get('status') == 'reviewing':
+                for event in value.get('activity') or []:
+                    if event.get('status') == 'running':
+                        event['status'] = 'skipped'
+                value.setdefault('activity', []).append({'title': '审查已手动中止', 'roles': ['reporter'],
+                                                         'status': 'completed', 'time': time.time()})
+                value.update(status='cancelled', error='user_cancelled', notice='用户已主动中止本次审查。')
+            elif (execution := value.get('execution')) and execution['status'] in {'starting', 'queued', 'running', 'cancelling'}:
+                value['execution'] = {**execution, 'status': 'cancelling'}
+                if execution['status'] == 'starting':
+                    value['execution']['awaiting_launch'] = True
+            elif value.get('review') and payload.get('execution_request') is True and (
+                not execution or execution.get('attempt_id') == payload.get('retry_of')
+            ):
+                if execution:
+                    value['execution_history'] = [*value.get('execution_history', []), execution]
+                value['execution'] = {'status': 'cancelled', 'attempt_id': uuid.uuid4().hex,
+                                      'execution_performed': False, 'scientific_validation': False,
+                                      'notice': '已取消启动实验。'}
+            else:
+                return jsonify(value)
+            if payload.get('terminate') is True:
+                value['termination_requested'] = True
+            complete_termination(value)
+            if not store.replace(owner, previous, value):
+                continue
+            current_execution = value.get('execution') or {}
+            if current_execution.get('status') == 'cancelling' and not current_execution.get('awaiting_launch'):
+                value = stop_execution(owner, job, value)
+            return jsonify(value)
+        raise ReviewError('cancel_pending', '任务状态正在更新，请重试中断。', 409)
 
     @app.post('/assessments/<job>/terminate')
     def terminate(job):
@@ -476,7 +578,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     @app.post('/kg/relations/verify')
     def verify_kg_relations():
         owner = authorize()
-        return jsonify(kg.verify_related(owner, str(body().get('paper_id') or '')))
+        with kg.public_work_slot(owner):
+            return jsonify(kg.verify_related(owner, str(body().get('paper_id') or '')))
 
     @app.post('/kg/relations/edit')
     def edit_kg_relation():
@@ -490,8 +593,10 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     def expand_kg_literature():
         owner = authorize()
         payload = body()
-        return jsonify(kg.expand_literature(owner, str(payload.get('paper_id') or ''),
-                                            kinds=payload.get('kinds'), limit=payload.get('limit')))
+        with kg.public_work_slot(owner):
+            return jsonify(kg.expand_literature(owner, str(payload.get('paper_id') or ''),
+                kinds=payload.get('kinds'), limit=payload.get('limit', 5),
+                depth=payload.get('depth', 1), total=payload.get('max_total'), operation_id=payload.get('operation_id')))
 
     @app.post('/kg/literature/paper')
     def update_kg_paper():
@@ -499,6 +604,18 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         payload = body()
         return jsonify(kg.update_paper_choice(owner, str(payload.get('paper_id') or ''),
                                              str(payload.get('action') or '')))
+
+    @app.post('/kg/contributions/extract')
+    def extract_kg_contributions():
+        owner = authorize()
+        payload = body()
+        material = material_body({'paper': payload['paper']})['paper'] if payload.get('paper') else None
+        with kg.public_work_slot(owner):
+            return jsonify(kg.retry_contributions(owner, str(payload.get('paper_id') or ''), material, operation_id=payload.get('operation_id')))
+
+    @app.post('/kg/operations/<operation_id>/cancel')
+    def cancel_kg_operation(operation_id):
+        return jsonify(kg.cancel_graph_operation(authorize(), operation_id))
 
     @app.post('/kg/nodes/delete')
     def delete_kg_node():

@@ -54,11 +54,11 @@ export class ExecutionCenter {
    const paperOnly=Boolean(!codeBound&&(p.paper||r?.materials?.paper));
    const terminated=Boolean(r?.terminated_at);
    const isCancelling=!terminated&&Boolean(this.h.isProjectCancelling?.(p.id)||ex?.status==='cancelling');
-   const reviewingNow=!terminated&&!isCancelling&&Boolean(r?.status==='reviewing'||(!r&&p.online_pending_request));
+   const reviewingNow=!terminated&&!isCancelling&&Boolean(r?.status==='reviewing'||p.online_pending_request);
    const waiting=!terminated&&Boolean(ex?.needs_user||(!ex&&(r?.review?.resource_preflight?.needs_user||(r?.review?.task==='reproduction'&&!codeBound))));
    const interrupted=Boolean(['failed','cancelled'].includes(r?.status)||['failed','cancelled','expired'].includes(ex?.status)||execStages.some(stage=>stage.status==='failed'));
    const statusKey=terminated?'terminated':isCancelling?'cancelling':reviewingNow?'reviewing':
-    ex?.status==='running'?'reproducing':['queued','starting'].includes(ex?.status)?'queued':
+    ex?.status==='running'?'reproducing':(p.online_execution_pending||['queued','starting'].includes(ex?.status))?'queued':
     waiting?'waiting':interrupted?'interrupted':r?.review?'completed':'draft';
    const completedCount=execStages.filter(stage=>stage.status==='completed').length;
    const totalStages=codeBound?stages.length:0;
@@ -88,6 +88,7 @@ export class ExecutionCenter {
     taskKey,
     taskLabel,
     statusKey,
+    retryCancel:Boolean(p.online_cancel_error),
     statusLabel,
     verdictKey,
     statusTone, active, materialKey,
@@ -214,7 +215,7 @@ export class ExecutionCenter {
        </td>
        <td class="archive-col-actions">
         <div class="order-actions-col">
-         ${item.statusKey==='cancelling'?'<button type="button" class="btn small" disabled>正在中断</button>':
+         ${item.statusKey==='cancelling'?(item.retryCancel?`<button type="button" class="btn small danger" data-order-cancel="${e(item.id)}">重试中断</button>`:'<button type="button" class="btn small" disabled>正在中断</button>'):
           ['reviewing','queued','reproducing'].includes(item.statusKey)?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看进度</button><button type="button" class="btn small danger" data-order-cancel="${e(item.id)}">中断运行</button>`:
           ['waiting','interrupted'].includes(item.statusKey)?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看诊断</button><button type="button" class="btn danger small" data-order-terminate="${e(item.id)}">终止审查</button>`:
           item.statusKey==='terminated'?`<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="process">查看记录</button>`:

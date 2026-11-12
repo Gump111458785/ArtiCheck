@@ -1,5 +1,6 @@
 """Read bounded, public citation neighborhoods from OpenAlex."""
 from concurrent.futures import ThreadPoolExecutor
+from threading import BoundedSemaphore
 import json
 from pathlib import Path
 import tempfile
@@ -20,6 +21,7 @@ LIMITS = {3, 5, 8}
 PDF_HOSTS = {'arxiv.org', 'export.arxiv.org', 'openaccess.thecvf.com', 'aclanthology.org',
              'proceedings.mlr.press', 'jmlr.org', 'www.jmlr.org', 'proceedings.neurips.cc',
              'papers.nips.cc', 'pmc.ncbi.nlm.nih.gov'}
+OPENREVIEW_ID = re.compile(r'id=[A-Za-z0-9_-]{1,64}\Z')
 PDF_LIMIT = 12 * 1024**2
 
 
@@ -68,6 +70,10 @@ def work_metadata(work):
             urls.append(pdf)
         if isinstance(landing, str) and re.fullmatch(r'https://arxiv\.org/abs/(?:[a-z-]+/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?', landing):
             urls.append(landing.replace('/abs/', '/pdf/', 1))
+        if isinstance(landing, str) and landing.startswith('https://openreview.net/forum?'):
+            candidate = landing.replace('/forum?', '/pdf?', 1)
+            if allowed_pdf(candidate):
+                urls.append(candidate)
     doi = work.get('doi') or ''
     preprint = re.fullmatch(r'https://doi\.org/10\.48550/arxiv\.(\d{4}\.\d{4,5})(?:v\d+)?', doi, re.I)
     if preprint:
@@ -82,10 +88,13 @@ def allowed_pdf(value):
         return False
     try:
         url = urlsplit(value)
-        return (url.scheme == 'https' and url.hostname in PDF_HOSTS and not url.username and not url.password
-                and url.port in {None, 443} and not url.query and not url.fragment
-                and bool(url.path) and (url.path.endswith('.pdf') or url.hostname == 'aclanthology.org'
-                                        or url.hostname in {'arxiv.org','export.arxiv.org'} and url.path.startswith('/pdf/')))
+        if url.scheme != 'https' or url.username or url.password or url.port not in {None, 443} or url.fragment:
+            return False
+        if url.hostname == 'openreview.net':
+            return url.path == '/pdf' and OPENREVIEW_ID.fullmatch(url.query) is not None
+        return (url.hostname in PDF_HOSTS and not url.query and bool(url.path)
+                and (url.path.endswith('.pdf') or url.hostname == 'aclanthology.org'
+                     or url.hostname in {'arxiv.org','export.arxiv.org'} and url.path.startswith('/pdf/')))
     except ValueError:
         return False
 
@@ -97,10 +106,13 @@ def fetch_method_chunks(paper, query, deadline):
                 raise URLError('Redirect outside public PDF allowlist')
             return super().redirect_request(req, fp, code, msg, headers, newurl)
 
+    status = 'no_full_text'
     for url in paper.get('pdf_sources', []):
         remaining = deadline - time.monotonic()
-        if remaining < 2 or not allowed_pdf(url):
+        if not allowed_pdf(url):
             continue
+        if remaining < 2:
+            return [], status if status == 'insufficient_evidence' else 'pending'
         try:
             request = Request(url, headers={'User-Agent': 'ArtiCheck/1.0 public research methods', 'Accept': 'application/pdf'})
             with build_opener(PublicPDFRedirects()).open(request, timeout=min(6, remaining/2)) as response:
@@ -111,50 +123,70 @@ def fetch_method_chunks(paper, query, deadline):
                         break
                     data.extend(block)
                 else:
+                    if deadline - time.monotonic() <= 1 and status != 'insufficient_evidence':
+                        status = 'pending'
                     continue
                 raw = bytes(data)
                 source = response.geturl()
             if not allowed_pdf(source) or not raw.startswith(b'%PDF-') or len(raw) > PDF_LIMIT:
                 continue
+            status = 'insufficient_evidence'
             with tempfile.TemporaryDirectory(prefix='articheck-oa-') as directory:
                 path = Path(directory) / 'paper.pdf'
                 path.write_bytes(raw)
                 pages, _ = extract_paper(path, timeout=max(1, min(10, deadline - time.monotonic())))
-            chunks = retrieve_methods(pages, query=query, limit=2)
+            chunks = retrieve_methods(pages, query=query, limit=4)
             if chunks:
-                return [{**chunk, 'source_url': source} for chunk in chunks]
-        except (OSError, ValueError, URLError):
+                return [{**chunk, 'source_url': source} for chunk in chunks], 'pending'
+        except HTTPError as exc:
+            if exc.code == 429 or exc.code >= 500:
+                if status != 'insufficient_evidence':
+                    status = 'pending'
+        except (URLError, TimeoutError):
+            if status != 'insufficient_evidence':
+                status = 'pending'
+        except (OSError, ValueError):
             continue
-    return []
+    return [], status
 
 
-def retrieve_public_methods(papers, query, provider=None):
+def retrieve_public_methods(papers, query, provider=None, *, include_status=False, check=lambda: None):
     if not papers:
         return {}
     deadline = time.monotonic() + 28
     def retrieve(paper):
-        if not paper.get('pdf_sources') and provider and paper.get('authors') and deadline - time.monotonic() > 7:
+        check()
+        chunks, status = fetch_method_chunks(paper, query, deadline)
+        if not chunks and provider and paper.get('authors') and deadline - time.monotonic() > 7:
+            check()
             try:
-                sources = provider.find_open_editions(paper)
-                paper = {**paper, 'pdf_sources': sources}
+                tried = set(paper.get('pdf_sources', []))
+                sources = [url for url in provider.find_open_editions(paper) if url not in tried]
             except (ReviewError, OSError, ValueError):
-                pass
-        return fetch_method_chunks(paper, query, deadline)
+                sources = []
+                if status == 'no_full_text':
+                    status = 'pending'
+            if sources:
+                chunks, alternate = fetch_method_chunks({**paper, 'pdf_sources': sources}, query, deadline)
+                if chunks or alternate == 'insufficient_evidence' or status == 'no_full_text':
+                    status = alternate
+        return (chunks, status) if include_status else chunks
 
-    with ThreadPoolExecutor(max_workers=min(8, len(papers))) as pool:
+    with ThreadPoolExecutor(max_workers=min(4, len(papers))) as pool:
         return dict(zip((paper['id'] for paper in papers), pool.map(retrieve, papers)))
 
 
 class OpenAlex:
     def __init__(self, key=''):
         self.key = key
+        self.request_slots = BoundedSemaphore(3)
 
     def request(self, path='', **params):
         query = {'select': FIELDS, **params}
         if self.key:
             query['api_key'] = self.key
         try:
-            with urlopen('https://api.openalex.org/works' + path + '?' + urlencode(query), timeout=8) as response:
+            with self.request_slots, urlopen('https://api.openalex.org/works' + path + '?' + urlencode(query), timeout=8) as response:
                 return json.loads(response.read(1_000_000))
         except HTTPError as error:
             if error.code == 404:

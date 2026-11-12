@@ -62,9 +62,12 @@ class HostedStore:
 
     def replace(self, owner, previous, value):
         # A late poll must never overwrite a cancellation or newer result.
+        encoded = json.dumps(value, ensure_ascii=False)
+        if len(encoded.encode()) > 500_000:
+            raise ReviewError('report_size', '审查报告超出保存上限。', 413)
         script="if redis.call('GET',KEYS[1])~=ARGV[1] then return 0 end; redis.call('SET',KEYS[1],ARGV[2],'EX',ARGV[3]); return 1"
         return self.command('EVAL', script, '1', self.key(owner, value['id']),
-                            json.dumps(previous, ensure_ascii=False), json.dumps(value, ensure_ascii=False), str(TTL)) == 1
+                            json.dumps(previous, ensure_ascii=False), encoded, str(TTL)) == 1
 
     def lock(self, owner, job, attempt=1):
         # The record itself contains the authoritative state. A permanent-in-TTL

@@ -66,7 +66,10 @@ E2B 免费额度、平台免费配额与实际账单以各控制台为准。这�
 | POST | `/v1/assessments` | 可选 `paper` / `code`（至少一项），`task`、可选 `scope` / `max_seconds` / `supplement`、`request_id` → 审查报告或已存在任务 |
 | GET | `/v1/assessments/{id}` | 身份隔离的报告与实际执行状态；不会重建实例 |
 | POST | `/v1/assessments/{id}/execute` | `code` 与 `plan_sha256`，重试另带 `retry_of` → 冻结计划的执行状态；重验源码身份 |
-| POST | `/v1/assessments/{id}/cancel` | 请求停止所选实例，保留已有证据；无法确认停止时不伪装为已停止 |
+| POST | `/v1/assessments/{id}/cancel` | 中断审查或执行。可选 `terminate: true`，停止确认后终止记录。尚在提交执行时发送 `execution_request: true`，重试可附 `retry_of`。 |
+| POST | `/v1/kg/literature/expand` | `paper_id`、`kinds`、`depth`、`max_total`、`operation_id` → 多级公开文献关系 |
+| POST | `/v1/kg/contributions/extract` | `paper_id`、`operation_id`，自己的审查记录可提供原始 `paper` → 带证据的贡献及提取状态 |
+| POST | `/v1/kg/operations/{id}/cancel` | 停止图谱检索或提取，返回 `cancelled` 或 `completed` |
 | POST | `/v1/assessments/{id}/feedback` | 受阻后提交 `answer: unavailable / can_provide`，记录材料可获得性，不改变科学验收为通过 |
 
 `paper` / `code` 小文件使用 `{name, content_base64}`，大文件使用 `{name,upload_id,kind}`；GitHub 大仓库使用服务返回的 `{name,repository,commit,sha256,bytes}`。引用解析与大小、哈希校验均在服务端完成，不接受任意下载地址。上传的签名只允许写入固定文件路径，不含模型或 E2B 账号 key。`request_id` 推荐使用无连字符 UUID；同一编号不得替换材料、任务目的、范围或时限。报告来源为 `model_api_review`，运行观测单独放在 `execution` 中。
@@ -80,6 +83,13 @@ PDF 的原页图像与保留布局的文字共同进入主审。长文为每页�
 识别论文自身的 arXiv / DOI 标识后，检索公开资料；没有可识别标识时仅核对导入材料，不将上传的私人稿件标题直接用于公开检索。网页来源区分原始论文、出版方、可能的作者仓库与二手资料；网页命中不能自动证明代码属于作者。仓库线索有材料依据时才自动获取源码并重新生成计划。
 
 有疑点或图表指标时，在请求时限和额度内增加一轮保守复核，撤回证据不足的指控、补读遗漏列，并保存原建议与修订理由。复核仍由模型完成，不等于独立科学验证；失败时保留初审结果和失败原因。用户可在“图表与证据”中返回对应 PDF 页。
+
+## 继续、中断与图谱扩展
+
+- 从中断报告选择「纠正/补完材料并继续审查」会打开材料编辑区。确认审查方式并提交后才发起新请求。
+- 提交审查、准备执行环境、排队和运行期间可中断。服务端按请求编号和执行尝试编号保存取消状态。终止审查会保留已有证据，迟到的返回结果不得恢复已停止的任务。
+- 「扩展此论文」支持 2–3 级，整次操作共用新增论文上限。检索和贡献提取可停止。独立的贡献提取使用方法正文和 Related Work 提供的归属线索。
+- 图谱服务限制每个账号同时运行 1 个重型请求、全局 3 个。每轮书目检索最多 3 个并发、PDF 读取最多 4 个并发。实验阶段按依赖顺序执行。
 
 ## 核心模块
 

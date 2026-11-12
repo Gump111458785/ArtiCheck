@@ -4,16 +4,31 @@ Implements the structured Extraction -> Normalization -> Retrieval -> Pairwise C
 Human-in-the-Loop Verification & Graph View Builder pipeline specified in docs/功能1.md.
 """
 import copy
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 import hashlib
 import json
 import math
+from pathlib import Path
+import re
+import tempfile
+from threading import Lock
+import time
 import uuid
 
 from .kg_literature import KINDS, LIMITS, OpenAlex, normalize_title, retrieve_public_methods
-from .kg_methods import method_key, synthesize
-from .review_api import ReviewError, now
+from .kg_methods import extract_contributions, method_key, retrieve_methods, synthesize
+from .reproduction.paper_text import extract_paper
+from .review_api import ReviewError, decode_material, now
 
 KG_TTL = 30 * 86400
+METHOD_REASONS = {
+    'pending': '方法提取尚未完成，可重试。',
+    'no_full_text': '暂未取得可读取的正文。可查看公开书目获取原文。',
+    'insufficient_evidence': '现有正文片段不足以核实技术贡献。',
+    'no_sub_contributions': '已核实主要贡献，正文未提供足以细分的独立依据。',
+    'unavailable': '尚无可核实的方法证据，可尝试提取。',
+}
 
 def _tokenize(text):
     import re
@@ -116,6 +131,7 @@ def extract_paper_graph_entry(project_payload, owner_id='anonymous'):
         'metadata_source': 'PDF' if any(review.get(key) for key in ('publication_year','publication_venue','research_direction')) else '',
         'arxiv_id': payload.get('arxiv_id') or '',
         'abstract': review.get('paper_abstract') or payload.get('paper_abstract') or '',
+        'paper_sha256': (report.get('materials') or {}).get('paper'),
         'visibility': 'PRIVATE', 'source_type': payload.get('source_type') or 'USER_UPLOAD',
         'review_status': review_status, 'repro_status': reproduction, 'created_at': now(),
         'contributions': contributions, 'method_graph': review.get('method_graph') or [],
@@ -245,6 +261,9 @@ class KnowledgeGraphService:
         self._mem_layouts = {}
         self._mem_verifications = {}
         self._mem_literature = {}
+        self._extraction_inflight = set()
+        self._extraction_lock = Lock()
+        self._memory_operations = {}
         self.literature = OpenAlex(env.get('OPENALEX_API_KEY', ''))
 
     def _redis_get(self, key, default, *, permanent=False):
@@ -400,27 +419,164 @@ return 1
         default = {'papers': {}, 'links': {}, 'matches': {}, 'choices': {}, 'method_links': {}}
         return key, copy.deepcopy(self._redis_get(key, self._mem_literature.get(key, default), permanent=True))
 
-    def update_literature(self, owner, change):
+    def update_literature(self, owner, change, *, operation_key=None):
         # Compare-and-swap the raw value so simultaneous searches and reading edits merge.
         key = f'articheck:kg:literature:{self.store.namespace}:{self._owner_hash(owner)}'
         if not getattr(self.store, 'url', '') or not getattr(self.store, 'token', ''):
-            _, state = self.literature_state(owner)
-            change(state)
-            self._mem_literature[key] = state
+            with self._extraction_lock:
+                if operation_key and self._memory_operations.get(operation_key):
+                    raise ReviewError('graph_operation_closed', '此图谱操作已停止或已处理。', 409)
+                _, state = self.literature_state(owner)
+                change(state)
+                self._mem_literature[key] = state
+                if operation_key:
+                    self._memory_operations[operation_key] = 'completed'
             return
-        script = ("if (redis.call('GET',KEYS[1]) or '')~=ARGV[1] then return 0 end; "
-                  "redis.call('SET',KEYS[1],ARGV[2]); return 1")
+        script = ("if #KEYS==2 and redis.call('EXISTS',KEYS[2])==1 then return -1 end; "
+                  "if (redis.call('GET',KEYS[1]) or '')~=ARGV[1] then return 0 end; "
+                  "redis.call('SET',KEYS[1],ARGV[2]); "
+                  "if #KEYS==2 then redis.call('SET',KEYS[2],'completed','EX',300) end; return 1")
+        keys = ('2', key, operation_key) if operation_key else ('1', key)
         for _ in range(4):
             raw = self.store.command('GET', key)
             state = json.loads(raw) if raw else {'papers': {}, 'links': {}, 'matches': {}, 'choices': {}, 'method_links': {}}
             change(state)
-            if self.store.command('EVAL', script, '1', key, raw or '', json.dumps(state, ensure_ascii=False)) == 1:
+            result = self.store.command('EVAL', script, *keys, raw or '', json.dumps(state, ensure_ascii=False))
+            if result == 1:
                 return
+            if result == -1:
+                raise ReviewError('graph_operation_closed', '此图谱操作已停止或已处理。', 409)
         raise ReviewError('graph_changed', '文献条目正在更新，请重试。', 409)
 
-    def expand_literature(self, owner, paper_id, *, kinds, limit):
+    def graph_operation_key(self, owner, operation_id):
+        if operation_id is None:
+            return None
+        if not isinstance(operation_id, str) or not re.fullmatch(r'[a-f0-9]{32}', operation_id):
+            raise ReviewError('invalid_request_id', '图谱操作编号无效。')
+        return f'articheck:kg:operation:{self.store.namespace}:{self._owner_hash(owner)}:{operation_id}'
+
+    def cancel_graph_operation(self, owner, operation_id):
+        key = self.graph_operation_key(owner, operation_id)
+        if key is None:
+            raise ReviewError('invalid_request_id', '图谱操作编号无效。')
+        if getattr(self.store, 'url', '') and getattr(self.store, 'token', ''):
+            self.store.command('SET', key, 'cancelled', 'NX', 'EX', '300')
+            return {'status': self.store.command('GET', key)}
+        with self._extraction_lock:
+            self._memory_operations.setdefault(key, 'cancelled')
+            return {'status': self._memory_operations[key]}
+
+    def operation_checkpoint(self, operation_key):
+        mutex = Lock()
+        last_check = float('-inf')
+        status = None
+
+        def check():
+            nonlocal last_check, status
+            if operation_key is None:
+                return
+            with mutex:
+                if time.monotonic() - last_check > .3:
+                    last_check = time.monotonic()
+                    if getattr(self.store, 'url', '') and getattr(self.store, 'token', ''):
+                        status = self.store.command('GET', operation_key)
+                    else:
+                        status = self._memory_operations.get(operation_key)
+                if status:
+                    raise ReviewError('graph_operation_closed', '此图谱操作已停止或已处理。', 409)
+        return check
+
+    @contextmanager
+    def public_work_slot(self, owner):
+        owner_hash = self._owner_hash(owner)
+        if not (getattr(self.store, 'url', '') and getattr(self.store, 'token', '')):
+            with self._extraction_lock:
+                active = getattr(self, '_public_work', set())
+                if owner_hash in active or len(active) >= 3:
+                    raise ReviewError('literature_busy', '文献任务已达到并发上限，请稍后重试。', 429)
+                self._public_work = active
+                active.add(owner_hash)
+            try:
+                yield
+            finally:
+                with self._extraction_lock:
+                    active.remove(owner_hash)
+            return
+        key = f'articheck:kg:public-work:{self.store.namespace}'
+        member = owner_hash + ':' + uuid.uuid4().hex
+        script = """
+local now=tonumber(redis.call('TIME')[1])
+redis.call('ZREMRANGEBYSCORE',KEYS[1],'-inf',now)
+local active=redis.call('ZRANGE',KEYS[1],0,-1)
+if #active>=3 then return 0 end
+for _,item in ipairs(active) do
+    if string.sub(item,1,string.len(ARGV[1])+1)==ARGV[1]..':' then return 0 end
+end
+redis.call('ZADD',KEYS[1],now+135,ARGV[2])
+redis.call('EXPIRE',KEYS[1],135)
+return 1
+"""
+        if self.store.command('EVAL', script, '1', key, owner_hash, member) != 1:
+            raise ReviewError('literature_busy', '文献任务已达到并发上限，请稍后重试。', 429)
+        try:
+            yield
+        finally:
+            try:
+                self.store.command('ZREM', key, member)
+            except ReviewError:
+                pass  # The lease expires after the request lifetime.
+
+    def discover_literature(self, metadata, groups, *, kinds, depth, total, state, deadline, check=lambda: None):
+        anchor = metadata['id']
+        papers, links = {}, {}
+        frontier = [(metadata, groups)]
+
+        def neighborhood(paper):
+            check()
+            if time.monotonic() >= deadline:
+                return paper, {}
+            try:
+                return self.literature.neighborhood(title=paper['title'], identifier=paper['id'],
+                                                    kinds=set(kinds), limit=min(5, total))
+            except ReviewError:
+                return paper, {}
+
+        for level in range(depth):
+            check()
+            candidates = []
+            for source, group in frontier:
+                ordered = [group[kind] for kind in kinds if kind in group]
+                for rank in range(max(map(len, ordered), default=0)):
+                    for kind in kinds:
+                        items = group.get(kind, [])
+                        if rank < len(items):
+                            candidates.append((source['id'], kind, items[rank]))
+            next_papers = []
+            allowance = max(1, (total - len(papers)) // (depth - level))
+            for source, kind, target in candidates:
+                wid = target['id']
+                if wid == source or state['choices'].get(wid, {}).get('removed'):
+                    continue
+                if wid != anchor and wid not in papers:
+                    if len(next_papers) >= allowance or len(papers) >= total:
+                        continue
+                    papers[wid] = target
+                    next_papers.append(target)
+                links[(source, kind, wid)] = (source, kind, wid)
+            if level + 1 == depth or not next_papers or len(papers) >= total or time.monotonic() >= deadline:
+                break
+            with ThreadPoolExecutor(max_workers=min(3, len(next_papers))) as pool:
+                frontier = list(pool.map(neighborhood, next_papers))
+        return papers, list(links.values())
+
+    def expand_literature(self, owner, paper_id, *, kinds, limit, depth=1, total=None, operation_id=None):
         if not isinstance(kinds, list) or any(not isinstance(kind, str) or kind not in KINDS for kind in kinds):
             raise ReviewError('invalid_literature_kind', '请选择需要查找的研究关系。')
+        kinds = list(dict.fromkeys(kinds))
+        if type(depth) is not int or depth not in {1, 2, 3}:
+            raise ReviewError('invalid_literature_depth', '请选择一至三级扩展。')
+        if total is not None and (type(total) is not int or not 3 <= total <= 15):
+            raise ReviewError('invalid_literature_total', '新增论文上限为 3 至 15 篇。')
         if type(limit) is not int or limit not in LIMITS:
             raise ReviewError('invalid_literature_limit', '请选择每类 3、5 或 8 篇。')
         _, state = self.literature_state(owner)
@@ -428,14 +584,23 @@ return 1
         paper = own.get(paper_id) or state['papers'].get(paper_id)
         if not paper or state['choices'].get(paper_id, {}).get('removed'):
             raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
+        operation_key = self.graph_operation_key(owner, operation_id)
+        check = self.operation_checkpoint(operation_key)
+        check()
         metadata, groups = self.literature.neighborhood(
             title=paper['title'], identifier=state['matches'].get(paper_id, paper_id if paper_id in state['papers'] else ''),
             doi=paper.get('doi', ''), kinds=set(kinds), limit=limit,
         )
 
         anchor = metadata['id']
-        discovered = {item['id']: item for items in groups.values() for item in items
-                      if not state['choices'].get(item['id'], {}).get('removed')}
+        if depth == 1 and total is None:
+            discovered = {item['id']: item for items in groups.values() for item in items
+                          if item['id'] != anchor and not state['choices'].get(item['id'], {}).get('removed')}
+            links = [(anchor, kind, item['id']) for kind, items in groups.items() for item in items
+                     if item['id'] in discovered]
+        else:
+            discovered, links = self.discover_literature(metadata, groups, kinds=kinds, depth=depth,
+                total=total or 10, state=state, deadline=time.monotonic()+32, check=check)
         available = {anchor: metadata, **discovered}
         existing = {
             wid: [row for row in state['papers'].get(wid, {}).get('contributions', []) if row.get('method_grounded')]
@@ -450,14 +615,19 @@ return 1
             if len(matches) == 1 and matches[0].get('method_graph'):
                 existing[wid] = matches[0]['method_graph']
         fetch = [item for wid, item in available.items() if not existing[wid]]
-        chunks = retrieve_public_methods(fetch, paper['title'], self.literature)
+        check()
+        evidence = retrieve_public_methods(fetch, paper['title'], self.literature, include_status=True,
+                                           **({'check': check} if operation_key else {}))
+        check()
+        chunks = {wid: rows for wid, (rows, _) in evidence.items()}
         inputs = [{'id': wid, 'title': item['title'], 'chunks': chunks.get(wid, []), 'existing': existing[wid]}
                   for wid, item in available.items() if chunks.get(wid) or existing[wid]]
         with_evidence = {row['id'] for row in inputs}
         saved_pairs = {self.link_key(row['left_paper'], row['right_paper'])
                        for row in state.get('method_links', {}).values()}
-        pairs = [[anchor, wid] for wid in discovered if anchor in with_evidence and wid in with_evidence
-                 and self.link_key(anchor, wid) not in saved_pairs]
+        pairs = list(dict.fromkeys(tuple(sorted((source, target))) for source, _, target in links
+                     if source in with_evidence and target in with_evidence
+                     and self.link_key(source, target) not in saved_pairs))[:30]
         analysis_error = ''
         try:
             extracted, relationships = synthesize(self.reviewer, self.budget, inputs, pairs)
@@ -472,8 +642,10 @@ return 1
             item['contributions'] = extracted.get(wid) or [
                 row for row in state['papers'].get(wid, {}).get('contributions', []) if row.get('method_grounded')
             ]
-            item['method_status'] = ('grounded' if item['contributions'] else
-                                     'pending' if chunks.get(wid) else 'unavailable')
+            status = evidence.get(wid, ([], 'pending'))[1]
+            if chunks.get(wid) and not analysis_error and self.reviewer and self.reviewer.configured and self.budget:
+                status = 'no_sub_contributions' if item['contributions'] else 'insufficient_evidence'
+            item.update(self.method_fields(item['contributions'], status))
 
         def save(current):
             if current['choices'].get(paper_id, {}).get('removed'):
@@ -484,22 +656,23 @@ return 1
                 wid = item['id']
                 prior = current['papers'].get(wid, {})
                 if not item.get('contributions') and any(row.get('method_grounded') for row in prior.get('contributions', [])):
-                    item = {**item, 'contributions': prior['contributions'], 'method_status': 'grounded'}
+                    item = {**item, 'contributions': prior['contributions'], **self.method_fields(
+                        prior['contributions'], prior.get('method_detail_status', 'pending'))}
                 current['papers'][wid] = item
 
-            save_public(metadata)
-            for kind, papers in groups.items():
-                for related in papers:
-                    target = related['id']
-                    if current['choices'].get(target, {}).get('removed'):
-                        continue
-                    save_public(related)
-                    source, destination = (target, identifier) if kind == 'previous' else (identifier, target)
-                    if kind == 'similar':
-                        source, destination = sorted((identifier, target))
-                    key = f'{kind if kind == "similar" else "citation"}:{source}:{destination}'
-                    current['links'][key] = {'source': source, 'target': destination,
-                                             'kind': 'similar' if kind == 'similar' else 'citation'}
+            for wid, item in available.items():
+                if not current['choices'].get(wid, {}).get('removed'):
+                    save_public(item)
+            for origin, kind, target in links:
+                if any(current['choices'].get(wid, {}).get('removed') for wid in (origin, target)):
+                    continue
+                source, destination = (target, origin) if kind == 'previous' else (origin, target)
+                if kind == 'similar':
+                    source, destination = sorted((origin, target))
+                key = f'{kind if kind == "similar" else "citation"}:{source}:{destination}'
+                current['links'][key] = {'source': source, 'target': destination,
+                                         'kind': 'similar' if kind == 'similar' else 'citation',
+                                         **({'depth': depth} if depth > 1 else {})}
             methods = current.setdefault('method_links', {})
             snapshots = {wid: extracted.get(wid, []) + existing.get(wid, []) for wid in available}
             for relation in relationships:
@@ -514,8 +687,116 @@ return 1
             if len(current['papers']) > 75 or len(current['links']) > 300:
                 raise ReviewError('literature_capacity', '图谱的公开条目或关系已达上限，请先移除部分条目。', 409)
 
-        self.update_literature(owner, save)
+        self.update_literature(owner, save, operation_key=operation_key)
         return {**self.build_graph_response(owner, focus_paper_id=paper_id), 'method_notice': analysis_error}
+
+    @staticmethod
+    def method_fields(contributions, status):
+        detail_count = sum(len(row.get('details', [])) for row in contributions)
+        detail_status = 'grounded' if detail_count else status
+        return {'method_status': 'grounded' if contributions else status, 'method_detail_status': detail_status,
+                'method_reason': METHOD_REASONS.get(detail_status, ''), 'detail_count': detail_count}
+
+    @contextmanager
+    def extraction_slot(self, owner, paper_id):
+        key = f'articheck:kg:extract:{self.store.namespace}:{self._owner_hash(owner)}:{paper_id}'
+        redis = getattr(self.store, 'url', '') and getattr(self.store, 'token', '')
+        token = uuid.uuid4().hex
+        if redis:
+            acquired = self.store.command('SET', key, token, 'NX', 'EX', '110') == 'OK'
+        else:
+            with self._extraction_lock:
+                acquired = key not in self._extraction_inflight
+                self._extraction_inflight.add(key)
+        if not acquired:
+            raise ReviewError('contribution_extraction_active', '这篇论文正在提取贡献，请稍后刷新。', 409)
+        try:
+            yield
+        finally:
+            if redis:
+                script = "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) end; return 0"
+                try:
+                    self.store.command('EVAL', script, '1', key, token)
+                except ReviewError:
+                    pass  # The lease still expires if the storage connection drops.
+            else:
+                with self._extraction_lock:
+                    self._extraction_inflight.discard(key)
+
+    @staticmethod
+    def merge_contributions(existing, extracted):
+        rows = {method_key(row): row for row in existing}
+        titles = {row['title'].casefold() for row in existing}
+        for row in extracted:
+            key = method_key(row)
+            if key in rows:
+                old = rows[key]
+                details = {method_key(item): item for item in old.get('details', []) + row.get('details', [])}
+                rows[key] = {**old, 'summary': row.get('summary') or old.get('summary') or old['title'],
+                             'details': list(details.values())[:2]}
+            elif len(rows) < 3 and row['title'].casefold() not in titles:
+                rows[key] = {**row, 'local_id': key}
+                titles.add(row['title'].casefold())
+        return list(rows.values())
+
+    def retry_contributions(self, owner, paper_id, material=None, *, operation_id=None):
+        operation_key = self.graph_operation_key(owner, operation_id)
+        check = self.operation_checkpoint(operation_key)
+        check()
+        _, state = self.literature_state(owner)
+        own = next((paper for paper in self.owned_papers(owner) if paper['id'] == paper_id), None)
+        public = state['papers'].get(state['matches'].get(paper_id, paper_id))
+        if state['choices'].get(paper_id, {}).get('removed') or not (own or public):
+            raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
+        paper = own or public
+        storage = 'private_methods' if own else 'papers'
+        cached = state.get(storage, {}).get(paper_id, {})
+        existing = cached.get('contributions') or paper.get('method_graph') or []
+        existing = [{**row, 'local_id': method_key(row)} for row in existing if row.get('method_grounded')]
+        notice = ''
+        with self.extraction_slot(owner, paper_id):
+            if material is not None:
+                if not own or not own.get('paper_sha256'):
+                    raise ReviewError('original_paper_required', '只可为自己的审查记录提交原始 PDF。', 422)
+                pdf, identity = decode_material(material, '.pdf', 20 * 1024**2)
+                if identity['sha256'] != own['paper_sha256']:
+                    raise ReviewError('paper_changed', 'PDF 与审查时的文件不一致。', 409)
+                try:
+                    with tempfile.TemporaryDirectory(prefix='articheck-kg-method-') as directory:
+                        path = Path(directory) / 'paper.pdf'
+                        path.write_bytes(pdf)
+                        pages, _ = extract_paper(path, timeout=14)
+                    chunks = retrieve_methods(pages, query='architecture design algorithm implementation')
+                except (OSError, ValueError):
+                    chunks = []
+                status = 'pending' if chunks else 'insufficient_evidence'
+            elif public:
+                chunks, status = retrieve_public_methods([public], paper['title'], self.literature,
+                                                          include_status=True, **({'check': check} if operation_key else {}))[public['id']]
+            else:
+                chunks, status = [], 'no_full_text'
+                notice = '请从审查项目重新提供原始 PDF，以提取方法贡献。'
+
+            check()
+            extracted = []
+            if chunks and self.reviewer and self.reviewer.configured and self.budget:
+                try:
+                    extracted = extract_contributions(self.reviewer, self.budget, title=paper['title'],
+                                                      chunks=chunks, existing=existing)
+                    status = 'no_sub_contributions' if (existing or extracted) else 'insufficient_evidence'
+                except (ReviewError, OSError, ValueError, KeyError, IndexError, TypeError) as error:
+                    notice = str(error) if isinstance(error, ReviewError) else METHOD_REASONS['pending']
+
+            def save(current):
+                if current['choices'].get(paper_id, {}).get('removed'):
+                    raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
+                bucket = current.setdefault(storage, {})
+                record = bucket.get(paper_id, {})
+                contributions = self.merge_contributions(record.get('contributions') or existing, extracted)
+                bucket[paper_id] = {**record, 'contributions': contributions, **self.method_fields(contributions, status)}
+
+            self.update_literature(owner, save, operation_key=operation_key)
+        return {**self.build_graph_response(owner, focus_paper_id=paper_id), 'method_notice': notice}
 
     @staticmethod
     def link_key(source, target):
@@ -704,6 +985,65 @@ return 1
         self.update_literature(owner, allocate)
         return self.literature_state(owner)[1]['paper_slots']
 
+    @staticmethod
+    def initial_paper_positions(papers, focus, aliases, links, overrides):
+        by_id = {paper['id']: paper for paper in papers}
+        groups = {-1: set(), 0: set(), 1: set()}
+        for link in links.values():
+            source = aliases.get(link['source'], link['source'])
+            target = aliases.get(link['target'], link['target'])
+            if source == focus and target in by_id and target != focus:
+                groups[1 if link['kind'] == 'citation' else 0].add(target)
+            if target == focus and source in by_id and source != focus:
+                groups[-1 if link['kind'] == 'citation' else 0].add(source)
+        if not any(groups.values()):
+            return {}
+        groups[0] -= groups[-1] | groups[1]
+        points = {pid: (pos['x'], pos['y']) for pid, pos in overrides.items() if pid in by_id}
+        nearest = [points[pid] for group in groups.values() for pid in group if pid in points]
+        origin = (sum(p[0] for p in nearest)/len(nearest), sum(p[1] for p in nearest)/len(nearest)) if nearest else (520, 325)
+
+        def fits(point):
+            return all(math.dist(point, other) >= 76 and
+                       (abs(point[1]-other[1]) >= 34 or abs(point[0]-other[0]) >= 220)
+                       for other in points.values())
+
+        if focus not in points:
+            points[focus] = next((point for point in (origin, *((origin[0], origin[1]+dy)
+                for step in range(1, len(points)+2) for dy in (step*76, -step*76))) if fits(point)))
+        x, y = points[focus]
+
+        def place_side(ids, side):
+            count = len(ids)
+            if not count:
+                return
+            grid = [(x+side*dx, y+step*76)
+                    for dx in (120, 340, 560) for step in range(-len(by_id)-1, len(by_id)+2)]
+            grid.sort(key=lambda point: (math.dist((x, y), point), point[1]))
+            for pid in sorted(ids):
+                if pid not in points:
+                    points[pid] = next(point for point in grid if fits(point))
+
+        place_side(groups[-1], -1)
+        place_side(groups[1], 1)
+        for index, pid in enumerate(sorted(groups[0])):
+            if pid not in points:
+                place_side({pid}, -1 if index%2==0 else 1)
+
+        # Keep unrelated papers outside the local neighborhood without hiding them.
+        remaining = sorted(set(by_id)-points.keys())
+        for i, pid in enumerate(remaining):
+            step = i+2
+            while True:
+                radius = 300+step*40
+                angle = i*2.39996323
+                point = (x+radius*math.cos(angle), y+radius*math.sin(angle))
+                if fits(point):
+                    points[pid] = point
+                    break
+                step += 1
+        return points
+
     def build_graph_response(self, owner, *, focus_paper_id=''):
         own = self.owned_papers(owner)
         _, library = self.literature_state(owner)
@@ -721,27 +1061,34 @@ return 1
                 aliases.setdefault(matched, paper['id'])
             if library['choices'].get(paper['id'], {}).get('removed'):
                 continue
-            contributions = paper.get('method_graph') or [row for row in public.get('contributions', [])
-                                                           if row.get('method_grounded')]
+            private_methods = library.get('private_methods', {}).get(paper['id'], {})
+            contributions = self.merge_contributions(private_methods.get('contributions', []), paper.get('method_graph', []))
+            if not contributions:
+                contributions = [row for row in public.get('contributions', []) if row.get('method_grounded')]
+            detail_status = (private_methods.get('method_detail_status') or public.get('method_detail_status') or
+                             ('pending' if contributions or paper.get('paper_sha256') else public.get('method_status', 'unavailable')))
             papers.append({
                 'id': paper['id'], 'title': paper['title'], 'project_id': paper['project_id'],
                 'source_type': 'USER_UPLOAD', 'source_url': public.get('source_url', ''), 'canonical': matched or paper['id'],
                 'review_status': paper['review_status'], 'contributions': contributions,
                 'abstract': paper['abstract'], 'metadata': self.metadata(paper, public),
-                'method_status': 'grounded' if contributions else public.get('method_status', 'unavailable'),
+                'can_supply_original_pdf': bool(paper.get('paper_sha256')),
+                **self.method_fields(contributions, detail_status),
             })
         for public in library['papers'].values():
             if public['id'] not in aliases and not library['choices'].get(public['id'], {}).get('removed'):
                 contributions = [row for row in public.get('contributions', []) if row.get('method_grounded')]
                 papers.append({**public, 'source_type': 'PUBLIC_LITERATURE', 'metadata': self.metadata({}, public),
                                'canonical': public['id'], 'contributions': contributions,
-                               'method_status': 'grounded' if contributions else public.get('method_status', 'unavailable')})
+                               **self.method_fields(contributions, public.get('method_detail_status') or
+                                                    ('pending' if contributions else public.get('method_status', 'unavailable')))})
         focus_paper_id = aliases.get(focus_paper_id, focus_paper_id)
         if not any(paper['id'] == focus_paper_id for paper in papers):
             focus_paper_id = next((paper['id'] for paper in reversed(papers) if paper['source_type'] == 'USER_UPLOAD'), papers[0]['id'] if papers else '')
         slots = self.paper_slots(owner, papers, library)
         layout = self.get_layout(owner)
         positions = layout.get('positions') or {}
+        paper_points = self.initial_paper_positions(papers, focus_paper_id, aliases, library['links'], positions)
         nodes, edges, timeline = [], [], []
         contributions_by_paper = {}
         method_nodes = {}
@@ -772,12 +1119,16 @@ return 1
             item = {'paper_id': paper_id, 'title': paper['title'],
                     'year': paper['metadata']['year']['value'], 'direction': paper['metadata']['direction']['value'],
                     'venue': paper['metadata']['venue']['value'], 'source_type': paper['source_type'],
-                    'visibility': 'PRIVATE', 'read': bool(flags.get('read', paper['source_type'] == 'USER_UPLOAD')), 'method_status': paper['method_status'], 'hidden': bool(flags.get('hidden')), 'source_url': paper.get('source_url', '')}
+                    'visibility': 'PRIVATE', 'read': bool(flags.get('read', paper['source_type'] == 'USER_UPLOAD')),
+                    'hidden': bool(flags.get('hidden')), 'source_url': paper.get('source_url', ''),
+                    **{key: paper[key] for key in ('method_status', 'method_detail_status', 'method_reason', 'detail_count')},
+                    'can_supply_original_pdf': paper.get('can_supply_original_pdf', False), 'project_id': paper.get('project_id', '')}
             timeline.append(item)
             px, py = append_node({**item, 'id': paper_id, 'node_type': 'Paper', 'layer': 1,
                                   'label': paper['title'], 'full_title': paper['title'],
                                   'abstract': paper.get('abstract', ''), 'metadata': paper['metadata']},
-                                 520 + radius * math.cos(angle), 325 + radius * math.sin(angle))
+                                 *paper_points.get(paper_id, (520 + radius * math.cos(angle),
+                                                               325 + radius * math.sin(angle))))
             for offset, contribution in enumerate(paper['contributions'][:6]):
                 method_id = method_key(contribution)
                 cid = f'{paper_id}_contribution_{method_id}'
@@ -787,7 +1138,7 @@ return 1
                 parent = {'id': cid, 'paper_id': paper_id, 'paper_title': paper['title'],
                           'parent_id': paper_id, 'node_type': 'Contribution', 'layer': 2,
                           'label': contribution['title'], 'full_title': contribution['title'],
-                          'summary': contribution['title'], 'source_url': contribution.get('source_url', ''),
+                          'summary': contribution.get('summary') or contribution['title'], 'source_url': contribution.get('source_url', ''),
                           'quote': contribution['quote'], 'page': contribution['page'], 'section': contribution['section'],
                           'method_id': method_id, 'canonical_paper': paper['canonical']}
                 cx, cy = append_node(parent, px + 105*math.cos(direction), py + 105*math.sin(direction))
@@ -802,10 +1153,15 @@ return 1
                     child = {'id': did, 'paper_id': paper_id, 'paper_title': paper['title'],
                              'parent_id': cid, 'node_type': 'Detail', 'layer': 3,
                              'label': detail['title'], 'full_title': detail['title'],
+                             'summary': detail.get('summary') or detail['title'],
                              'quote': detail['quote'], 'page': detail['page'], 'section': detail['section'],
                              'source_url': detail.get('source_url', '')}
                     append_node(child, cx + 79*math.cos(theta), cy + 79*math.sin(theta))
                     add_edge(cid, did, 'HAS_DETAIL', '细分贡献')
+            visible_details = sum(node['node_type'] == 'Detail' and node.get('paper_id') == paper_id for node in nodes)
+            item['detail_count'] = visible_details
+            paper_node = next(node for node in nodes if node['id'] == paper_id)
+            paper_node['detail_count'] = visible_details
             contributions_by_paper[paper_id] = True
 
         for link in library['links'].values():
@@ -814,6 +1170,8 @@ return 1
                 continue
             if link['kind'] == 'citation':
                 add_edge(source, target, 'CITED_BY', '被后续论文引用', '箭头由被引用论文指向引用它的论文。', 'https://openalex.org/' + link['target'])
+            elif link.get('depth'):
+                add_edge(source, target, 'RELATED_WORK', '公开书目相关', 'OpenAlex 提供的相关论文线索。')
         for relation in library.get('method_links', {}).values():
             left = method_nodes.get((relation['left_paper'], relation['left_id']))
             right = method_nodes.get((relation['right_paper'], relation['right_id']))
@@ -837,7 +1195,7 @@ return 1
         by_id = {node['id']: node for node in nodes}
         paper_of = lambda node_id: by_id[node_id].get('paper_id', node_id)
         def visible_relation(edge):
-            if edge['edge_type'] not in ('CITED_BY', 'SIMILAR_CONTRIBUTION'):
+            if edge['edge_type'] not in ('CITED_BY', 'RELATED_WORK', 'SIMILAR_CONTRIBUTION'):
                 return True
             left, right = edge['source'], edge['target']
             return all(overrides.get(key, {}).get('action') != 'remove' for key in (

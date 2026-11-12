@@ -38,26 +38,34 @@ class HostedUploads:
         record={'id':job,'type':'material_upload','status':'starting','files':checked,'deadline':time.time()+LIFETIME}
         if not self.store.claim(owner,record):
             old=self.store.get(owner,job)
+            if old.get('type')=='material_upload' and old.get('status')=='closed':
+                raise ReviewError('upload_expired','本次传输已关闭，请重新提交材料。',410)
             if old.get('type')!='material_upload' or old.get('files')!=checked:
                 raise ReviewError('request_changed','同一上传编号不能替换文件。',409)
             return self.delivery(old)
         from e2b import Sandbox
         sandbox=None
+        starting = {**record}
         try:
             record['reservation']=self.store.reserve_compute()
-            self.store.save(owner,record)
+            if not self.store.replace(owner,starting,record):
+                raise ReviewError('upload_expired','本次传输已关闭。',410)
+            starting = {**record}
             sandbox=Sandbox.create(api_key=self.key,secure=True,timeout=LIFETIME,retries=0,
                 api_headers={'Idempotency-Key':'articheck-upload-'+job},
                 metadata={'project':'articheck','purpose':'material-upload'},
                 network={'allow_public_traffic':False,'deny_out':['0.0.0.0/0']})
             record.update(status='ready',sandbox_id=sandbox.sandbox_id)
-            self.store.save(owner,record)
+            if not self.store.replace(owner,starting,record):
+                raise ReviewError('upload_expired','本次传输已关闭。',410)
+            starting = {**record}
             return self.delivery(record,sandbox)
         except Exception as exc:
             if sandbox:
                 try:sandbox.kill()
                 except Exception:pass
-            record['status']='failed';self.store.save(owner,record)
+            record['status']='failed'
+            self.store.replace(owner,starting,record)
             if isinstance(exc,ReviewError):raise
             raise ReviewError('upload_start_failed','临时传输通道创建失败，请重新提交上传；不会自动重复创建。',502) from exc
 
@@ -100,12 +108,26 @@ class HostedUploads:
         return {'name':item['name'],'_raw_bytes':raw}
 
     def cancel(self,owner,job):
-        record=self.store.get(owner,job)
-        if record.get('type')!='material_upload':raise ReviewError('not_found','上传记录不存在。',404)
-        if record.get('status')=='ready':
-            from e2b import Sandbox
-            try:Sandbox.kill(record['sandbox_id'],api_key=self.key)
-            except Exception:
-                if record['deadline']>time.time():raise ReviewError('upload_cleanup_failed','未能确认临时通道关闭，到期后自动回收。',502)
-            record['status']='closed';self.store.save(owner,record)
-        return {'id':job,'status':record['status']}
+        for _ in range(6):
+            try:
+                record=self.store.get(owner,job)
+            except ReviewError as exc:
+                if exc.code!='not_found':
+                    raise
+                if self.store.claim(owner,{'id':job,'type':'material_upload','status':'closed'}):
+                    return {'id':job,'status':'closed'}
+                continue
+            if record.get('type')!='material_upload':
+                raise ReviewError('not_found','上传记录不存在。',404)
+            if record.get('status')=='closed':
+                return {'id':job,'status':'closed'}
+            if record.get('status')=='ready':
+                from e2b import Sandbox
+                try:
+                    Sandbox.kill(record['sandbox_id'],api_key=self.key)
+                except Exception as exc:
+                    if record['deadline']>time.time():
+                        raise ReviewError('upload_cleanup_failed','未能确认临时通道关闭，到期后自动回收。',502) from exc
+            if self.store.replace(owner,record,{**record,'status':'closed'}):
+                return {'id':job,'status':'closed'}
+        raise ReviewError('upload_cleanup_failed','上传状态正在更新，请重试关闭。',409)
