@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from articheck.kg_literature import allowed_pdf, retrieve_public_methods
+from articheck.kg_literature import OpenAlex, allowed_pdf, pdf_text_status, retrieve_public_methods
 from articheck.kg_methods import grounded_contributions, method_key, retrieve_methods
 from articheck.kg_service import KnowledgeGraphService
 from articheck.review_api import ReviewError
@@ -86,10 +86,48 @@ class ContributionExtractionTests(unittest.TestCase):
         graph = KnowledgeGraphService({}, SimpleNamespace(namespace='test'))
         owner = 'a' * 64
         graph.update_literature(owner, lambda data: data['papers'].update({'W1': {'id': 'W1', 'title': 'Public paper'}}))
-        with patch('articheck.kg_service.retrieve_public_methods', return_value={'W1': ([], 'insufficient_evidence')}):
+        with patch('articheck.kg_service.verify_public_fulltext', return_value=([], 'verified')):
             result = graph.retry_contributions(owner, 'W1')
         self.assertEqual(result['papers'][0]['method_status'], 'insufficient_evidence')
         self.assertIn('正文片段不足', result['papers'][0]['method_reason'])
+
+    def test_fulltext_verification_rejects_scans_and_wrong_papers(self):
+        self.assertEqual(pdf_text_status([{'text': ''}], 'Routing'), 'unreadable_pdf')
+        body = 'Each layer dynamically selects a sparse route. ' * 15
+        self.assertEqual(pdf_text_status([{'text': 'A Different Paper\n' + body}], 'Routing'), 'identity_mismatch')
+        self.assertEqual(pdf_text_status([{'text': 'Routing\n' + body}], 'Routing'), 'verified')
+
+    def test_multilevel_expansion_fetches_only_verified_neighborhoods(self):
+        owner = 'a' * 64
+        graph = KnowledgeGraphService({}, SimpleNamespace(namespace='test'))
+        records = {
+            number: {'id': f'https://openalex.org/W{number}', 'display_name': title,
+                     'referenced_works': [f'https://openalex.org/W{ref}' for ref in refs]}
+            for number, title, refs in [(1, 'Root', [2, 3]), (2, 'Book record', [4]),
+                                         (3, 'Verified paper', [5]), (4, 'Never fetched', []),
+                                         (5, 'Leaf', [])]
+        }
+        events = []
+        graph.literature = OpenAlex()
+        def identify(*, title, identifier='', doi=''):
+            return next(row for row in records.values() if row['display_name'] == title)
+        def request(path='', **params):
+            ids = params['filter'].split(':')[1]
+            events.append(('relations', ids))
+            return {'results': [records[int(key[1:])] for key in ids.split('|')]}
+        def verify(paper, provider, deadline, **kwargs):
+            events.append(('verify', paper['id']))
+            return [], 'no_full_text' if paper['id'] == 'W2' else 'verified'
+        graph.literature.identify = identify
+        graph.literature.request = request
+        graph.update_literature(owner, lambda state: state['papers'].update({'W1': {'id': 'W1', 'title': 'Root'}}))
+        with patch('articheck.kg_service.verify_public_fulltext', side_effect=verify):
+            result = graph.expand_literature(owner, 'W1', kinds=['previous'], limit=5, depth=2, total=6)
+        self.assertLess(events.index(('verify', 'W1')), events.index(('relations', 'W2|W3')))
+        self.assertLess(events.index(('verify', 'W3')), events.index(('relations', 'W5')))
+        self.assertNotIn(('relations', 'W4'), events)
+        self.assertEqual(next(row for row in result['papers'] if row['paper_id'] == 'W2')['fulltext_status'], 'no_full_text')
+        self.assertIn('W5', {row['paper_id'] for row in result['papers']})
 
     def test_public_retrieval_tries_attributed_open_edition_after_unusable_link(self):
         source = 'https://arxiv.org/pdf/1512.03385'

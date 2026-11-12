@@ -99,7 +99,16 @@ def allowed_pdf(value):
         return False
 
 
-def fetch_method_chunks(paper, query, deadline):
+def pdf_text_status(pages, title):
+    first_page = pages[0].get('text', '')[:5000] if pages else ''
+    body_length = sum(len(normalize_title(page.get('text', ''))) for page in pages[:3])
+    if body_length < 240:
+        return 'unreadable_pdf'
+    title = normalize_title(title)
+    return 'verified' if title and title in normalize_title(first_page) else 'identity_mismatch'
+
+
+def fetch_method_chunks(paper, query, deadline, *, verify=False, progress=lambda phase: None):
     class PublicPDFRedirects(HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
             if not allowed_pdf(newurl):
@@ -112,7 +121,7 @@ def fetch_method_chunks(paper, query, deadline):
         if not allowed_pdf(url):
             continue
         if remaining < 2:
-            return [], status if status == 'insufficient_evidence' else 'pending'
+            return [], ('download_failed' if status == 'no_full_text' else status) if verify else (status if status == 'insufficient_evidence' else 'pending')
         try:
             request = Request(url, headers={'User-Agent': 'ArtiCheck/1.0 public research methods', 'Accept': 'application/pdf'})
             with build_opener(PublicPDFRedirects()).open(request, timeout=min(6, remaining/2)) as response:
@@ -130,24 +139,53 @@ def fetch_method_chunks(paper, query, deadline):
                 source = response.geturl()
             if not allowed_pdf(source) or not raw.startswith(b'%PDF-') or len(raw) > PDF_LIMIT:
                 continue
-            status = 'insufficient_evidence'
+            status = 'unreadable_pdf' if verify else 'insufficient_evidence'
+            if verify:
+                progress('reading')
             with tempfile.TemporaryDirectory(prefix='articheck-oa-') as directory:
                 path = Path(directory) / 'paper.pdf'
                 path.write_bytes(raw)
                 pages, _ = extract_paper(path, timeout=max(1, min(10, deadline - time.monotonic())))
+            if verify:
+                status = pdf_text_status(pages, paper['title'])
+                if status != 'verified':
+                    continue
             chunks = retrieve_methods(pages, query=query, limit=4)
+            if verify:
+                return [{**chunk, 'source_url': source} for chunk in chunks], 'verified'
             if chunks:
                 return [{**chunk, 'source_url': source} for chunk in chunks], 'pending'
         except HTTPError as exc:
             if exc.code == 429 or exc.code >= 500:
-                if status != 'insufficient_evidence':
-                    status = 'pending'
+                if status == 'no_full_text':
+                    status = 'download_failed' if verify else 'pending'
         except (URLError, TimeoutError):
-            if status != 'insufficient_evidence':
-                status = 'pending'
+            if status == 'no_full_text':
+                status = 'download_failed' if verify else 'pending'
         except (OSError, ValueError):
             continue
+    if verify and status == 'no_full_text' and paper.get('pdf_sources'):
+        status = 'download_failed'
     return [], status
+
+
+def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: None):
+    progress('downloading')
+    chunks, status = fetch_method_chunks(paper, paper['title'], deadline, verify=True, progress=progress)
+    if status == 'verified' or not paper.get('authors') or deadline - time.monotonic() < 4:
+        return chunks, status
+    try:
+        tried = set(paper.get('pdf_sources', []))
+        sources = [url for url in provider.find_open_editions(paper) if url not in tried]
+    except (ReviewError, OSError, ValueError):
+        return chunks, status
+    if sources:
+        progress('downloading')
+        alternate, alternate_status = fetch_method_chunks({**paper, 'pdf_sources': sources}, paper['title'], deadline,
+                                                           verify=True, progress=progress)
+        if alternate_status == 'verified' or status == 'no_full_text':
+            return alternate, alternate_status
+    return chunks, status
 
 
 def retrieve_public_methods(papers, query, provider=None, *, include_status=False, check=lambda: None):
@@ -228,11 +266,13 @@ class OpenAlex:
                 return {**candidate, 'locations': [*(candidate.get('locations') or []), *locations]}
         raise ReviewError('literature_unmatched', '未能唯一匹配公开论文。请核对论文题目或 DOI。', 404)
 
-    def neighborhood(self, *, title, identifier='', doi='', kinds, limit):
+    def neighborhood(self, *, title, identifier='', doi='', kinds, limit, before_relations=None):
         anchor = self.identify(title=title, identifier=identifier, doi=doi)
         metadata = work_metadata(anchor)
         if not metadata:
             raise ReviewError('literature_unmatched', '公开书目中未找到这篇论文。', 404)
+        if before_relations:
+            before_relations(metadata)
         anchor_id = metadata['id']
 
         references = [identifier for value in anchor.get('referenced_works', [])

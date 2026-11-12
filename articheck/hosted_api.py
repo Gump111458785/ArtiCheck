@@ -148,7 +148,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         if len(json.dumps(text_materials(context), ensure_ascii=False).encode()) > 175_000:
             raise ReviewError('context_too_large', '材料解析后的内容过大，请缩小代码包或论文范围。', 413)
         identity = digest({'materials': material_identity(context), 'task': context['task'],
-                           'scope': scope, 'max_seconds': context['max_seconds'],'supplement':context['supplement']})
+                           'scope': scope, 'max_seconds': context['max_seconds'],'supplement':context['supplement'],
+                           **({'purpose': context['purpose']} if context.get('purpose') else {})})
         pending = {'id': job, 'status': 'reviewing', 'created_at': now(), 'started_at': time.time(),
                    'format': 'articheck-online-assessment-v2', 'source': 'model_api_review',
                    'materials': material_identity(context), 'input_sha256': identity, 'review': None,
@@ -234,6 +235,9 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                     value['audit']={'status':'not_completed','reason':exc.code if isinstance(exc,ReviewError) else 'cross_audit_failed'}
             else:
                 value['audit']={'status':'not_completed','reason':'request_deadline'}
+        if context.get('purpose') == 'reproduce_other':
+            for row in value['review'].get('findings', []) + value.get('audit', {}).get('raw_findings', []):
+                row['suggestion'] = ''
         if value.get('audit',{}).get('status')!='completed':
             activity('交叉复核未执行或未完成',['cross_auditor'],
                      '本次不适用、请求时限不足或复核请求未成功；以报告标记为准。','skipped')
@@ -612,6 +616,11 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         material = material_body({'paper': payload['paper']})['paper'] if payload.get('paper') else None
         with kg.public_work_slot(owner):
             return jsonify(kg.retry_contributions(owner, str(payload.get('paper_id') or ''), material, operation_id=payload.get('operation_id')))
+
+    @app.get('/kg/operations/<operation_id>/progress')
+    def kg_operation_progress(operation_id):
+        owner = authorize()
+        return jsonify(kg.graph_progress(kg.graph_operation_key(owner, operation_id)))
 
     @app.post('/kg/operations/<operation_id>/cancel')
     def cancel_kg_operation(operation_id):

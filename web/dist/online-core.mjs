@@ -7,7 +7,7 @@ export function metricUnit(m){
  const ambiguous=m.unit_uncertain||(['%','％','percent','percentage','百分比'].includes(String(m.unit).trim().toLowerCase())&&m.value>=0&&m.value<=1&&!/[%％]|百分/.test(m.quote||''));
  return ambiguous?'（单位待核对）':m.unit||'';
 }
-export function inputKey(p){return JSON.stringify([p.paper?.sha256||null,p.repository?.sha256||null,p.online_task||'auto',p.online_scope||'',p.online_max_seconds||null,p.online_supply_notes||'']);}
+export function inputKey(p){return JSON.stringify([p.paper?.sha256||null,p.repository?.sha256||null,p.online_task||'auto',p.online_scope||'',p.online_max_seconds||null,p.online_supply_notes||'',...(p.online_purpose?[p.online_purpose]:[])]);}
 export function hasCode(p){return Boolean(p.repository?.blob||p.repository?.remote?.repository);}
 export function validateInput(p,{token='',consent=true}={}){
  const errors={};

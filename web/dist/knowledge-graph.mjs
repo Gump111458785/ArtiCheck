@@ -18,6 +18,8 @@ function broadDirection(value){
  return categories.find(([,pattern])=>pattern.test(text))?.[0]||(text?'其他':'未知');
 }
 
+const expansionPhases={downloading:'正在获取开放原文…',reading:'正在解析并核验原文…',searching:'正在检索公开文献…',extracting:'正在提取方法贡献与关联证据…'};
+
 export class KnowledgeGraphWorkspace{
  constructor(h){this.h=h;this.data=null;this.loading=false;this.error='';this.filters={year:'',direction:'',venue:''};this.generation=0;this.selected=null;this.inspectorTab='detail';this.expanded=new Set();this.pinned=new Set();this.zoom=1;this.pan={x:0,y:0};this.query='';this.focusMode=false;this.mutating=false;this.searching=false;this.expansionPaper=null;this.notice='';this.enableKg=true;this.focusProject=null;this.drag=null;this.layoutQueue=Promise.resolve();this.initialPositions=new WeakMap();}
  esc(v){return this.h.esc(v??'');}
@@ -94,9 +96,9 @@ export class KnowledgeGraphWorkspace{
  }
 
  operationStatus(){
-  const feedback=this.searching?{tone:'add',text:'正在检索公开文献…',pending:true}:this.operationFeedback;
+  const feedback=this.searching?{tone:'add',text:expansionPhases[this.graphOperation?.phase]||'正在查找开放原文…',pending:true}:this.operationFeedback;
   if(!feedback)return '';
-  return `<div class="kg-search-progress kg-link-feedback ${feedback.tone}"><span role="status">${this.esc(feedback.text)}</span>${feedback.pending?'<progress aria-label="图谱操作进度"></progress>':''}${this.graphOperation?`<button class="btn small" type="button" data-kg-action="cancel-operation" ${this.graphOperation.stopping?'disabled':''}>${this.graphOperation.stopping?'正在停止…':'停止'}</button>`:''}</div>`;
+  return `<div class="kg-search-progress kg-link-feedback ${feedback.tone}"><span role="status" data-kg-operation-status>${this.esc(feedback.text)}</span>${feedback.pending?'<progress aria-label="图谱操作进度"></progress>':''}${this.graphOperation?`<button class="btn small" type="button" data-kg-action="cancel-operation" ${this.graphOperation.stopping?'disabled':''}>${this.graphOperation.stopping?'正在停止…':'停止'}</button>`:''}</div>`;
  }
  finishOperation(feedback){
   this.operationFeedback=feedback;
@@ -108,7 +110,7 @@ export class KnowledgeGraphWorkspace{
   const e=v=>this.esc(v),d=this.data;
   const toolbar=`<div class="kg-filters"><label class="kg-filter"><span>搜索</span><input type="search" aria-label="搜索论文名称" data-kg-search value="${e(this.query)}" placeholder="论文名称"></label>${this.filterControls()}</div>`;
   if(this.loading&&!d)return `<section class="kg-workspace">${toolbar}<div class="kg-loading" role="status">正在读取知识图谱…</div></section>`;
-  if(!d)return `<section class="kg-workspace">${toolbar}<div class="kg-empty"><h3>${this.error?'暂时无法读取图谱':'打开我的知识图谱'}</h3><p>${e(this.error||'从论文报告打开图谱，或加载已经保存的论文。')}</p><button class="btn primary" data-kg-action="load">加载我的图谱</button></div></section>`;
+  if(!d)return `<section class="kg-workspace">${toolbar}<div class="kg-empty">${this.error?`<p role="alert">${e(this.error)}</p>`:''}<button class="btn primary" data-kg-action="load">加载我的图谱</button></div></section>`;
   const count=this.matchingPapers().filter(p=>!p.hidden).length;
   return `<section class="kg-workspace">${toolbar}${this.notice?`<p class="kg-notice" role="alert">${e(this.notice)}</p>`:''}<div class="kg-stats"><span><strong>${count}</strong> / ${d.stats?.paper_count||0} 篇论文</span>${this.focusMode?'<button class="btn text small" data-kg-action="exit-focus">退出聚焦模式</button>':''}</div><div class="kg-main">${count?this.canvasView():`<div class="kg-empty kg-empty-canvas">${this.operationStatus()}没有匹配的论文。可以调整筛选，或从论文报告打开一篇论文。</div>`}<aside class="kg-inspector">${this.inspector()}</aside></div></section>`;
  }
@@ -308,7 +310,7 @@ export class KnowledgeGraphWorkspace{
    body=`<h3>${e(n.full_title)}</h3><p class="kg-meta">${n.source_type==='PUBLIC_LITERATURE'?'公开书目':'我的审查记录'} · <strong class="kg-reading ${n.read?'read':'unread'}">${n.read?'已读':'未读'}</strong>${n.hidden?' · 已隐藏':''}</p><dl class="kg-dl">${metadata.map(([key,label])=>{
     const row=n.metadata?.[key]||{};
     return `<div><dt>${label}</dt><dd>${e(row.value||'未知')}${row.source_url?` <a href="${e(row.source_url)}" target="_blank" rel="noopener noreferrer">${e(row.source)}</a>`:row.source?` <small>${e(row.source)}</small>`:''}</dd></div>`;
-   }).join('')}</dl><p>${e(n.abstract)}</p>${n.method_detail_status!=='grounded'?this.extractionActions(n):''}`;
+   }).join('')}</dl>${n.fulltext_label?`<p class="kg-method-missing">${e(n.fulltext_label)}</p>`:''}<p>${e(n.abstract)}</p>${n.method_detail_status!=='grounded'||n.fulltext_status!=='verified'?this.extractionActions(n):''}`;
   }else{
    body=`<h3>${e(n.full_title)}</h3><p class="kg-meta">${e(n.paper_title)}</p>${n.quote?`<blockquote>${e(n.quote)}</blockquote><p>${e(n.section||'方法正文')}${n.page?' · PDF 第 '+e(n.page)+' 页':''}</p>`:''}${n.source_url?`<a href="${e(n.source_url)}" target="_blank" rel="noopener noreferrer">方法正文来源</a>`:''}${this.data.nodes.some(child=>child.parent_id===n.id)?`<div class="kg-insp-actions"><button class="btn small" data-kg-expand="${e(n.id)}">${this.expanded.has(n.id)?'收起细分贡献':'展开细分贡献'}</button></div>`:''}`;
   }
@@ -351,6 +353,17 @@ export class KnowledgeGraphWorkspace{
    catch(error){if(generation===this.generation)this.h.toast?.('布局自动保存失败：'+error.message);}
   });
  }
+ async watchExpansion(operation){
+  try{
+   const {phase}=await this.api('/operations/'+operation.id+'/progress');
+   if(this.graphOperation===operation&&expansionPhases[phase]){
+    operation.phase=phase;
+    const status=document.querySelector('[data-kg-operation-status]');
+    if(status)status.textContent=expansionPhases[phase];
+   }
+  }catch{}
+  if(this.graphOperation===operation&&!operation.finished)operation.timer=setTimeout(()=>this.watchExpansion(operation),1500);
+ }
  async changeLiterature(path,payload){
   if(this.mutating)return;
   const version=this.generation;
@@ -364,6 +377,7 @@ export class KnowledgeGraphWorkspace{
    if(version!==this.generation||operation?.cancelled)return null;
    const request=typeof payload==='function'?await payload():payload;
    if(version!==this.generation||operation?.cancelled)return null;
+   if(this.searching)operation.timer=setTimeout(()=>this.watchExpansion(operation),1000);
    const data=await this.api(path,operation?{...request,operation_id:operation.id}:request);
    if(version!==this.generation||operation?.cancelled)return null;
    const paperPositions=new Map((this.data?.nodes||[]).filter(node=>node.node_type==='Paper').map(node=>[node.id,{x:node.x,y:node.y}]));
@@ -377,7 +391,7 @@ export class KnowledgeGraphWorkspace{
    return true;
   }catch(error){if(operation?.cancelled||operation?.stopping)return null;if(version===this.generation)this.notice=error.message;}
   finally{
-   if(operation)operation.finished=true;
+   if(operation){operation.finished=true;clearTimeout(operation.timer);}
    if(version===this.generation&&!operation?.cancelled&&!operation?.stopping){
     if(this.graphOperation===operation)this.graphOperation=null;
     this.mutating=false;this.searching=false;this.h.render();

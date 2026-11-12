@@ -63,12 +63,13 @@ E2B 免费额度、平台免费配额与实际账单以各控制台为准。这�
 | POST | `/v1/repositories` | `{url}` → 固定提交、源码指纹、文件目录；较大仓库返回不可变源码引用，避免 100 MB 经页面 JSON 往返 |
 | POST | `/v1/uploads` | `request_id`、`files[{kind,name,bytes,sha256}]` → 短期写入 URL 和 `upload_id`；文件直接 POST multipart 到签名 URL |
 | POST | `/v1/uploads/{id}/cancel` | 关闭属于当前浏览器的临时传输通道 |
-| POST | `/v1/assessments` | 可选 `paper` / `code`（至少一项），`task`、可选 `scope` / `max_seconds` / `supplement`、`request_id` → 审查报告或已存在任务 |
+| POST | `/v1/assessments` | 可选 `paper` / `code`（至少一项），`purpose` 可设为 `self_review` 或 `reproduce_other`（旧客户端可继续传 `task`），可选 `scope` / `max_seconds` / `supplement`、`request_id` → 审查报告或已存在任务 |
 | GET | `/v1/assessments/{id}` | 身份隔离的报告与实际执行状态；不会重建实例 |
 | POST | `/v1/assessments/{id}/execute` | `code` 与 `plan_sha256`，重试另带 `retry_of` → 冻结计划的执行状态；重验源码身份 |
 | POST | `/v1/assessments/{id}/cancel` | 中断审查或执行。可选 `terminate: true`，停止确认后终止记录。尚在提交执行时发送 `execution_request: true`，重试可附 `retry_of`。 |
 | POST | `/v1/kg/literature/expand` | `paper_id`、`kinds`、`depth`、`max_total`、`operation_id` → 多级公开文献关系 |
-| POST | `/v1/kg/contributions/extract` | `paper_id`、`operation_id`，自己的审查记录可提供原始 `paper` → 带证据的贡献及提取状态 |
+| POST | `/v1/kg/contributions/extract` | `paper_id`、`operation_id`，可补充原始 `paper` → 带证据的贡献及提取状态 |
+| GET | `/v1/kg/operations/{id}/progress` | 获取、解析、检索和提取进度 |
 | POST | `/v1/kg/operations/{id}/cancel` | 停止图谱检索或提取，返回 `cancelled` 或 `completed` |
 | POST | `/v1/assessments/{id}/feedback` | 受阻后提交 `answer: unavailable / can_provide`，记录材料可获得性，不改变科学验收为通过 |
 
@@ -108,3 +109,12 @@ EdgeOne 的 Python 3.10 环境使用 `e2b==2.55.1`；新版本 SDK 的 Python �
 ## 账户与多级审查界面
 
 右上角支持注册登录、头像菜单和个人中心。实际审查活动通过报告的 `activity` 字段更新，运行事件仍来自 `execution.events`。指标按数据集、类别与图表协议分层，原始数值与出处保持对应。[接口、安全边界与使用方式](ACCOUNTS_AND_COLLABORATION.md)。
+
+
+### 图谱原文与方法贡献
+
+图谱先用 OpenAlex 确定书目及开放版本，再通过受限的下载入口获取 PDF。系统核对首页标题与正文可读性，保存核验状态。多级扩展对每一层起点执行相同检查。用户补充原始 PDF 后，自己的论文用文件指纹匹配原始审查，公开文献用书目标题匹配。只有书目的节点会标明正文状态。
+
+- 开放版本发现采用现有 OpenAlex 来源。开放获取位置与 PDF 地址的设计可参考 [Unpaywall 开放位置字段](https://unpaywall.org/data-format)。
+- 线上沿用隔离的 pypdf 解析。章节结构和双栏阅读顺序可参考 [GROBID 全文解析](https://grobid.readthedocs.io/en/latest/training/fulltext/) 与 [Docling](https://github.com/docling-project/docling)。当前扫描件无可提取正文时显示解析失败并允许补充文件。
+- 贡献提取保留方法章节、页码和引文。Related Work 用于归属判断，主贡献与子贡献由方法证据支持。可用 [NLPContributionGraph](https://aclanthology.org/2021.semeval-1.44/) 的贡献句、短语和关系标注作为后续评测参考。

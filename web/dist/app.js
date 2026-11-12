@@ -85,6 +85,14 @@ async function init(){
 
 function pendingReview(){const reviewed=new Set(state.feedback.filter(f=>f.run_id===state.run?.report_id).map(f=>f.claim_id));return (state.run?.findings||[]).filter(f=>f.verdict==='issue'&&!reviewed.has(f.claim_id)).length}
 function render(){
+ const previousTerminal=app.querySelector('[data-terminal-key]');
+ const terminalPosition=previousTerminal&&{
+  key:previousTerminal.dataset.terminalKey,
+  top:previousTerminal.scrollTop,
+  follow:previousTerminal.scrollHeight>previousTerminal.clientHeight&&
+   previousTerminal.scrollHeight-previousTerminal.clientHeight-previousTerminal.scrollTop<=8,
+  pageX:window.scrollX,pageY:window.scrollY
+ };
  const projectPage=['projects','project'].includes(state.page),centerPage=['workbench','roles','evidence','trace'].includes(state.page);
  const pageName=state.page==='account'?'个人中心':state.page==='home'?'ArtiCheck · 开始':projectPage?intake.title():centerPage?execution?.heading(state.page)||'执行中心':navItems.find(n=>n[0]===state.page)?.[2]||'执行中心';
  const source=state.mode==='runtime'?'本地执行已连接':'在线工作台';
@@ -101,6 +109,13 @@ function render(){
  <main id="main" class="page" data-view="${state.page}"><div class="page-title between"><div><h1 title="${esc(pageName)}">${esc(pageName)}</h1><p class="subtitle">${state.page==='home'?'从材料准备到执行审查，开始或继续一项复现评估。':projectPage?esc(intake.subtitle()):centerPage?esc(execution.subtitle(state.page)):pageSubtitle()}</p></div><div class="title-actions">${projectPage?intake.actions():centerPage?execution.actions(state.page):state.page==='evaluation'?'':state.page==='contracts'?`<button class="btn" data-action="download-spec">${icon('download')}OpenAPI</button>`:''}</div></div>
  ${renderPage()}<footer class="page-footer"><span>${projectPage?'论文材料 · 实验计划 · 可追溯证据':centerPage?'任务 → 角色与阶段 → 证据复核':state.page==='evaluation'?'系统评测 · 与论文项目独立':'ArtiCheck 研究工作空间'}</span><span>ArtiCheck</span></footer></main></div></div>`;
  bindInputs();account?.afterRender();intake?.afterRender();execution?.afterRender();apiReview?.afterRender();if(state.page==='http-api')legacyAPI?.afterRender();if(state.page==='knowledge-graph')knowledgeGraph?.afterRender();
+ if(terminalPosition){
+  const terminal=app.querySelector('[data-terminal-key]');
+  if(terminal?.dataset.terminalKey===terminalPosition.key){
+   terminal.scrollTop=terminalPosition.follow?terminal.scrollHeight:terminalPosition.top;
+   window.scrollTo({left:terminalPosition.pageX,top:terminalPosition.pageY,behavior:'instant'});
+  }
+ }
  clearTimeout(homeCaseTimer);
  if(state.page==='home'){
   homeCaseTimer=setTimeout(()=>{
@@ -111,7 +126,7 @@ function render(){
   },6500);
  }
 }
-function pageSubtitle(){if(state.page==='help')return '使用指南、内置样例与账户说明。';if(state.page==='knowledge-graph')return '查看论文、主贡献和细分贡献，按需扩展公开研究脉络。';if(state.page==='account')return '管理账户资料、安全设置与当前浏览器中的审查项目。';if(['workbench','evidence','trace'].includes(state.page)&&state.executionKind==='full')return '按计划版本查询完整实验、审查依据与实际阶段输出。';const f=state.run?.findings||[],issues=f.filter(x=>x.verdict==='issue').length;return {'http-api':'连接你自己部署的 HTTP 审阅服务。','api-review':'提交论文或代码，自动识别审查需求，查看报告与实际执行证据。',evaluation:'独立查看系统判定质量、评测协议与结果来源。',workbench:state.run?`${f.length} 条主张已核查，${issues} 条与执行证据不一致。${pendingReview()?pendingReview()+' 条待人工复核。':''}`:'选择 Artifact，核对指标、数据划分和基线设置。',evidence:'主张规范、执行输出与人工判定。',trace:'按执行顺序记录规划动作、工具调用和判定。',contracts:'本地运行时 · HTTP / JSON / SSE',handoff:`${state.feedback.length} 条人工反馈，${state.feedback.filter(f=>f.hard_sample).length} 条困难样本候选。`}[state.page]}
+function pageSubtitle(){if(state.page==='help')return '使用指南、内置样例与账户说明。';if(state.page==='knowledge-graph')return '查看论文、主贡献和细分贡献，按需扩展公开研究脉络。';if(state.page==='account')return '管理账户资料、安全设置与当前浏览器中的审查项目。';if(['workbench','evidence','trace'].includes(state.page)&&state.executionKind==='full')return '按计划版本查询完整实验、审查依据与实际阶段输出。';const f=state.run?.findings||[],issues=f.filter(x=>x.verdict==='issue').length;return {'http-api':'连接你自己部署的 HTTP 审阅服务。','api-review':'提交论文或代码，按材料确定检查范围，查看报告与实际执行证据。',evaluation:'独立查看系统判定质量、评测协议与结果来源。',workbench:state.run?`${f.length} 条主张已核查，${issues} 条与执行证据不一致。${pendingReview()?pendingReview()+' 条待人工复核。':''}`:'选择 Artifact，核对指标、数据划分和基线设置。',evidence:'主张规范、执行输出与人工判定。',trace:'按执行顺序记录规划动作、工具调用和判定。',contracts:'本地运行时 · HTTP / JSON / SSE',handoff:`${state.feedback.length} 条人工反馈，${state.feedback.filter(f=>f.hard_sample).length} 条困难样本候选。`}[state.page]}
 function reviewPanes(withTimeline=false){return `<div class="review-grid ${state.mobileDetail?'detail-open':''}"><div class="review-index">${claimsCard()}${withTimeline?timelineCard():''}</div><div class="detail-pane"><button class="btn text mobile-back" data-action="back-claims">${icon('arrow')}返回主张列表</button>${state.selectedStage?stageCard():evidenceCard()}</div></div>`}
 function renderPage(){if(state.page==='knowledge-graph')return knowledgeGraph.render();if(state.page==='help')return helpView();if(state.page==='account')return account.center();if(state.page==='http-api')return legacyAPI.render();if(state.page==='api-review')return apiReview.render();if(state.page==='home')return renderHome({projects:intake.all(),report:intake.reproduction.catalogCase,mode:state.mode,esc,icon,storageError:intake.storageError,caseIndex:state.caseIndex});if(['workbench','roles','evidence','trace'].includes(state.page))return execution.render(state.page);return probePage();}
 function probeDetailView(tab){state.selectedStage=null;return tab==='trace'?traceView(true):reviewPanes();}

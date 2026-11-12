@@ -143,14 +143,19 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  const idxProject=finalHtml.indexOf('我的 ResNet 审查项目');
  const idxPaper=finalHtml.indexOf('Deep Residual Learning for Image Recognition');
  const idxContrib=finalHtml.indexOf('提出残差学习框架解决深层网络退化问题');
- const idxCode=finalHtml.indexOf('核心代码与实现解析');
- assert.ok(idxVerdict>=0 && idxVerdict<idxProject && idxProject<idxPaper && idxPaper<idxContrib && idxContrib<idxCode);
+ assert.ok(idxVerdict>=0 && idxVerdict<idxProject && idxProject<idxPaper && idxPaper<idxContrib);
  assert.match(finalHtml,/editorial-verdict/);
- assert.match(finalHtml,/trainer\.py · train 核心定义/);
- assert.match(finalHtml,/data-report-jump="metrics"/);
- assert.match(finalHtml,/data-report-jump="findings"/);
- assert.match(finalHtml,/data-report-jump="observations"/);
- assert.match(finalHtml,/data-report-jump="coverage"/);
+ assert.match(finalHtml,/论文审查/);
+ assert.match(finalHtml,/代码审查/);
+ assert.match(finalHtml,/论文与代码核对/);
+ assert.doesNotMatch(finalHtml,/trainer\.py · train 核心定义/);
+ const external={...completedMismatch,review:{...completedMismatch.review,purpose:'reproduce_other'}};
+ assert.match(ws.finalReport(external,{title:'复现项目'}),/目标 90 % · 实测 70 %/);
+ assert.doesNotMatch(ws.finalReport(external,{title:'复现项目'}),/反馈建议|修正建议/);
+ external.execution={...external.execution,execution_performed:true,metrics:[{...external.execution.metrics[0],observed:90,status:'within_tolerance'}]};
+ assert.equal(reportVerdict(external).state,'passed');
+ external.execution.metrics=[];
+ assert.equal(reportVerdict(external).label,'未验证');
  assert.doesNotMatch(finalHtml,/查看计划与执行条件/);
 
  // Fourth-batch UI requirements:

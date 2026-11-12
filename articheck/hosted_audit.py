@@ -62,7 +62,10 @@ def cross_audit(reviewer,context,report,*,request_timeout=25):
         finding=copy.deepcopy(original['findings'][row['index']])
         if row['decision']=='remove':continue
         finding['audit_note']=row['reason']
-        if row['decision']=='downgrade':finding['severity']='low'
+        if row['decision']=='downgrade':
+            finding['severity']='low'
+            if 'confirmed_error' in finding:
+                finding['confirmed_error']=False
         findings.append(finding)
     report['review']['findings']=findings
     metrics=[]

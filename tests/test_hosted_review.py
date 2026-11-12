@@ -495,6 +495,20 @@ class HostedReviewTests(unittest.TestCase):
         with self.assertRaises(ReviewError):
             prepare_assessment({})
 
+    def test_review_purpose_does_not_override_material_scope(self):
+        supplied = materials()
+        for purpose in ('self_review', 'reproduce_other'):
+            for keys, task in [(('paper',), 'self_review'), (('code',), 'code_review'),
+                               (('paper', 'code'), 'reproduction')]:
+                with self.subTest(purpose=purpose, keys=keys):
+                    context, _ = prepare_assessment({**{key: supplied[key] for key in keys},
+                                                     'purpose': purpose, 'task': 'reproduction'})
+                    result = validate_assessment(output(context), context)
+                    self.assertEqual(result['purpose'], purpose)
+                    self.assertEqual(result['task'], task)
+                    self.assertEqual(bool(result['plan']['stages']), 'code' in keys)
+                    self.assertEqual(bool(result['repository_hint']), False)
+
     def test_actual_pdf_images_are_bounded_and_never_embedded_in_saved_report(self):
         context,_=prepare_visual_assessment(materials())
         self.assertEqual(len(context['paper_images']),2)

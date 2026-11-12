@@ -16,7 +16,7 @@ from threading import Lock
 import time
 import uuid
 
-from .kg_literature import KINDS, LIMITS, OpenAlex, normalize_title, retrieve_public_methods
+from .kg_literature import KINDS, LIMITS, OpenAlex, normalize_title, pdf_text_status, retrieve_public_methods, verify_public_fulltext
 from .kg_methods import extract_contributions, method_key, retrieve_methods, synthesize
 from .reproduction.paper_text import extract_paper
 from .review_api import ReviewError, decode_material, now
@@ -29,6 +29,16 @@ METHOD_REASONS = {
     'no_sub_contributions': '已核实主要贡献，正文未提供足以细分的独立依据。',
     'unavailable': '尚无可核实的方法证据，可尝试提取。',
 }
+
+FULLTEXT_LABELS = {
+    'verified': '已核验正文',
+    'download_failed': '开放原文下载失败，可重试',
+    'unreadable_pdf': '原文无法提取正文，可能为扫描件',
+    'identity_mismatch': '下载文件与书目标题无法核对',
+    'no_full_text': '仅有书目，未取得可读开放原文',
+    'not_checked': '仅有书目，正文待核验',
+}
+
 
 def _tokenize(text):
     import re
@@ -466,6 +476,17 @@ return 1
             self._memory_operations.setdefault(key, 'cancelled')
             return {'status': self._memory_operations[key]}
 
+    def graph_progress(self, operation_key, phase=None):
+        if not operation_key:
+            return {}
+        key = operation_key + ':progress'
+        if not getattr(self.store, 'url', '') or not getattr(self.store, 'token', ''):
+            return {}
+        if phase:
+            self.store.command('SET', key, phase, 'EX', '180')
+            return {}
+        return {'phase': self.store.command('GET', key)}
+
     def operation_checkpoint(self, operation_key):
         mutex = Lock()
         last_check = float('-inf')
@@ -526,7 +547,7 @@ return 1
             except ReviewError:
                 pass  # The lease expires after the request lifetime.
 
-    def discover_literature(self, metadata, groups, *, kinds, depth, total, state, deadline, check=lambda: None):
+    def discover_literature(self, metadata, groups, *, kinds, depth, total, state, deadline, check=lambda: None, gate=None):
         anchor = metadata['id']
         papers, links = {}, {}
         frontier = [(metadata, groups)]
@@ -537,8 +558,11 @@ return 1
                 return paper, {}
             try:
                 return self.literature.neighborhood(title=paper['title'], identifier=paper['id'],
-                                                    kinds=set(kinds), limit=min(5, total))
-            except ReviewError:
+                                                    kinds=set(kinds), limit=min(5, total),
+                                                    **({'before_relations': gate} if gate else {}))
+            except ReviewError as error:
+                if error.code == 'graph_operation_closed':
+                    raise
                 return paper, {}
 
         for level in range(depth):
@@ -587,9 +611,40 @@ return 1
         operation_key = self.graph_operation_key(owner, operation_id)
         check = self.operation_checkpoint(operation_key)
         check()
+        fulltext_results = {}
+        deadline = time.monotonic() + 38
+
+        def progress(phase):
+            self.graph_progress(operation_key, phase)
+
+        def require_readable(record):
+            check()
+            wid = record['id']
+            prior = state['papers'].get(wid, {})
+            uploaded = record['id'] == anchor_id[0] and paper_id in own and (
+                paper.get('method_graph') or state.get('private_methods', {}).get(paper_id, {}).get('fulltext_status') == 'verified')
+            if uploaded or prior.get('fulltext_status') == 'verified':
+                fulltext_results[wid] = ([], 'verified')
+            else:
+                fulltext_results[wid] = verify_public_fulltext(record, self.literature, deadline, progress=progress)
+            check()
+            status = fulltext_results[wid][1]
+            if status != 'verified':
+                raise ReviewError('literature_fulltext_required', FULLTEXT_LABELS[status] +
+                                  '。可重试或补充这篇论文的原始 PDF。', 422)
+
+        anchor_id = ['']
+
+        def verify_anchor(record):
+            anchor_id[0] = record['id']
+            require_readable(record)
+            progress('searching')
+
+        gate = require_readable if isinstance(self.literature, OpenAlex) else None
         metadata, groups = self.literature.neighborhood(
             title=paper['title'], identifier=state['matches'].get(paper_id, paper_id if paper_id in state['papers'] else ''),
             doi=paper.get('doi', ''), kinds=set(kinds), limit=limit,
+            **({'before_relations': verify_anchor} if gate else {}),
         )
 
         anchor = metadata['id']
@@ -600,7 +655,7 @@ return 1
                      if item['id'] in discovered]
         else:
             discovered, links = self.discover_literature(metadata, groups, kinds=kinds, depth=depth,
-                total=total or 10, state=state, deadline=time.monotonic()+32, check=check)
+                total=total or 10, state=state, deadline=deadline, check=check, gate=gate)
         available = {anchor: metadata, **discovered}
         existing = {
             wid: [row for row in state['papers'].get(wid, {}).get('contributions', []) if row.get('method_grounded')]
@@ -614,11 +669,22 @@ return 1
                 matches = [paper]
             if len(matches) == 1 and matches[0].get('method_graph'):
                 existing[wid] = matches[0]['method_graph']
-        fetch = [item for wid, item in available.items() if not existing[wid]]
+        fetch = [item for wid, item in available.items() if not existing[wid] and wid not in fulltext_results]
         check()
-        evidence = retrieve_public_methods(fetch, paper['title'], self.literature, include_status=True,
-                                           **({'check': check} if operation_key else {}))
+        if gate:
+            fetch = [item for item in fetch if state['papers'].get(item['id'], {}).get('fulltext_status') != 'verified']
+            if fetch and time.monotonic() < deadline:
+                with ThreadPoolExecutor(max_workers=min(3, len(fetch))) as pool:
+                    results = pool.map(lambda item: verify_public_fulltext(item, self.literature, deadline,
+                                                                          progress=progress), fetch[:6])
+                    fulltext_results.update(zip((item['id'] for item in fetch), results))
+            evidence = {wid: (rows, 'pending' if rows else 'insufficient_evidence')
+                        for wid, (rows, status) in fulltext_results.items() if status == 'verified'}
+        else:
+            evidence = retrieve_public_methods(fetch, paper['title'], self.literature, include_status=True,
+                                               **({'check': check} if operation_key else {}))
         check()
+        progress('extracting')
         chunks = {wid: rows for wid, (rows, _) in evidence.items()}
         inputs = [{'id': wid, 'title': item['title'], 'chunks': chunks.get(wid, []), 'existing': existing[wid]}
                   for wid, item in available.items() if chunks.get(wid) or existing[wid]]
@@ -646,6 +712,8 @@ return 1
             if chunks.get(wid) and not analysis_error and self.reviewer and self.reviewer.configured and self.budget:
                 status = 'no_sub_contributions' if item['contributions'] else 'insufficient_evidence'
             item.update(self.method_fields(item['contributions'], status))
+            item['fulltext_status'] = fulltext_results.get(wid, ([], ''))[1] or (
+                'verified' if chunks.get(wid) else state['papers'].get(wid, {}).get('fulltext_status') or 'not_checked')
 
         def save(current):
             if current['choices'].get(paper_id, {}).get('removed'):
@@ -658,6 +726,8 @@ return 1
                 if not item.get('contributions') and any(row.get('method_grounded') for row in prior.get('contributions', [])):
                     item = {**item, 'contributions': prior['contributions'], **self.method_fields(
                         prior['contributions'], prior.get('method_detail_status', 'pending'))}
+                if prior.get('fulltext_status') == 'verified':
+                    item['fulltext_status'] = 'verified'
                 current['papers'][wid] = item
 
             for wid, item in available.items():
@@ -754,22 +824,28 @@ return 1
         existing = cached.get('contributions') or paper.get('method_graph') or []
         existing = [{**row, 'local_id': method_key(row)} for row in existing if row.get('method_grounded')]
         notice = ''
+        fulltext_status = cached.get('fulltext_status', 'not_checked')
         with self.extraction_slot(owner, paper_id):
             if material is not None:
-                if not own or not own.get('paper_sha256'):
-                    raise ReviewError('original_paper_required', '只可为自己的审查记录提交原始 PDF。', 422)
                 pdf, identity = decode_material(material, '.pdf', 20 * 1024**2)
-                if identity['sha256'] != own['paper_sha256']:
+                if own and identity['sha256'] != own.get('paper_sha256'):
                     raise ReviewError('paper_changed', 'PDF 与审查时的文件不一致。', 409)
                 try:
                     with tempfile.TemporaryDirectory(prefix='articheck-kg-method-') as directory:
                         path = Path(directory) / 'paper.pdf'
                         path.write_bytes(pdf)
                         pages, _ = extract_paper(path, timeout=14)
-                    chunks = retrieve_methods(pages, query='architecture design algorithm implementation')
-                except (OSError, ValueError):
-                    chunks = []
+                except (OSError, ValueError) as error:
+                    raise ReviewError('literature_fulltext_required', FULLTEXT_LABELS['unreadable_pdf'], 422) from error
+                chunks = retrieve_methods(pages, query='architecture design algorithm implementation')
+                fulltext_status = 'verified' if own and chunks else pdf_text_status(pages, paper['title'])
+                if fulltext_status != 'verified':
+                    raise ReviewError('literature_fulltext_required', FULLTEXT_LABELS[fulltext_status], 422)
                 status = 'pending' if chunks else 'insufficient_evidence'
+            elif public and isinstance(self.literature, OpenAlex):
+                chunks, fulltext_status = verify_public_fulltext(public, self.literature, time.monotonic() + 28)
+                status = ('pending' if chunks else 'insufficient_evidence') if fulltext_status == 'verified' else fulltext_status
+                notice = FULLTEXT_LABELS.get(fulltext_status, '') if fulltext_status != 'verified' else ''
             elif public:
                 chunks, status = retrieve_public_methods([public], paper['title'], self.literature,
                                                           include_status=True, **({'check': check} if operation_key else {}))[public['id']]
@@ -793,7 +869,12 @@ return 1
                 bucket = current.setdefault(storage, {})
                 record = bucket.get(paper_id, {})
                 contributions = self.merge_contributions(record.get('contributions') or existing, extracted)
-                bucket[paper_id] = {**record, 'contributions': contributions, **self.method_fields(contributions, status)}
+                if record.get('fulltext_status') == 'verified':
+                    fulltext = 'verified'
+                else:
+                    fulltext = fulltext_status
+                bucket[paper_id] = {**record, 'contributions': contributions, 'fulltext_status': fulltext,
+                                    **self.method_fields(contributions, status)}
 
             self.update_literature(owner, save, operation_key=operation_key)
         return {**self.build_graph_response(owner, focus_paper_id=paper_id), 'method_notice': notice}
@@ -1072,6 +1153,7 @@ return 1
                 'source_type': 'USER_UPLOAD', 'source_url': public.get('source_url', ''), 'canonical': matched or paper['id'],
                 'review_status': paper['review_status'], 'contributions': contributions,
                 'abstract': paper['abstract'], 'metadata': self.metadata(paper, public),
+                'fulltext_status': private_methods.get('fulltext_status') or ('verified' if paper.get('method_graph') else public.get('fulltext_status')),
                 'can_supply_original_pdf': bool(paper.get('paper_sha256')),
                 **self.method_fields(contributions, detail_status),
             })
@@ -1122,7 +1204,9 @@ return 1
                     'visibility': 'PRIVATE', 'read': bool(flags.get('read', paper['source_type'] == 'USER_UPLOAD')),
                     'hidden': bool(flags.get('hidden')), 'source_url': paper.get('source_url', ''),
                     **{key: paper[key] for key in ('method_status', 'method_detail_status', 'method_reason', 'detail_count')},
-                    'can_supply_original_pdf': paper.get('can_supply_original_pdf', False), 'project_id': paper.get('project_id', '')}
+                    'fulltext_status': paper.get('fulltext_status') or 'not_checked',
+                    'fulltext_label': FULLTEXT_LABELS.get(paper.get('fulltext_status'), FULLTEXT_LABELS['not_checked']),
+                    'can_supply_original_pdf': paper['source_type'] == 'PUBLIC_LITERATURE' or paper.get('can_supply_original_pdf', False), 'project_id': paper.get('project_id', '')}
             timeline.append(item)
             px, py = append_node({**item, 'id': paper_id, 'node_type': 'Paper', 'layer': 1,
                                   'label': paper['title'], 'full_title': paper['title'],

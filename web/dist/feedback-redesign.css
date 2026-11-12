@@ -2286,7 +2286,7 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .kg-lineage li>div{min-width:0;flex:1}
 .kg-paper-manage{align-self:flex-start;max-width:82px;padding:2px 4px;font-size:11px}
 .kg-canvas.has-similarity .kg-edge.citation{opacity:.24}
-.kg-canvas.has-similarity .kg-edge.similar{opacity:.9}
+.kg-canvas.has-similarity .kg-edge.similar:not(.dim){opacity:.9}
 .kg-canvas.has-similarity .kg-edge.similar line{stroke-width:2.5}
 .kg-cmp-card blockquote{margin:4px 0 8px;padding-left:8px;border-left:2px solid #c3d5ee}
 .archive-filter-panel{padding:12px 14px}
@@ -2438,3 +2438,23 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .kg-edge.candidate line { stroke-dasharray: 3 4; }
 
 .kg-search-progress .btn { justify-self: center; margin: 5px; }
+
+.report-review-group{
+ margin-block:1rem;
+ padding:clamp(1rem,2.6vw,2rem);
+ border:1px solid #dce4ee;
+ border-radius:14px;
+ background:#fff;
+ scroll-margin-top:1rem;
+}
+.report-review-group>h2{margin:0 0 1rem}
+.report-review-group>details>summary,.report-review-group>summary{
+ cursor:pointer;
+ color:#274c82;
+ font-weight:650;
+}
+.report-review-group .report-finding{margin-block:.75rem}
+.report-review-group .report-finding:target{outline:2px solid #3768dd}
+.verdict-mismatches{padding-inline-start:1.3rem;line-height:1.7}
+#new-review-form .review-task-options{margin-block:1rem;padding:0;border:0}
+#new-review-form .review-task-options legend{margin-bottom:.5rem;font-weight:650}

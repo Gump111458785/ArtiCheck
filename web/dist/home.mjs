@@ -30,19 +30,6 @@ export const SHOWCASE_CASES=[
   plan:'c4190e8a21b7'
  },
  {
-  id:'textcnn-sst2',
-  tag:'复现受阻案例 · 预训练词向量缺失',
-  badge:'数据获取中断',
-  badgeState:'failed',
-  title:'TextCNN',
-  paperTitle:'Convolutional Neural Networks for Sentence Classification',
-  lead:'卷积神经网络句子分类实验复现，检测外部预训练权重与数据划分完备性。',
-  facts:[['实际运行','2','/ 5 阶段'],['报错退出码','1','FileNotFound'],['观测指标','0','/ 12 项']],
-  levels:[['run','计划执行',false],['environment_rebuilt','环境重建',true],['training','论文训练协议',false],['conclusion','主要结论',false]],
-  scope:'阶段 S2 在加载 GoogleNews-vectors-negative300.bin 时因原始外链失效中断，需补充公开镜像线索。',
-  plan:'91a4d03f7c12'
- },
- {
   id:'graph-gat-cora',
   tag:'审计拦截案例 · 数据划分泄漏',
   badge:'发现数据泄漏',
@@ -92,7 +79,7 @@ export function renderHome({projects,report,mode,esc,icon,storageError='',caseIn
  return `<div class="start-workspace">
  ${storageError?`<p class="error-box" role="alert">${esc(storageError)}</p>`:''}
  <div class="start-grid"><section class="start-intro" aria-labelledby="start-title"><h2 id="start-title">一篇论文，一条证据链。</h2><p class="start-description">提交论文或代码，自动识别图表指标、审查材料，并追踪实际执行证据。</p><div class="start-cta-row"><button class="btn primary start-primary" data-action="new">${icon('plus')}开始在线审查</button><button class="btn start-secondary" data-action="nav" data-page="workbench">查看复现项目列表 (${model.total})</button></div>
- <ol class="start-steps"><li><strong>准备论文与代码</strong><span>PDF、仓库地址或代码 ZIP</span></li><li><strong>自动识别审查需求</strong><span>论文自查、代码检查与复现评估</span></li><li><strong>执行并审查证据</strong><span>逐条判定，保留来源与复核记录</span></li></ol>
+ <ol class="start-steps"><li><strong>准备论文与代码</strong><span>PDF、仓库地址或代码 ZIP</span></li><li><strong>选择审查目的</strong><span>自我审查或复现他人</span></li><li><strong>执行并审查证据</strong><span>逐条判定，保留来源与复核记录</span></li></ol>
  <section class="start-repository"><h3>ArtiCheck 项目源码</h3><p>在 GitHub 查看源码和本地安装步骤，在自己的电脑上启动工作台。</p>${repositoryButton(icon)}</section></section>
  <section class="start-case start-case-carousel" aria-labelledby="start-case-title" data-carousel-index="${idx}"><div class="start-case-topbar"><h2 id="start-case-title" title="${esc(activeCase.title+' – '+activeCase.paperTitle)}"><span class="case-project-name">${esc(activeCase.title)}</span><span class="case-heading-divider"> – </span><span class="case-paper-name">${esc(caseHeading)}</span></h2><div class="start-carousel-controls" role="group" aria-label="案例轮播切换"><button type="button" class="carousel-arrow" data-case-prev aria-label="上一个案例">‹</button><div class="carousel-dots">${SHOWCASE_CASES.map((item,i)=>`<button type="button" class="carousel-dot ${i===idx?'active':''}" data-case-index="${i}" aria-label="切换到案例 ${i+1}: ${esc(item.title)}"></button>`).join('')}</div><button type="button" class="carousel-arrow" data-case-next aria-label="下一个案例">›</button></div></div>${renderCaseBody()}</section></div></div>`;
 }

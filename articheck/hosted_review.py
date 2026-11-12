@@ -67,6 +67,9 @@ def digest(value):
 
 
 def prepare_assessment(body, *, images=True):
+    purpose = body.get('purpose')
+    if purpose is not None and purpose not in ('self_review', 'reproduce_other'):
+        raise ReviewError('invalid_purpose', '请选择自我审查或复现他人。')
     task = body.get('task', 'auto')
     if task not in TASKS:
         raise ReviewError('invalid_task', '请选择自动识别、论文自查、复现评估或代码审查。')
@@ -76,7 +79,10 @@ def prepare_assessment(body, *, images=True):
     if type(seconds) is not int or not 30 <= seconds <= MAX_SECONDS:
         raise ReviewError('invalid_budget', '最长执行时间请填写 30–600 秒，也可留空。')
     context, scope = prepare_context(body, partial=True)
-    context['task'] = task
+    context['task'] = ('code_review' if not context['paper'] else 'self_review' if not context['code']
+                       else 'auto') if purpose else task
+    if purpose:
+        context['purpose'] = purpose
     context['max_seconds'] = seconds
     supplement=body.get('supplement','')
     if not isinstance(supplement,str) or len(supplement)>3000:
@@ -107,6 +113,7 @@ nonpaper 仅用于简历、说明书、普通通知等非学术文档，不能�
 代码审查不把缺少论文列为缺陷；论文自查不把用户未上传代码列为作者缺陷。不适用条件不扣分。
 不要把本阶段尚未执行列为代码问题；执行前边界放入 coverage。面向普通用户，不输出内部 JSON 字段名或 null 等实现术语。
 上下文被节选、文件未提供给模型、页面图像不全属于 coverage，不作为作者论文或仓库的缺陷放进 findings。
+purpose 表示用户目的。self_review 核对当前材料并给具体修改建议；reproduce_other 只报告证据、逻辑错误和复现差异，suggestion 留空。检查范围以提供的论文和代码为准。每个 finding 可标注 area 为 paper、code 或 alignment，confirmed_error 只在证据直接证明数据、实现或论证确有错误时填 true。
 findings 的标题写出单一问题；detail 用一到两句保留关键对比、数值与依据，suggestion 只写可执行的改法。文件或页码填写在专用字段，不在文字中重复。
 默认覆盖提供上下文内所有适用指标。仅用户明确限定 scope 时缩小范围。
 逐表穷举作者方法及其变体的可读数值，包括 top-1/top-5、多数据集、多设置和逐类别 AP；
@@ -142,7 +149,7 @@ JSON 结构：
  "task":"self_review|reproduction|code_review", "classification_reason":"依据", "repository_hint":null,
  "criteria":[{"dimension":"scope|code|data|environment|settings|workflow|resources|results",
  "status":"documented|needs_review|missing|not_applicable", "note":"说明", "page":null,"file":null}],
- "findings":[{"title":"问题", "severity":"high|medium|low", "detail":"具体证据与不确定性", "suggestion":"修正建议", "page":null,"file":null}],
+ "findings":[{"title":"问题", "severity":"high|medium|low", "detail":"具体证据与不确定性", "suggestion":"修正建议", "area":"paper|code|alignment", "confirmed_error":false, "page":null,"file":null}],
  "metrics":[{"id":"M1","reference":"Table 1","model":"模型名","dataset":"数据集","metric":"指标", "value":1.0,"unit":"%",
  "protocol":"划分、设定等", "page":1,"quote":"表格中的逐字原文","author_method":true,"precision":"printed"}],
  "web_checks":[{"claim":"待核对描述","status":"supported|contradicted|unresolved","url":"实际提供的网址","note":"核对依据与局限"}],
@@ -325,7 +332,10 @@ def validate_assessment(value, context):
         if ref['file'] is not None and ref['file'] not in files:
             citation_gaps.append('文件 '+ref['file']+' 未进入源码上下文，相关问题建议没有充足依据，未列为已发现问题。')
             continue
-        clean_findings.append({k: text(row, k) for k in ('title', 'detail', 'suggestion')} |
+        clean_findings.append({k: text(row, k) for k in ('title', 'detail')} |
+            {'suggestion': '' if context.get('purpose') == 'reproduce_other' else text(row, 'suggestion')} |
+            {'area': row.get('area') if row.get('area') in ('paper', 'code', 'alignment') else '',
+             'confirmed_error': row.get('confirmed_error') is True and bool(ref['page'] or ref['file'])} |
                               {'severity': row['severity'], **ref})
     clean_metrics = []; rejected = []; seen = set();visual_observations=[]
     normalize = lambda s: re.sub(r'\s+', '', s)
@@ -521,6 +531,8 @@ def validate_assessment(value, context):
                        'stages': stages, 'needs': needs, 'metric_patterns': patterns,
                        'max_seconds': context['max_seconds'], 'policy': 'frozen_api_plan', 'fail_fast': True,
                        'hardware': 'GPU' if str(plan.get('hardware','CPU')).upper()=='GPU' and context['execution_environment'].get('gpu') else 'CPU'}}
+    if context.get('purpose'):
+        result['purpose'] = context['purpose']
     result['plan_sha256'] = digest({'plan':result['plan'],'metrics':result['metrics']})
     required_resources=[n for n in needs if n['required'] and re.search(r'(GPU|CUDA|显卡|显存|内存|RAM)',n['name'],re.I)]
     if context['code'] and not stages and result['plan']['blocked_reason'] and required_resources:
