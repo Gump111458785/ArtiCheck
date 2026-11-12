@@ -66,6 +66,8 @@ def cross_audit(reviewer,context,report,*,request_timeout=25):
             finding['severity']='low'
             if 'confirmed_error' in finding:
                 finding['confirmed_error']=False
+            if 'suggestion_type' in finding:
+                finding['suggestion_type']='optimize'
         findings.append(finding)
     report['review']['findings']=findings
     metrics=[]

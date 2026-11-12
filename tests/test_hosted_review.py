@@ -7,6 +7,7 @@ import time
 import io
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from flask import Flask, jsonify
 
@@ -212,8 +213,15 @@ class HostedReviewTests(unittest.TestCase):
         relation = {'left_paper': 'W11', 'left_id': method_key(evidence),
                     'right_paper': 'W33', 'right_id': method_key(public_evidence),
                     'description': '两项架构都使用恒等捷径直接传递输入特征。'}
-        with patch('articheck.kg_service.synthesize', return_value=({'W33': [public_evidence]}, [relation])):
-            graph = client.post(expand, json=payload, headers=HEADERS).json
+        graph = client.post(expand, json=payload, headers=HEADERS).json
+        self.assertFalse(any(edge['edge_type'] == 'SIMILAR_CONTRIBUTION' for edge in graph['edges']))
+        self.assertNotIn('legacy abstract', json.dumps(graph))
+        with patch('articheck.kg_service.retrieve_public_methods', return_value={'W33': ([{'text': evidence['quote']}], 'pending')}), \
+                patch('articheck.kg_service.extract_contributions', return_value=[public_evidence]):
+            response = client.post('/kg/contributions/extract', json={'paper_id': 'W33'}, headers=HEADERS)
+        self.assertEqual(response.status_code, 200)
+        with patch('articheck.kg_service.synthesize', return_value=({}, [relation])):
+            graph = client.post('/kg/relations/verify', json={'paper_id': 'W33'}, headers=HEADERS).json
         by_id = {row['id']: row for row in graph['nodes']}
         self.assertEqual(by_id[root]['metadata']['year']['source'], 'OpenAlex')
         self.assertEqual([n['label'] for n in graph['nodes'] if n['node_type'] == 'Detail'], ['Identity shortcuts'])
@@ -225,7 +233,7 @@ class HostedReviewTests(unittest.TestCase):
                             and edge['source_url'] for edge in graph['edges']))
         self.assertTrue(by_id[root]['read'])
         self.assertFalse(by_id['W33']['read'])
-        self.assertEqual(by_id['W22']['method_status'], 'no_full_text')
+        self.assertEqual(by_id['W22']['fulltext_status'], 'not_checked')
         self.assertNotIn('legacy abstract', json.dumps(graph))
         edge = next(edge for edge in graph['edges'] if edge['edge_type'] == 'SIMILAR_CONTRIBUTION')
         self.assertEqual(edge['evidence'][0]['section'], '3. Residual Learning')
@@ -762,6 +770,24 @@ class HostedReviewTests(unittest.TestCase):
         self.assertIn('当前条件',answer['availability']['verdict'])
         self.assertIsNone(answer['execution'])
         self.assertEqual(executor.launches,0)
+
+    def test_provider_failure_persists_actionable_timeline_detail(self):
+        app = Flask(__name__)
+        store, budget = MemoryStore(), Budget()
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), budget, store=store, executor=Executor())
+        app.register_error_handler(ReviewError, lambda error: (jsonify(code=error.code), error.status))
+        client = app.test_client()
+        job = 'd' * 32
+        upstream = HTTPError('https://api.deepseek.com/chat/completions', 429, 'internal response', None, None)
+        with patch('articheck.hosted_api.assess', side_effect=upstream) as model:
+            response = client.post('/assessments', json={'code': materials()['code'], 'request_id': job}, headers=HEADERS)
+        model.assert_called_once()
+        self.assertEqual(response.status_code, 502)
+        saved = client.get('/assessments/' + job, headers=HEADERS).json
+        self.assertEqual(saved['status'], 'failed')
+        self.assertEqual(saved['activity'][-1]['detail'], saved['error_message'])
+        self.assertIn('HTTP 429', saved['error_message'])
+        self.assertNotIn('internal response', json.dumps(saved))
 
     def test_a_late_poll_cannot_replace_a_cancellation(self):
         app=Flask(__name__);store=MemoryStore();executor=Executor();budget=Budget()

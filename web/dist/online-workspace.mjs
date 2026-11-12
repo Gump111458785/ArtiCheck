@@ -1,4 +1,4 @@
-import {criteriaDecisions,reportVerdict} from './report-verdict.mjs';
+import {criteriaDecisions,reportVerdict,reportOutcome,reportNodes,location,withUnit,duration} from './report-verdict.mjs';
 import {metricCatalog} from './metric-catalog.mjs';
 import {activityView,timelineStates,activityEvents,ROLE_NAMES,visibleRoles} from './review-activity.mjs';
 import {inspectZip} from './intake-core.mjs';
@@ -64,15 +64,7 @@ export function extractPaperMeta(r,p){
  if(!contributions.length){
   const bulletMatches=[...rawText.matchAll(/(?:•|\*|-|\(\d+\)|\b(?:first|second|third|1\)|2\)|3\)))\s*([^\n]{20,240})/gi)].map(m=>m[1].trim());
   if(bulletMatches.length>=2)contributions=bulletMatches.slice(0,4);
-  else{
-   if(v.summary)contributions.push(v.summary);
-   if(v.classification_reason&&v.classification_reason!==v.summary)contributions.push(v.classification_reason);
-   if(v.metrics?.length){
-    const datasets=[...new Set(v.metrics.map(m=>m.dataset).filter(Boolean))].slice(0,4);
-    const models=[...new Set(v.metrics.filter(m=>m.author_method).map(m=>m.model).filter(Boolean))].slice(0,3);
-    contributions.push(`围绕 ${models.join(' / ')||'作者提出的方法'} 在 ${datasets.join('、')||'论文核心数据集'} 上报告了 ${v.metrics.length} 项可溯源图表实验指标。`);
-   }
-  }
+  // No fallback to the overall judgement: a summary is not a contribution of the paper.
  }
  return {title,abstract,contributions:contributions.slice(0,5)};
 }
@@ -146,7 +138,7 @@ export function normalizeGitHubUrl(raw){
 }
 
 export class OnlineWorkspace{
- constructor(intake){this.i=intake;this.selected=null;this.tab='materials';this.token='';this.consent=true;this.errors={};this.error='';this.execNotice='';this.busy='';this.capabilities=null;this.timer=null;this.repoTimer=null;this.repoGeneration=0;this.repoPending=null;this.repoState='';this.pending=false;this.liveReport=null;this.progressTimer=null;this.activeController=null;this.userAborted=false;this.cancelling=false;this.metricAudience='all';this.metricQuery='';this.activityOpen=false;this.activeRoleNode=null;this.phase='materials';this.owner=null;try{this.owner=sessionCapability();}catch{this.error='浏览器存储不可用，暂时无法保存审查身份。请允许此网站使用本地存储。';}}
+ constructor(intake){this.i=intake;this.selected=null;this.tab='materials';this.token='';this.consent=true;this.errors={};this.error='';this.execNotice='';this.busy='';this.capabilities=null;this.timer=null;this.repoTimer=null;this.repoGeneration=0;this.repoPending=null;this.repoState='';this.pending=false;this.liveReport=null;this.progressTimer=null;this.activeController=null;this.userAborted=false;this.cancelling=false;this.metricAudience='all';this.nodeOpen=new Map();this.metricQuery='';this.activityOpen=false;this.activeRoleNode=null;this.phase='materials';this.owner=null;try{this.owner=sessionCapability();}catch{this.error='浏览器存储不可用，暂时无法保存审查身份。请允许此网站使用本地存储。';}}
  esc(value){return this.i.esc(value??'');}
  projects(){return this.i.projects.filter(p=>(p.online_account||null)===(this.i.h.account?.()?.id||null));}
  current(){return this.projects().find(p=>p.id===this.selected)||null;}
@@ -279,7 +271,7 @@ export class OnlineWorkspace{
   if(roleId==='literature_reader'){
    const meta=extractPaperMeta(r,p);
    const authorMetrics=(rv.metrics||[]).filter(m=>m.author_method);
-   return `<section id="online-role-node-panel" class="role-node-summary-panel"><header class="role-node-panel-head"><div><span class="online-kicker">01 · 文献审阅节点报告</span><h3>${e(meta?.title||rv.paper_title||p?.title||'论文文献审阅总结')}</h3></div>${closeBtn}</header>${meta?`<section class="role-paper-abstract"><h4>摘要</h4><p>${e(meta.abstract)}</p></section><div class="role-node-grid role-paper-grid"><div class="role-node-block"><h4>核心创新点与贡献（${meta.contributions.length} 项）</h4><ul class="role-node-list">${meta.contributions.map(c=>`<li>${e(c)}</li>`).join('')}</ul></div><div class="role-node-block"><h4>提取图表指标概览（共 ${rv.metrics?.length||0} 项，作者方法 ${authorMetrics.length} 项）</h4><ul class="role-node-list">${(rv.metrics||[]).slice(0,6).map(m=>`<li><strong>${e(m.reference)} · ${e(m.model)}</strong>（${e(m.dataset)} / ${e(m.metric)}）：<code>${e(m.value)} ${e(metricUnit(m))}</code>${m.page?` · <button type="button" class="btn text small" data-online-page="${e(m.page)}">PDF 第 ${e(m.page)} 页</button>`:''}</li>`).join('')||'<li>未从图表中提取到定量实验指标</li>'}</ul></div></div>`:`<p class="role-node-lead">${e(rv.summary)}</p>`}</section>`;
+   return `<section id="online-role-node-panel" class="role-node-summary-panel"><header class="role-node-panel-head"><div><span class="online-kicker">01 · 文献审阅节点报告</span><h3>${e(meta?.title||rv.paper_title||p?.title||'论文文献审阅总结')}</h3></div>${closeBtn}</header>${meta?`<section class="role-paper-abstract"><h4>摘要</h4><p>${e(meta.abstract)}</p></section><div class="role-node-grid role-paper-grid"><div class="role-node-block"><h4>作者自述贡献（${meta.contributions.length} 项，模型概括）</h4><ul class="role-node-list">${meta.contributions.map(c=>`<li>${e(c)}</li>`).join('')}</ul></div><div class="role-node-block"><h4>提取图表指标概览（共 ${rv.metrics?.length||0} 项，作者方法 ${authorMetrics.length} 项）</h4><ul class="role-node-list">${(rv.metrics||[]).slice(0,6).map(m=>`<li><strong>${e(m.reference)} · ${e(m.model)}</strong>（${e(m.dataset)} / ${e(m.metric)}）：<code>${e(m.value)} ${e(metricUnit(m))}</code>${m.page?` · <button type="button" class="btn text small" data-online-page="${e(m.page)}">PDF 第 ${e(m.page)} 页</button>`:''}</li>`).join('')||'<li>未从图表中提取到定量实验指标</li>'}</ul></div></div>`:`<p class="role-node-lead">${e(rv.summary)}</p>`}</section>`;
   }
   if(roleId==='code_inspector'){
    const snippets=extractCoreCodeSnippets(r,p);
@@ -299,8 +291,8 @@ export class OnlineWorkspace{
    return `<section id="online-role-node-panel" class="role-node-summary-panel role-cross-review"><header class="role-node-panel-head"><div><span class="online-kicker">05 · 交叉核查节点报告</span><h3>证据出处、复核记录与数值比对（${rv.findings?.length||0} 项问题）</h3></div>${closeBtn}</header><p class="role-node-lead">${r.audit?.status==='completed'?`交叉复核保留 ${rv.findings.length} 条有效问题建议，撤回 ${r.audit.withdrawn||0} 条依据不足的建议，补充 ${r.audit.additional_metrics||0} 条图表指标。`:'已完成图表原文出处校验与阶段执行状态核对。'}</p>${obs.length?this.observations(r):''}<div class="online-findings role-audit-findings"><h4>${this.isSelfReview(r)?'保留的问题与修正建议':'保留的证据与差异'}</h4>${this.findingCards(this.isSelfReview(r)?rv.findings:rv.findings.map(f=>({...f,suggestion:''})))||'<p>本次未保留问题建议。</p>'}</div></section>`;
   }
   if(roleId==='reporter'){
-   const v=reportVerdict(r,p);
-   return `<section id="online-role-node-panel" class="role-node-summary-panel"><header class="role-node-panel-head"><div><span class="online-kicker">06 · 报告整理节点报告</span><h3>最终审查结论与报告汇总</h3></div><div class="role-panel-actions"><button type="button" class="btn primary small" data-online-tab="report">进入完整最终报告</button>${closeBtn}</div></header><div class="role-verdict-summary ${e(v.state)}"><strong>${e(v.scope)} · ${e(v.label)}</strong><p>${e(v.reason)}</p></div><p class="role-node-lead">${e(rv.summary)}</p></section>`;
+   const o=reportOutcome(r,p,{stale:this.reportStale(r,p)}),state={pass:'passed',fail:'failed'}[o.tone]||'pending';
+   return `<section id="online-role-node-panel" class="role-node-summary-panel"><header class="role-node-panel-head"><div><span class="online-kicker">06 · 报告整理节点报告</span><h3>最终审查结论与报告汇总</h3></div><div class="role-panel-actions"><button type="button" class="btn primary small" data-online-tab="report">进入完整最终报告</button>${closeBtn}</div></header><div class="role-verdict-summary ${e(state)}"><strong>${e(o.headline)}</strong><p>${e(o.note||o.sub||o.verdict?.reason||'')}</p></div><p class="role-node-lead">${e(rv.summary)}</p></section>`;
   }
   return '';
  }
@@ -338,43 +330,120 @@ export class OnlineWorkspace{
   return (findings||[]).map((f,n)=>`<article class="report-finding" ${f.index==null?'':`id="report-issue-${f.index}"`}><header><span class="online-issue-index">${String(n+1).padStart(2,'0')}</span><h3>${e(concise(f.title,75))}</h3><span class="online-severity ${e(f.severity)}">${e(severity[f.severity])}</span></header><p class="finding-evidence">${e(concise(f.detail))}</p>${f.suggestion?`<div class="online-suggestion"><strong>修正建议</strong><p>${e(concise(f.suggestion,130))}</p></div>`:''}${this.citation(f)}${f.audit_note||f.detail!==concise(f.detail)||f.suggestion&&f.suggestion!==concise(f.suggestion,130)?`<details class="finding-source"><summary>完整依据</summary><p>${e(f.detail)}</p>${f.suggestion?`<p><strong>修正建议</strong> ${e(f.suggestion)}</p>`:''}${f.audit_note?`<p><strong>交叉复核</strong> ${e(f.audit_note)}</p>`:''}</details>`:''}</article>`).join('');
  }
 
+ // Final report: basic information → result (by purpose) → process timeline → collapsed appendix.
+ reportStale(r,p){return Boolean(p?.online_report&&p.online_report.id===r?.id&&p.online_input_key!==inputKey(p));}
  finalReport(r,p=this.current()){
-  const e=v=>this.esc(v),v=reportVerdict(r,p),rv=r.review||{},self=this.isSelfReview(r);
-  const paper=Boolean(r.materials?r.materials.paper:p?.paper),code=Boolean(r.materials?r.materials.code:hasCode(p||{}));
-  const paperMeta=paper?extractPaperMeta(r,p):null;
-  const findings=(rv.findings||[]).map((row,index)=>({...row,index}));
-  const priority={high:0,medium:1,low:2};
-  findings.sort((a,b)=>priority[a.severity]-priority[b.severity]);
-  const area=f=>!paper?'code':!code?'paper':f.area||(f.page&&f.file?'alignment':f.file?'code':'paper');
-  const cards=key=>this.findingCards(findings.filter(f=>area(f)===key).map(f=>({...f,suggestion:''})));
-  const group=(key,title,content)=>`<section class="report-review-group" id="report-${key}"><h2>${title}</h2>${content}</section>`;
-  const stopped=r.execution?.stages?.find(stage=>stage.status==='failed');
-  const notes=criteriaDecisions(r,p).filter(row=>!row.note||!findings.some(f=>f.detail?.trim()===row.note.trim()));
-  const format=(m,key)=>m[key]==null?'未记录':e(m[key])+(m.unit?' '+e(m.unit):'');
-  const datasets=new Set((rv.metrics||[]).map(m=>m.dataset?.trim()).filter(name=>name&&!/^(未|未知|unknown|n\/?a$)/i.test(name)).map(name=>name.toLowerCase()));
-  const metadata=[['项目名称',p?.title||r.project_title||'未命名审查项目'],['论文题目',paper?rv.paper_title||r.paper_title||p?.paper?.name||'未提取':'未提交'],
-   ['代码文件',code?p?.repository?.repo_name||p?.repository?.name||'名称未记录':'未提交'],
-   ['论文页数',paper?r.review?.coverage?.total_paper_pages||p?.paper?.pages?.length||'未记录':'不适用'],
-   ['数据集',datasets.size?datasets.size+' 个':'未识别']];
-  const status=row=>({documented:'通过',needs_review:'待核查',missing:'待核查',not_applicable:'不适用'}[row.status]||'待核查');
-  const stageFindings={scope:'paper',code:'code',results:'alignment'};
-  const stages=criteriaDecisions(r,p).map(row=>[criterionNames[row.dimension]||row.dimension,
-   findings.some(f=>stageFindings[row.dimension]===area(f)&&f.confirmed_error&&(f.page||f.file))?'不通过':status(row)]);
-  if(r.execution||rv.plan?.stages?.length)stages.push(['实验执行',({completed:'通过',failed:'不通过',expired:'不通过'}[r.execution?.status]||'待核查'),r.execution?.stages?.find(row=>row.status==='failed')?.reason||rv.plan?.blocked_reason]);
-  if(paper&&code)stages.push(['指标比对',v.mismatches?.length?'不通过':r.execution?.metrics?.length&&r.execution.metrics.every(m=>m.status==='within_tolerance'&&m.observed!=null)&&v.scope!=='实验指标'?'通过':'待核查',v.scope==='实验指标'?v.reason:'']);
-  return `<section id="report-top-section" class="report-result-sheet">
-   <div class="report-result-head ${v.state}"><div><p class="report-result-caption">最终结果</p><h2>${e(v.label)}</h2><p>${e(v.reason)}</p></div><div class="verdict-actions"><button class="btn primary" data-online="export">导出报告</button><button class="btn" data-online-tab="process">查看过程</button></div></div>
-   <dl class="report-metadata">${metadata.map(([label,value])=>`<div><dt>${label}</dt><dd>${e(value)}</dd></div>`).join('')}</dl>
-   <section class="report-stage-results"><h2>阶段结果</h2><div class="online-table-wrap"><table class="online-table"><thead><tr><th scope="col">审查阶段</th><th scope="col">结果</th></tr></thead><tbody>${stages.map(([label,state])=>`<tr><th scope="row">${e(label)}</th><td><span class="report-stage-status ${({'通过':'passed','不通过':'failed','待核查':'pending'})[state]||'inactive'}">${e(state)}</span></td></tr>`).join('')||'<tr><td colspan="2">暂无阶段结果</td></tr>'}</tbody></table></div></section>
-   ${v.state==='failed'?`<section class="report-failure-details"><h2>不通过项说明</h2>${v.mismatches?.length?`<ul>${v.mismatches.map(m=>`<li><strong>${e(m.metric)}</strong>　目标 ${format(m,'expected')}　实测 ${format(m,'observed')}　容差 ${m.tolerance==null?'未记录':'±'+format(m,'tolerance')}</li>`).join('')}</ul>`:''}${v.stage?`<p><strong>${e(v.stage.title||v.stage.id)}</strong>　${e(v.stage.reason||v.reason)}</p>`:''}${v.errors?.length?this.findingCards(v.errors.map(f=>({...f,suggestion:''}))):''}${!v.mismatches?.length&&!v.errors?.length&&!v.stage?`<p>${e(v.reason)}</p>`:''}</section>`:''}
-  </section>
-  <details class="report-review-group report-details" data-report-details="${e(r.id)}"><summary>详细报告</summary>
-  ${group('paper','论文审查',paper?`${cards('paper')||'<p>本次未记录有证据支持的论文问题。</p>'}<details><summary>图表与原文出处</summary>${this.metricEvidence(rv.metrics||[])}</details>${paperMeta?`<details><summary>论文摘要与主要贡献</summary><h3>${e(paperMeta.title)}</h3><p>${e(paperMeta.abstract)}</p><ul>${paperMeta.contributions.map(item=>`<li>${e(item)}</li>`).join('')}</ul></details>`:''}`:'<p>仅收到代码，未检查论文。</p>')}
-  ${group('code','代码审查',code?`${stopped?`<p><strong>执行中断</strong> · ${e(stopped.title||stopped.id)}${stopped.reason?' · '+e(stopped.reason):''} <button class="btn small" data-online-tab="process">查看实际日志</button></p>`:r.execution?.execution_performed?`<p>${e(executionNames[r.execution.status]||r.execution.status)} · ${r.execution.stages?.filter(stage=>stage.status==='completed').length||0} 个阶段已执行</p>`:'<p>已检查提交的代码，尚无运行证据。</p>'}${cards('code')}${this.coreCodeSection(r,p)}`:'<p>仅收到论文，未检查代码。</p>')}
-  ${group('alignment','论文与代码核对',paper&&code?`${cards('alignment')}${this.observations(r)||'<p>尚无可与论文目标比较的实测结果。</p>'}`:'<p>需要同时提供论文与代码才能核对。</p>')}
-  ${self&&findings.some(f=>f.suggestion)?group('feedback','反馈建议',findings.filter(f=>f.suggestion).map(f=>`<article class="report-finding"><button class="btn text small" data-report-anchor="report-issue-${f.index}">${e(f.title)}</button><p>${e(f.suggestion)}</p></article>`).join('')):''}
-  ${this.conflictsSection(r)}
-  ${this.criteriaSection(r,p)}${this.criteriaDetails(r,p,notes)}<section class="report-evidence">${this.evidence(r,{omitMetrics:true})}</section></details>`;
+  const e=v=>this.esc(v),self=this.isSelfReview(r),v=r.review||{};
+  const conflicts=this.conflictState?.id===r.id?this.conflictState:null;
+  const {outcome:o,nodes,notApplicable}=reportNodes(r,p,{stale:this.reportStale(r,p),conflicts:conflicts?.items??null,conflictError:Boolean(conflicts?.error)});
+  const paperMeta=o.paper?extractPaperMeta(r,p):null;
+  return `<section id="report-top-section" class="rpt" data-report-purpose="${e(o.purpose)}" data-report-materials="${e(o.materials)}">
+   ${this.reportInfo(r,p,o,paperMeta)}
+   ${self?this.selfResult(r,o,nodes):this.otherResult(r,o,nodes)}
+   ${this.reportFlow(r,p,o,nodes,notApplicable)}
+   ${this.reportAppendix(r,p,o,paperMeta)}
+  </section>`;
+ }
+ reportInfo(r,p,o,paperMeta){
+  const e=v=>this.esc(v),v=r.review||{},x=r.execution,cov=v.coverage||{},self=o.purpose==='self_review';
+  const times=(r.activity||[]).map(a=>a.time).filter(t=>typeof t==='number');
+  const reviewSeconds=times.length>1?Math.max(...times)-Math.min(...times):null;
+  const finished=Math.max(...times,typeof x?.finished_at==='number'?x.finished_at:0);
+  const repo=p?.repository,repoName=repo?.repo_name||repo?.remote?.repository||repo?.name?.replace(/\.zip$/i,'')||'名称未记录',commit=repo?.commit||repo?.remote?.commit;
+  const meta=[
+   ['论文',o.paper?`${paperMeta?.title||p?.paper?.name||'已提交'} · ${cov.total_paper_pages??p?.paper?.pages?.length??'—'} 页`:'未提交'],
+   ['代码',o.code?`${repoName}${commit?' @'+String(commit).slice(0,7):''} · ${cov.total_code_files??repo?.files?.length??'—'} 个文件`:'未提交'],
+   ['完成时间',finished>0?new Date(finished*1000).toLocaleString('zh-CN',{hour12:false}):'未记录'],
+   ['用时',[reviewSeconds!=null?'审阅 '+duration(reviewSeconds):'',x?.elapsed_seconds!=null?'执行 '+duration(x.elapsed_seconds):''].filter(Boolean).join(' · ')||'未记录']];
+  const observed=(x?.metrics||[]).filter(m=>typeof m.observed==='number').length;
+  const scope=[
+   o.paper?`论文 ${cov.paper_pages_in_context??'—'}/${cov.total_paper_pages??'—'} 页`:'',
+   o.code?`代码 ${cov.code_files_in_context??'—'}/${cov.total_code_files??'—'} 个文件进入审阅`:'',
+   o.paper?`图表指标 ${(v.metrics||[]).length} 项${o.code?`，其中 ${observed} 项实测`:''}`:'',
+   o.code?(o.run?.done?`运行 ${o.run.done}/${o.run.total} 个阶段`:'未运行代码'):'',
+   self&&o.paper?'相关工作只比较你知识图谱中的论文':'',
+   (cov.gaps||[]).length?`覆盖缺口 ${(cov.gaps||[]).length} 项`:''].filter(Boolean);
+  return `<header class="rpt-info">
+   <div class="rpt-title-row"><h2 class="rpt-project">${e(p?.title||r.project_title||'未命名审查项目')}</h2><span class="rpt-chip ${self?'neutral':'info'}">${self?'审查自己':'审查别人'}</span>
+    <div class="rpt-actions"><button class="btn primary" data-online="export">${self?'导出修改清单':'导出报告'}</button><button class="btn" data-online-tab="process">查看过程详情</button></div></div>
+   <dl class="rpt-meta">${meta.map(([label,value])=>`<div><dt>${label}</dt><dd>${e(value)}</dd></div>`).join('')}</dl>
+   <p class="rpt-scope"><strong>核验范围</strong>${e(scope.join(' · ')||'仅限提交的材料')}${(cov.gaps||[]).length?' · <button type="button" class="rpt-link" data-report-anchor="rpt-appendix-coverage">查看覆盖边界</button>':''}</p>
+  </header>`;
+ }
+ reportItems(r,groups,nodes,{numbered=0}={}){
+  const e=v=>this.esc(v),title=Object.fromEntries(nodes.map((n,i)=>[n.id,`${'①②③④⑤⑥⑦⑧⑨'[i]||i+1} ${n.title}`]));
+  let n=numbered;
+  return groups.filter(([,,,items])=>items.length).map(([key,label,hint,items])=>`<section class="rpt-group" data-report-group="${key}"><h3><span class="rpt-chip ${{fix:'fail',weakens:'fail',optimize:'warn',gaps:'warn',confirm:'neutral'}[key]}">${label}</span><span>${hint} · ${items.length}</span></h3>
+   ${items.map(item=>{n++;const actions=!r.terminated_at&&item.dimension?(item.status==='needs_review'?`<button type="button" class="btn small" data-confirm-criterion="${e(item.dimension)}">标记为已确认</button>`:`<button type="button" class="btn small" data-supply-criterion="${e(item.dimension)}">补充材料</button>`):'';
+    return `<article class="rpt-item"><span class="rpt-num">${String(n).padStart(2,'0')}</span><div class="rpt-item-body">
+     <div class="rpt-item-head"><strong>${e(item.title)}</strong>${item.location?`<span class="rpt-loc">${e(item.location)}</span>`:''}${title[item.node]?`<button type="button" class="rpt-link" data-report-anchor="rpt-node-${e(item.node)}">流程 ${e(title[item.node])}</button>`:''}</div>
+     ${item.fact?`<p class="rpt-fact">${e(item.fact)}</p>`:''}${item.suggestion?`<p class="rpt-suggest"><strong>建议</strong>${e(item.suggestion)}</p>`:''}${actions?`<div class="rpt-item-actions">${actions}</div>`:''}</div></article>`;}).join('')}</section>`).join('');
+ }
+ selfResult(r,o,nodes){
+  const e=v=>this.esc(v);
+  const groups=[['fix','修改建议','有直接证据的错误',o.groups.fix],['optimize','优化建议','结论可能成立，但不够扎实',o.groups.optimize],['confirm','待你确认','我们没看到，不算你的错',o.groups.confirm]];
+  return `<section class="rpt-result tone-${e(o.tone)}" aria-labelledby="rpt-result-title"><p class="rpt-kicker">审查结果</p>
+   ${o.note?`<p class="rpt-flag" role="status">${e(o.note)}</p>`:''}
+   <h2 id="rpt-result-title" class="rpt-headline"><span class="rpt-head-main">${e(o.headline)}</span>${o.sub?`<span class="rpt-head-sub">${e(o.sub)}</span>`:''}</h2>
+   ${o.code&&o.run?`<p class="rpt-reason">代码${e(o.run.label)}${o.run.total?`（${o.run.done}/${o.run.total} 个阶段）`:''}${o.run.reason?' · '+e(o.run.reason):''}</p>`:''}
+   ${this.reportItems(r,groups,nodes)||'<p class="rpt-empty">核验范围内没有需要修改或确认的内容。</p>'}</section>`;
+ }
+ otherResult(r,o,nodes){
+  const e=v=>this.esc(v);
+  const groups=[['weakens','削弱结论','指标偏离、确认的错误或执行失败',o.groups.weakens],['gaps','可信度缺口','信息缺失或论文与代码不一致',o.groups.gaps],['confirm','待确认','本次材料或时间不足以判断',o.groups.confirm]];
+  const innovation=o.paper?`<section class="rpt-innov" aria-labelledby="rpt-innov-title"><h3 id="rpt-innov-title">创新点凝练</h3><p class="rpt-note">只列有逐字出处的机制创新；指标、数据集与训练设置不算创新点。</p>
+   ${o.innovations.length?o.innovations.map((item,i)=>`<article class="rpt-item"><span class="rpt-num rpt-num-lg">${i+1}</span><div class="rpt-item-body">
+    <div class="rpt-item-head"><strong>${e(item.title)}</strong><span class="rpt-chip ${{supported:'pass',unsupported:'fail',uncovered:'neutral',stated:'neutral'}[item.status]}">${e(item.statusLabel)}</span></div>
+    ${item.summary?`<p class="rpt-fact">${e(item.summary)}</p>`:''}
+    <p class="rpt-quote"><span class="rpt-loc">第 ${e(item.page)} 页${item.section?' · '+e(item.section):''}</span>“${e(item.quote)}”</p>
+    ${item.evidence?`<p class="rpt-evidence ${e(item.status)}">${e(item.evidence)}</p>`:''}</div></article>`).join(''):'<p class="rpt-empty">未能从原文提取有逐字出处的创新点，本报告不以摘要代替。</p>'}</section>`:'<p class="rpt-note">未提交论文，不凝练创新点。</p>';
+  return `<section class="rpt-result tone-${e(o.tone)}" aria-labelledby="rpt-result-title"><p class="rpt-kicker">审查结果</p>
+   ${o.note?`<p class="rpt-flag" role="status">${e(o.note)}</p>`:''}
+   <h2 id="rpt-result-title" class="rpt-headline is-verdict">${e(o.verdict.title)}：<span class="rpt-verdict tone-${e(o.verdict.tone)}">${e(o.verdict.label)}</span></h2>
+   ${o.verdict.reason?`<p class="rpt-reason">${e(o.verdict.reason)}</p>`:''}
+   <dl class="rpt-facts">${o.facts.map(f=>`<div><dt>${e(f.label)}</dt><dd><strong>${e(f.value)}</strong>${f.unit?` <span>${e(f.unit)}</span>`:''}</dd></div>`).join('')}</dl>
+   ${innovation}
+   <section class="rpt-issues" aria-labelledby="rpt-issues-title"><h3 id="rpt-issues-title">存疑与差异</h3><p class="rpt-note">只陈述证据，不给修改建议。</p>
+   ${this.reportItems(r,groups,nodes)||'<p class="rpt-empty">核验范围内没有发现存疑或差异。</p>'}</section></section>`;
+ }
+ reportFlow(r,p,o,nodes,notApplicable){
+  const e=v=>this.esc(v),clock=t=>typeof t==='number'?new Date(t*1000).toLocaleTimeString('zh-CN',{hour12:false}):'—';
+  const tone={pass:'pass',issue:'fail',fail:'fail',confirm:'neutral',running:'info',unreached:'neutral',skipped:'neutral',interrupted:'warn'};
+  return `<section class="rpt-flow" aria-labelledby="rpt-flow-title"><div class="rpt-section-head"><h2 id="rpt-flow-title">审查流程</h2><span>${nodes.length} 个节点 · 有问题的节点默认展开并列出量化差距，其余点击展开查看完整记录</span></div>
+   <ol class="rpt-timeline">${nodes.map((n,i)=>{const key=r.id+':'+n.id,open=this.nodeOpen?.has(key)?this.nodeOpen.get(key):['fail','issue','confirm'].includes(n.state);
+    return `<li class="rpt-node state-${e(n.state)}" id="rpt-node-${e(n.id)}"><span class="rpt-time">${e(clock(n.time))}</span><span class="rpt-dot" aria-hidden="true"></span>
+     <details data-report-node="${e(key)}" ${open?'open':''}><summary><strong>${'①②③④⑤⑥⑦⑧⑨'[i]||i+1} ${e(n.title)}</strong>${n.badge?`<span class="rpt-chip ${tone[n.state]||'neutral'}">${e(n.badge)}</span>`:''}<span class="rpt-node-sum">${e(n.summary)}</span></summary>
+     <div class="rpt-node-body">${this.nodeBody(n,r,p,o)}</div></details></li>`;}).join('')}
+   ${notApplicable.length?`<li class="rpt-node state-na"><span class="rpt-time">—</span><span class="rpt-dot" aria-hidden="true"></span><div class="rpt-na"><span>${e(notApplicable.join(' · '))}</span><span class="rpt-chip neutral">不适用</span><span>本次未提交${o.paper?'代码':'论文'}</span></div></li>`:''}</ol></section>`;
+ }
+ nodeBody(n,r,p,o){
+  const e=v=>this.esc(v),v=r.review||{},x=r.execution;
+  if(n.id==='material')return `<dl class="rpt-kv"><div><dt>审查目的</dt><dd>${o.purpose==='self_review'?'审查自己：纠错并给出修改与优化建议':'审查别人：评估合理性与可复现性，不给建议'}</dd></div><div><dt>材料类型</dt><dd>${e(typeNames[v.paper_type]||'待确认')}${v.classification_reason?' · '+e(v.classification_reason):''}</dd></div>${r.public_paper_identifier?`<div><dt>公开标识</dt><dd>${e(r.public_paper_identifier.value||r.public_paper_identifier.id||'')}</dd></div>`:''}</dl>`;
+  if(n.id==='review')return `<div class="rpt-parts">${n.parts.map(part=>`<div class="rpt-part ${part.findings.length?'has-issue':''}"><div class="rpt-part-head"><strong>${e(part.name)}</strong><span class="rpt-chip ${part.findings.length?'fail':'pass'}">${part.findings.length?part.findings.length+' 处':'通过'}</span></div>${part.facts?`<p>${e(part.facts)}</p>`:''}${part.findings.map(f=>`<p class="rpt-line"><strong>${e(f.title)}</strong> · ${e(concise(f.detail,160))}${location(f)?` <span class="rpt-loc">${e(location(f))}</span>`:''}</p>`).join('')}</div>`).join('')}</div>`;
+  if(n.id==='audit')return n.withdrawn?.length?`<p>撤回的条目不会出现在结果中：</p><ul class="rpt-list">${n.withdrawn.map(w=>`<li><strong>${e(w.title)}</strong> · ${e(w.reason)}</li>`).join('')}</ul>`:`<p>${e(n.summary)}</p>`;
+  if(n.id==='related')return this.conflictsSection(r)||`<p>${e(n.summary)}</p>`;
+  if(n.id==='plan')return n.stages.length?`<ol class="rpt-list">${n.stages.map(s=>`<li><strong>${e(s.id)} ${e(s.title)}</strong> <span class="rpt-loc">${e(s.file||'')}</span><code class="rpt-cmd">${e(concise(s.command,200))}</code></li>`).join('')}</ol>${(v.plan?.needs||[]).length?`<p class="rpt-note">所需资源：${e(v.plan.needs.map(x=>x.name+(x.required?'（必需）':'')).join('、'))}</p>`:''}`:`<p>${e(n.summary)}</p>`;
+  if(n.id==='run')return n.stages.length?`<div class="online-table-wrap"><table class="online-table rpt-table"><thead><tr><th scope="col">阶段</th><th scope="col">文件</th><th scope="col" class="number">用时</th><th scope="col" class="number">退出码</th><th scope="col">记录</th></tr></thead><tbody>${n.stages.map(s=>`<tr class="${s.status==='failed'?'is-fail':''}"><td>${e(s.id)} ${e(s.title)}</td><td class="rpt-loc">${e(s.file)}</td><td class="number">${e(s.duration||'—')}</td><td class="number">${s.exit==null?'—':e(s.exit)}</td><td>${e(s.status==='skipped'?s.reason||'已跳过':s.reason||s.tail.join(' / ')||({completed:'完成',failed:'失败',running:'执行中'}[s.status]||s.status))}</td></tr>`).join('')}</tbody></table></div>${x?.runtime?`<p class="rpt-note">运行环境：Python ${e(x.runtime.python||'3.x')}${(x.runtime.auto_provisioned_packages||[]).length?` · 自动补齐依赖 ${x.runtime.auto_provisioned_packages.length} 个`:''}${x.runtime.workspace_cleaned?' · 隔离环境与临时依赖已清理':''}</p>`:''}<button type="button" class="btn small" data-online-tab="process">查看逐阶段日志</button>`:`<p>${e(n.summary)}</p>`;
+  if(n.id==='metrics'){
+   if(!n.rows?.length)return `<p>${e(n.summary)}</p>`;
+   const bad=n.rows.filter(m=>m.status==='outside_tolerance');
+   return `${bad.map(m=>`<div class="rpt-gap"><div class="rpt-gap-name"><span>指标</span><strong>${e(m.metric)}</strong></div><div><span>论文</span><strong>${e(withUnit(m.expected,m.unit))}</strong></div><div><span>实测</span><strong>${e(withUnit(m.observed,m.unit))}</strong></div><div><span>差距</span><strong class="is-fail">${e(m.gap)}</strong></div><div><span>容差</span><strong>±${e(m.tolerance)}</strong></div><p>${m.source?'出处 '+e(m.source)+' · ':''}观测来自阶段 ${e(m.stage_id||'—')} 的标准输出${m.basis?' · '+e(m.basis):''}</p></div>`).join('')}
+    <div class="online-table-wrap"><table class="online-table rpt-table"><thead><tr><th scope="col">指标</th><th scope="col" class="number">论文</th><th scope="col" class="number">实测</th><th scope="col" class="number">差距</th><th scope="col" class="number">容差</th><th scope="col">结果</th></tr></thead><tbody>${n.rows.map(m=>`<tr class="${m.status==='outside_tolerance'?'is-fail':''}"><td>${e(m.metric)}</td><td class="number">${e(withUnit(m.expected,m.unit))}</td><td class="number">${e(withUnit(m.observed,m.unit))}</td><td class="number">${e(m.gap||'—')}</td><td class="number">±${e(m.tolerance)}</td><td>${e({within_tolerance:'在容差内',outside_tolerance:'超出容差',unobserved:'未取得观测'}[m.status]||m.status)}</td></tr>`).join('')}</tbody></table></div>
+    <p class="rpt-note">容差由服务端按论文印刷精度限定，且不超过报告值的 1%；数值吻合不等于论文主要结论成立。</p>`;
+  }
+  return `<p>${e(n.summary)}</p>`;
+ }
+ reportAppendix(r,p,o,paperMeta){
+  const e=v=>this.esc(v),v=r.review||{};
+  const item=(id,label,hint,body)=>body?`<details class="rpt-appendix-item" id="${id}" data-report-appendix="${e(r.id)}:${id}" ${this.nodeOpen?.get(r.id+':'+id)?'open':''}><summary><span>${label}</span><span class="rpt-hint">${e(hint)}</span></summary><div class="rpt-appendix-body">${body}</div></details>`:'';
+  return `<section class="rpt-appendix" aria-labelledby="rpt-appendix-title"><h2 id="rpt-appendix-title">附录</h2>
+   ${item('rpt-appendix-metrics','图表指标全表',`${(v.metrics||[]).length} 项 · 作者方法优先`,o.paper?this.metricEvidence(v.metrics||[]):'')}
+   ${item('rpt-appendix-paper','论文摘要与作者自述贡献','模型概括，未逐字核验',paperMeta?`<h3>${e(paperMeta.title)}</h3><p>${e(paperMeta.abstract)}</p>${paperMeta.contributions.length?`<ul>${paperMeta.contributions.map(c=>`<li>${e(c)}</li>`).join('')}</ul>`:''}`:'')}
+   ${item('rpt-appendix-code','核心代码与实现解析','关键实现片段',o.code?this.coreCodeSection(r,p):'')}
+   ${item('rpt-appendix-criteria','八项审查条件','按维度的材料依据',this.criteriaSection(r,p)+this.criteriaDetails(r,p))}
+   ${item('rpt-appendix-coverage','覆盖边界与公开资料',`${(v.coverage?.gaps||[]).length} 项覆盖缺口`,this.evidence(r,{omitMetrics:true}))}
+   <div class="rpt-appendix-item rpt-appendix-link"><span>原始日志与角色事件</span><button type="button" class="rpt-link" data-online-tab="process">前往过程详情</button></div>
+  </section>`;
  }
 
  isSelfReview(r){return r.review?.purpose?r.review.purpose==='self_review':r.review?.task!=='reproduction';}
@@ -408,7 +477,7 @@ export class OnlineWorkspace{
  observations(r){const e=v=>this.esc(v),rows=r.execution?.metrics||[];return rows.length?`<section id="report-observations-section" class="report-observations"><div class="online-section-heading"><h2>论文目标与实际观测</h2><span>${rows.length} 项</span></div><div class="online-table-wrap"><table class="online-table metric-comparison"><colgroup><col style="width:28%"><col style="width:23%"><col style="width:23%"><col style="width:26%"></colgroup><thead><tr><th>指标</th><th class="number">论文值</th><th class="number">观测值</th><th>比较结果 / 容差</th></tr></thead><tbody>${rows.map(m=>`<tr><td>${e(m.metric)}</td><td class="number">${e(m.expected)} ${e(m.unit)}</td><td class="number">${m.observed==null?'未观测':e(m.observed)+' '+e(m.unit)}</td><td><span class="online-status ${m.status==='outside_tolerance'?'missing':m.status==='within_tolerance'?'documented':'needs_review'}">${e({unobserved:'无可比较输出',within_tolerance:'数值在容差内',outside_tolerance:'超出容差'}[m.status]||m.status)}</span>${m.tolerance==null?'':` <small>±${e(m.tolerance)} ${e(m.unit)}</small>`}</td></tr>`).join('')}</tbody></table></div></section>`:'';}
 
  purposeChoice(p){
-  return `<fieldset class="review-task-options review-purpose" id="review-purpose"><legend>审查目的</legend>${[['self_review','自我审查','核查自己的论文和代码，提供修改建议'],['reproduce_other','复现他人','核对实验结果与证据']].map(([key,label,detail])=>`<label><input type="radio" name="online-purpose" value="${key}" data-online-purpose ${p.online_purpose===key?'checked':''}><span><strong>${label}</strong><small>${detail}</small></span></label>`).join('')}${this.errors.purpose?'<p class="online-field-error" role="alert">请选择审查目的。</p>':''}</fieldset>`;
+  return `<fieldset class="review-task-options review-purpose" id="review-purpose"><legend>审查目的</legend>${[['self_review','自我审查'],['reproduce_other','复现他人']].map(([key,label])=>`<label><input type="radio" name="online-purpose" value="${key}" data-online-purpose ${p.online_purpose===key?'checked':''}><strong>${label}</strong></label>`).join('')}${this.errors.purpose?'<p class="online-field-error" role="alert">请选择审查目的。</p>':''}</fieldset>`;
  }
  railRows(p){
   const e=v=>this.esc(v),paperBusy=this.busy.includes('论文'),codeBusy=Boolean(this.repoStartedAt||this.busy.includes('代码')||this.busy.includes('源码')),codeFail=this.repoState==='读取失败'&&!hasCode(p);
@@ -670,7 +739,8 @@ export class OnlineWorkspace{
   if(action==='new')return this.new();
   if(action==='export'){
    const report=p.online_report,reviewed=criteriaDecisions(report,p).filter(row=>row.manuallyReviewed).map(row=>row.dimension);
-   const exported={...report,verdict:reportVerdict(report,p),...(reviewed.length?{human_criteria_review:{source:'browser',passed_dimensions:reviewed}}:{})};
+   const {v:_review,x:_execution,...outcome}=reportOutcome(report,p,{stale:this.reportStale(report,p)});
+   const exported={...report,verdict:reportVerdict(report,p),outcome,...(reviewed.length?{human_criteria_review:{source:'browser',passed_dimensions:reviewed}}:{})};
    if(!this.isSelfReview(report)){
     exported.review={...report.review,findings:report.review.findings.map(({suggestion,...finding})=>finding)};
     if(report.audit?.raw_findings)exported.audit={...report.audit,raw_findings:report.audit.raw_findings.map(({suggestion,...finding})=>finding)};
@@ -799,8 +869,10 @@ export class OnlineWorkspace{
    const anchor=event.target.closest('[data-report-anchor]');
    if(anchor){
     const target=document.getElementById(anchor.dataset.reportAnchor);
-    const details=target?.closest('details[data-report-details]');
+    const details=target?.matches?.('details')?target:target?.closest('details[data-report-details],details[data-report-node],details[data-report-appendix]');
+    const inner=target?.querySelector?.(':scope > details[data-report-node]');
     if(details)details.open=true;
+    if(inner)inner.open=true;
     this.pulseSection(target);
     return;
    }
@@ -815,7 +887,7 @@ export class OnlineWorkspace{
     return;
    }
   });
-  document.addEventListener('toggle',event=>{if(event.target.matches?.('.review-activity-log'))this.activityOpen=event.target.open;},true);
+  document.addEventListener('toggle',event=>{if(event.target.matches?.('.review-activity-log'))this.activityOpen=event.target.open;const key=event.target.dataset?.reportNode||event.target.dataset?.reportAppendix;if(key)this.nodeOpen.set(key,event.target.open);},true);
   document.addEventListener('change',event=>{if(event.target.matches('[data-metric-audience]')){this.metricAudience=event.target.value;this.renderNow();}});
   document.addEventListener('input',event=>{if(event.target.matches('[data-metric-query]')){this.metricQuery=event.target.value;clearTimeout(this.metricTimer);this.metricTimer=setTimeout(()=>{const position=document.querySelector('[data-metric-query]')?.selectionStart;this.renderNow();const input=document.querySelector('[data-metric-query]');input?.focus();if(position!=null)input?.setSelectionRange(position,position);},250);}});
   document.addEventListener('click',event=>{const source=event.target.closest('[data-online-page]');if(source){const p=this.current();if(!p.paper?.blob||p.paper.sha256!==p.online_report?.materials.paper){this.error='原 PDF 已变更或不在当前浏览器，请导入对应版本后查看。';this.renderNow();return;}const url=URL.createObjectURL(p.paper.blob);window.open(url+'#page='+Number(source.dataset.onlinePage),'_blank','noopener');setTimeout(()=>URL.revokeObjectURL(url),60000);return;}const tab=event.target.closest('[data-online-tab]');if(tab){this.tab=tab.dataset.onlineTab;if(this.i.h.page?.()!=='api-review')this.i.h.navigate('api-review');else this.renderNow();return;}const action=event.target.closest('[data-online]');if(action)this.action(action.dataset.online);});

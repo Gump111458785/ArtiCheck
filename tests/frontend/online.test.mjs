@@ -138,20 +138,26 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  assert.doesNotMatch(paperTimeline,/实验执行/);
 
  const finalHtml=ws.finalReport(paperOnlyReport,{title:'我的 ResNet 审查项目',paper:{name:'1512.03385v1.pdf',pages:[{text:'Deep Residual Learning'}]}});
- const idxVerdict=finalHtml.indexOf('最终结果');
+ // Final report order: basic information → result → process timeline → appendix.
  const idxProject=finalHtml.indexOf('我的 ResNet 审查项目');
  const idxPaper=finalHtml.indexOf('Deep Residual Learning for Image Recognition');
+ const idxResult=finalHtml.indexOf('审查结果');
+ const idxFlow=finalHtml.indexOf('审查流程');
  const idxContrib=finalHtml.indexOf('提出残差学习框架解决深层网络退化问题');
- assert.ok(idxVerdict>=0 && idxVerdict<idxProject && idxProject<idxPaper && idxPaper<idxContrib);
- assert.match(finalHtml,/阶段结果/);
- assert.match(finalHtml,/详细报告/);
- assert.match(finalHtml,/论文审查/);
- assert.match(finalHtml,/代码审查/);
- assert.match(finalHtml,/论文与代码核对/);
+ assert.ok(idxProject>=0 && idxProject<idxPaper && idxPaper<idxResult && idxResult<idxFlow && idxFlow<idxContrib);
+ assert.match(finalHtml,/审查自己/);
+ assert.match(finalHtml,/核验范围内未发现需要修改的问题/);
+ assert.match(finalHtml,/论文审阅/);
+ assert.match(finalHtml,/相关工作对比/);
+ assert.match(finalHtml,/代码审阅 · 执行计划 · 环境与运行 · 指标比对<\/span><span class="rpt-chip neutral">不适用/);
+ assert.match(finalHtml,/附录/);
+ assert.doesNotMatch(finalHtml,/最终结果|不通过/);
  assert.doesNotMatch(finalHtml,/trainer\.py · train 核心定义/);
  const external={...completedMismatch,review:{...completedMismatch.review,purpose:'reproduce_other'}};
- assert.match(ws.finalReport(external,{title:'复现项目'}),/目标 90 %\s+实测 70 %/);
- assert.doesNotMatch(ws.finalReport(external,{title:'复现项目'}),/反馈建议|修正建议/);
+ const externalHtml=ws.finalReport(external,{title:'复现项目'});
+ assert.match(externalHtml,/论文 90% · 实测 70%/);
+ assert.match(externalHtml,/复现程度：<span class="rpt-verdict tone-fail">未复现/);
+ assert.doesNotMatch(externalHtml,/反馈建议|修正建议|<strong>建议<\/strong>/);
  external.execution={...external.execution,execution_performed:true,metrics:[{...external.execution.metrics[0],observed:90,status:'within_tolerance'}]};
  assert.equal(reportVerdict(external).state,'pending');
  external.review.findings=[];

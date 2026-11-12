@@ -64,9 +64,11 @@ class ContributionExtractionTests(unittest.TestCase):
         paper = ingested['focus_paper_id']
         root_before = next(node for node in ingested['nodes'] if node['node_type'] == 'Contribution')
         self.assertEqual(ingested['papers'][0]['method_detail_status'], 'pending')
-        unavailable = graph.retry_contributions(owner, paper)
+        with patch.object(graph.literature, 'identify', side_effect=ReviewError('literature_unmatched', '未匹配')), \
+                patch.object(graph, 'acquire_paper_pdf', return_value=([], 'no_full_text', None)):
+            unavailable = graph.retry_contributions(owner, paper)
         self.assertEqual(unavailable['papers'][0]['method_detail_status'], 'no_full_text')
-        self.assertIn('原始 PDF', unavailable['method_notice'])
+        self.assertIn('未取得可读开放原文', unavailable['method_notice'])
         with self.assertRaises(ReviewError) as error:
             graph.retry_contributions('b' * 64, paper, material)
         self.assertEqual(error.exception.status, 404)
@@ -99,14 +101,14 @@ class ContributionExtractionTests(unittest.TestCase):
         self.assertEqual(pdf_text_status([{'text': 'A Different Paper\n' + body}], 'Routing'), 'identity_mismatch')
         self.assertEqual(pdf_text_status([{'text': 'Routing\n' + body}], 'Routing'), 'verified')
 
-    def test_multilevel_expansion_fetches_only_verified_neighborhoods(self):
+    def test_multilevel_expansion_follows_metadata_without_downloading_pdfs(self):
         owner = 'a' * 64
         graph = KnowledgeGraphService({}, SimpleNamespace(namespace='test'))
         records = {
             number: {'id': f'https://openalex.org/W{number}', 'display_name': title,
                      'referenced_works': [f'https://openalex.org/W{ref}' for ref in refs]}
             for number, title, refs in [(1, 'Root', [2, 3]), (2, 'Book record', [4]),
-                                         (3, 'Verified paper', [5]), (4, 'Never fetched', []),
+                                         (3, 'Verified paper', [5]), (4, 'Book reference', []),
                                          (5, 'Leaf', [])]
         }
         events = []
@@ -117,19 +119,34 @@ class ContributionExtractionTests(unittest.TestCase):
             ids = params['filter'].split(':')[1]
             events.append(('relations', ids))
             return {'results': [records[int(key[1:])] for key in ids.split('|')]}
-        def verify(paper, provider, deadline, **kwargs):
-            events.append(('verify', paper['id']))
-            return [], 'no_full_text' if paper['id'] == 'W2' else 'verified'
         graph.literature.identify = identify
         graph.literature.request = request
         graph.update_literature(owner, lambda state: state['papers'].update({'W1': {'id': 'W1', 'title': 'Root'}}))
-        with patch('articheck.kg_service.verify_public_fulltext', side_effect=verify):
+        with patch.object(graph, 'acquire_paper_pdf') as acquire:
             result = graph.expand_literature(owner, 'W1', kinds=['previous'], limit=5, depth=2, total=6)
-        self.assertLess(events.index(('verify', 'W1')), events.index(('relations', 'W2|W3')))
-        self.assertLess(events.index(('verify', 'W3')), events.index(('relations', 'W5')))
-        self.assertNotIn(('relations', 'W4'), events)
-        self.assertEqual(next(row for row in result['papers'] if row['paper_id'] == 'W2')['fulltext_status'], 'no_full_text')
-        self.assertIn('W5', {row['paper_id'] for row in result['papers']})
+        acquire.assert_not_called()
+        self.assertIn(('relations', 'W4'), events)
+        self.assertIn(('relations', 'W5'), events)
+        self.assertEqual({row['paper_id'] for row in result['papers']}, {'W1', 'W2', 'W3', 'W4', 'W5'})
+        self.assertTrue(all(not row['pdf_available'] for row in result['papers']))
+
+    def test_find_pdf_for_discovered_paper_without_changing_graph(self):
+        owner = 'a' * 64
+        graph = KnowledgeGraphService({}, SimpleNamespace(namespace='test'))
+        graph.literature = OpenAlex()
+        paper = {'id': 'W2', 'title': 'Public paper', 'fallback_url': 'https://arxiv.org/abs/1706.03762'}
+        graph.update_literature(owner, lambda state: state['papers'].update({'W2': paper}))
+        with patch.object(graph, 'acquire_paper_pdf', return_value=([], 'no_full_text', None)):
+            result = graph.retry_contributions(owner, 'W2')
+        self.assertEqual(result['papers'][0]['fallback_url'], paper['fallback_url'])
+        self.assertFalse(result['papers'][0]['pdf_available'])
+        raw = (Path(__file__).resolve().parents[1] / 'web/dist/samples/articheck-method-note.pdf').read_bytes()
+        record = graph.pdfs.save(graph._owner_hash(owner), raw, paper, 'https://arxiv.org/pdf/1706.03762')
+        with patch.object(graph, 'acquire_paper_pdf', return_value=([], 'verified', record)):
+            result = graph.retry_contributions(owner, 'W2')
+        self.assertTrue(result['papers'][0]['pdf_available'])
+        self.assertEqual(graph.paper_file(owner, 'W2')[0], raw)
+        self.assertIn('已下载', graph.paper_index(owner))
 
     def test_download_source_order_and_identifiers(self):
         self.assertEqual(paper_reference('https://arxiv.org/pdf/1706.03762v2.pdf'), ('arxiv','1706.03762v2'))

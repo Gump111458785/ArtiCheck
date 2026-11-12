@@ -6,6 +6,7 @@ import re
 import time
 import uuid
 import copy
+from urllib.error import HTTPError
 
 from .hosted_github import import_repository, repository, resolve_repository
 from .hosted_uploads import HostedUploads
@@ -182,6 +183,8 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         activity('材料解析完成',[role for role,present in [('literature_reader',context.get('paper')),('code_inspector',context.get('code'))] if present],
                  '论文与源码已按输入预算解析；仅处理实际提供的材料。','completed')
         # Material parsing and the durable idempotency claim precede reservation.
+        failure_title = '公开来源核对未完成'
+        failure_roles = ['literature_reader' if context.get('paper') else 'code_inspector']
         try:
             if stopped():
                 return jsonify(store.get(owner, job))
@@ -198,26 +201,47 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                 else:sources.pop()
                 context['source_lookup']['context_truncated']=True
             has_code = bool(context.get('code'))
+            review_roles = [role for role, present in [
+                ('literature_reader', context.get('paper')), ('code_inspector', has_code),
+                ('planner', has_code and context.get('task') != 'self_review'),
+            ] if present]
             activity('联合审阅与计划编排' if has_code else '论文审阅与指标核查',
-                     [role for role,present in [('literature_reader',context.get('paper')),('code_inspector',has_code),('planner',has_code and context.get('task')!='self_review')] if present],
+                     review_roles,
                      '主审模型正在核对图表、实现与实验条件，并生成结构化建议和执行计划。' if has_code else '主审模型正在深度核对论文图表、指标出处与论证一致性。')
             if stopped():
                 return jsonify(store.get(owner, job))
+            failure_title, failure_roles = '模型调用额度检查未完成', review_roles
             attempt = budget.reserve()
             if stopped():
                 return jsonify(store.get(owner, job))
+            failure_title = '主审请求未完成'
             value = assess(reviewer, context, scope, request_timeout=max(5,min(80,108-(time.monotonic()-started))))
         except Exception as exc:
             if stopped():
                 return jsonify(store.get(owner, job))
-            activity('主审请求未完成',['reporter'],'保留已取得的活动记录，不自动重试。','failed')
-            pending.update(status='failed', error=exc.code if isinstance(exc, ReviewError) else 'provider_failed',
-                           error_message=str(exc)[:300] if isinstance(exc, ReviewError) else f'模型请求未完成（{type(exc).__name__}），请稍后重试。')
-            if not publish(pending):
-                return jsonify(store.get(owner, job))
             if isinstance(exc, ReviewError):
+                error = exc
+            elif isinstance(exc, HTTPError) and failure_title == '主审请求未完成':
+                message = {
+                    400: '模型服务拒绝了主审请求，请联系管理员检查请求格式。',
+                    401: '模型服务认证失败，请联系管理员检查模型 API 密钥。',
+                    402: '模型服务余额不足，请联系管理员。',
+                    403: '模型服务拒绝了当前账号的调用，请联系管理员。',
+                    422: '模型服务无法处理本次请求，请联系管理员检查请求格式。',
+                    429: '模型服务限流，请稍后重新审查。',
+                }.get(exc.code, '模型服务暂时无法完成主审，请稍后重新审查。')
+                error = ReviewError('provider_failed', f'{message}（HTTP {exc.code}）', 502)
+            elif isinstance(exc, TimeoutError) and failure_title == '主审请求未完成':
+                error = ReviewError('provider_failed', '主审请求超时，请稍后重新审查。', 502)
+            else:
+                error = ReviewError('provider_failed', f'{failure_title}，请稍后重新审查。', 502)
+            detail = str(error)[:300]
+            pending.update(status='failed', error=error.code, error_message=detail)
+            if not activity(failure_title, failure_roles, detail, 'failed'):
+                return jsonify(store.get(owner, job))
+            if error is exc:
                 raise
-            raise ReviewError('provider_failed', '模型请求失败，调用额度已预留；未自动重试。', 502) from exc
+            raise error from exc
         if stopped():
             return jsonify(store.get(owner, job))
         return_roles = [role for role,present in [('literature_reader',context.get('paper')),('code_inspector',context.get('code')),('planner',bool(context.get('code') and value['review']['plan']['stages']))] if present] or ['literature_reader']

@@ -66,6 +66,34 @@ def digest(value):
                                      separators=(',', ':')).encode()).hexdigest()
 
 
+RELATIVE_TOLERANCE_CAP = 0.01
+
+
+def tolerance_rule(metric, proposed):
+    """Apply printed rounding precision where compatible with the relative cap."""
+    value = metric['value']
+    resolution = None
+    for match in re.finditer(r'(?<![A-Za-z0-9_.])[-+]?\d+(?:\.(\d+))?(?:[eE]([-+]?\d+))?(?![A-Za-z0-9_.])',
+                             str(metric.get('quote', ''))):
+        number = float(match.group(0))
+        if number == value:
+            exponent = int(match.group(2) or 0) - len(match.group(1) or '')
+            if -323 <= exponent <= 308:
+                candidate = 0.5 * 10.0 ** exponent
+                resolution = candidate if resolution is None else min(resolution, candidate)
+
+    cap = abs(value) * RELATIVE_TOLERANCE_CAP
+    floor = min(resolution or 0, cap)
+    applied = min(max(proposed, floor), cap)
+    if proposed > cap:
+        basis = f'按报告值的 1% 封顶（±{cap:g}）'
+    elif proposed < floor:
+        basis = f'按论文印刷精度与相对上限确定最低容差（±{floor:g}）'
+    else:
+        basis = '采用服务端核验后的计划容差'
+    return applied, basis
+
+
 def prepare_assessment(body, *, images=True):
     purpose = body.get('purpose')
     if purpose is not None and purpose not in ('self_review', 'reproduce_other'):
@@ -135,7 +163,8 @@ findings 的标题写出单一问题；detail 用一到两句保留关键对比�
 计划运行在隔离 Linux 环境，无供应商密钥，不可调用模型 API。CPU 与 owned_gpu 环境均支持联网下载公开数据、权重与 Python 依赖（执行器会自动扫描源码 import 并补齐缺失库，owned_gpu 已预装 PyTorch、torchvision 及 CUDA，默认持续运行至全部阶段完成，运行结束后自动清空隔离环境、依赖库与全部临时产物）。plan.hardware 填 CPU 或 GPU；需要 CUDA 的评估、推理或 GPU 实验选 GPU。
 GitHub ZIP 的统一外层目录会被剥除。命令在剥除外层后的仓库根目录运行，引用文件可用仓库相对路径。
 命令可写小型检查脚本，但不得把论文报告值硬编码为观测结果，不得生成虚假的训练/评估输出。
-不要为运行不了的论文制造 toy 替代结果。如有论文，务必准确提取论文题目（paper_title）、摘要（paper_abstract）及 2–5 条核心创新点或主要贡献（paper_contributions）。
+不要为运行不了的论文制造 toy 替代结果。如有论文，务必准确提取论文题目（paper_title）、摘要（paper_abstract）及 2–5 条核心创新点或主要贡献（paper_contributions）；无法从原文确认时返回空数组，不要用总体判断或分类理由代替。
+contribution_metrics 把 method_graph 中每个主贡献 id 关联到直接支撑它的作者方法指标 id；没有直接支撑的指标就不列出，不要按名称猜测。
 细分贡献只写架构、算法机制或代码实现的具体创新，给出 PDF 逐字出处。指标、分数、对照、数据集、训练设置和具体实验不列为细分贡献。
 method_graph 使用 materials.method_chunks 中的 method 片段，概括简短主贡献和细分贡献。related_work 只用于区分前人方法。
 每项提供 method 的 chunk_id、逐字 quote 和一句机制解释 summary。证据不足返回空数组。
@@ -143,6 +172,7 @@ JSON 结构：
 {"summary":"总体判断", "paper_title":"论文题目（无论文则为空字符串）", "paper_abstract":"论文摘要（无论文则为空字符串）",
  "paper_contributions":["论文核心创新点或贡献1","创新点或贡献2"],
  "method_graph":[{"id":"c1","title":"技术短语","summary":"机制解释","chunk_id":"M1","quote":"方法逐字原文","details":[{"title":"细分技术短语","summary":"机制解释","chunk_id":"M1","quote":"方法逐字原文"}]}],
+ "contribution_metrics":[{"contribution_id":"c1","metric_ids":["M1"]}],
  "contribution_details":[{"contribution_index":1,"summary":"框架结构或代码实现的创新短语，最多 24 个汉字或 10 个英文词","page":1,"quote":"该细分贡献的 PDF 逐字依据"}],
  "publication_year":null, "publication_venue":"PDF 明示的发表期刊或会议，否则为空", "research_direction":"PDF 明示的主题或关键词，否则为空",
  "paper_type":"empirical|diagnostic|survey|nonpaper|unknown|code_only",
@@ -332,10 +362,13 @@ def validate_assessment(value, context):
         if ref['file'] is not None and ref['file'] not in files:
             citation_gaps.append('文件 '+ref['file']+' 未进入源码上下文，相关问题建议没有充足依据，未列为已发现问题。')
             continue
+        confirmed = row.get('confirmed_error') is True and bool(ref['page'] or ref['file'])
         clean_findings.append({k: text(row, k) for k in ('title', 'detail')} |
             {'suggestion': '' if context.get('purpose') == 'reproduce_other' else text(row, 'suggestion')} |
             {'area': row.get('area') if row.get('area') in ('paper', 'code', 'alignment') else '',
-             'confirmed_error': row.get('confirmed_error') is True and bool(ref['page'] or ref['file'])} |
+             'confirmed_error': confirmed,
+             # Only an evidence-backed error is a required fix; everything else is an improvement.
+             'suggestion_type': 'fix' if confirmed else 'optimize'} |
                               {'severity': row['severity'], **ref})
     clean_metrics = []; rejected = []; seen = set();visual_observations=[]
     normalize = lambda s: re.sub(r'\s+', '', s)
@@ -424,13 +457,17 @@ def validate_assessment(value, context):
         tolerance = row.get('tolerance')
         if compiled.groups < 1 or type(tolerance) not in (int, float) or not 0 <= tolerance < 1e6:
             continue
+        target = next(m for m in clean_metrics if m['id'] == row['metric_id'])
+        applied, basis = tolerance_rule(target, tolerance)
         stage=renamed.get(row.get('stage_id')) if row.get('stage_id') else (stages[0]['id'] if len(stages)==1 else None)
         if stage not in {s['id'] for s in stages}:
             rejected.append('一项指标未绑定明确的输出阶段，未与不同实验的同名输出混合比较。')
             continue
         aggregation=row.get('aggregation','last')
         if aggregation not in {'last','mean'}:continue
-        patterns.append({'metric_id': row['metric_id'], 'pattern': pattern, 'tolerance': tolerance,'stage_id':stage,'aggregation':aggregation})
+        patterns.append({'metric_id': row['metric_id'], 'pattern': pattern, 'tolerance': applied,
+                         'model_tolerance': tolerance, 'tolerance_basis': basis,
+                         'stage_id':stage,'aggregation':aggregation})
     needs = plan.get('needs', [])
     if not isinstance(needs, list) or len(needs) > 30:
         raise ReviewError('invalid_model_output', '资源需求格式无效。', 502)
@@ -479,10 +516,7 @@ def validate_assessment(value, context):
                 paper_abstract = re.sub(r'\s+', ' ', ' '.join(lines[1:12])).strip()[:1200]
             else:
                 paper_abstract = text(value, 'summary', 4000)
-        if not paper_contributions:
-            paper_contributions = [text(value, 'summary', 4000)]
-            if value.get('classification_reason'):
-                paper_contributions.append(text(value, 'classification_reason'))
+        # No fallback: an overall judgement is not a contribution of the paper.
     else:
         paper_title = ''
         paper_abstract = ''
@@ -514,11 +548,25 @@ def validate_assessment(value, context):
             if phrase := subcontribution_phrase(summary):
                 contribution_details.append({'index': index, 'page': page, 'quote': quote, 'summary': phrase})
 
+    method_graph = grounded_contributions(value.get('method_graph'), context.get('method_chunks', []))
+    graph_ids = {row['local_id'] for row in method_graph}
+    metric_ids = {m['id'] for m in clean_metrics if m.get('author_method')}
+    contribution_metrics = {}
+    for row in value.get('contribution_metrics') or [] if isinstance(value.get('contribution_metrics'), list) else []:
+        if not isinstance(row, dict) or not isinstance(row.get('metric_ids'), list):
+            continue
+        contribution_id = row.get('contribution_id')
+        if not isinstance(contribution_id, str) or contribution_id not in graph_ids:
+            continue
+        linked = [m for m in row['metric_ids'] if isinstance(m, str) and m in metric_ids]
+        if linked:
+            contribution_metrics[contribution_id] = list(dict.fromkeys(contribution_metrics.get(contribution_id, []) + linked))[:20]
+
     core_code_snippets = extract_core_code_snippets(value, context, stages, criteria, clean_findings)
     result = {'summary': text(value, 'summary', 4000), 'paper_title': paper_title,
               'paper_abstract': paper_abstract, 'paper_contributions': paper_contributions,
               'contribution_details': contribution_details,
-              'method_graph': grounded_contributions(value.get('method_graph'), context.get('method_chunks', [])),
+              'method_graph': method_graph, 'contribution_metrics': contribution_metrics,
               'publication_year': year, 'publication_venue': metadata_label('publication_venue'),
               'research_direction': metadata_label('research_direction'), 'paper_type': value['paper_type'],
               'task':task, 'repository_hint':hint,
