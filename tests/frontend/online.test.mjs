@@ -185,10 +185,17 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  assert.match(cancelledView,/review-ended/);
  assert.match(cancelledView,/审查已中断/);
  assert.match(cancelledView,/data-online="resume-review"/);
+ assert.doesNotMatch(cancelledView,/当前材料与该报告的版本不同/);
 
- wsRender.i.projects[0].online_report=paperOnlyReport;
+ const project=wsRender.i.projects[0];
+ project.online_report=paperOnlyReport;
+ project.online_input_key=inputKey(project);
  const completedView=wsRender.render();
  assert.match(completedView,/data-online-tab="report"/);
+ assert.doesNotMatch(completedView,/当前材料与该报告的版本不同/);
+ project.online_scope='修改后的审查范围';
+ assert.match(wsRender.render(),/当前材料与该报告的版本不同/);
+ delete project.online_scope;
 
  // Sixth-batch UI requirements:
  // - Sidebar card clickable with data-sidebar-jump

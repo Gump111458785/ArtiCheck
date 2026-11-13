@@ -205,7 +205,7 @@ export class OnlineWorkspace{
  render(){const p=this.ensure(),e=v=>this.esc(v);if(!p)return `<section class="online-empty"><h2>开始一项新的研究审查</h2><p>先为项目命名，再上传论文或代码。</p><button class="btn primary" data-online="new">新建审查</button></section>`;
  const ownOperation=!this.operationProject||this.operationProject===p.id;
  const busy=ownOperation?this.busy:'';
- const r=this.viewReport(p),stale=p.online_report&&p.online_input_key!==inputKey(p),isCancelling=Boolean(ownOperation&&this.cancelling||r?.execution?.status==='cancelling'),running=Boolean(isCancelling||busy&&this.phase==='running'||p.online_pending_request||p.online_execution_pending||r?.status==='reviewing'||['queued','starting','running','cancelling'].includes(r?.execution?.status));
+ const r=this.viewReport(p),stale=this.reportStale(r,p),isCancelling=Boolean(ownOperation&&this.cancelling||r?.execution?.status==='cancelling'),running=Boolean(isCancelling||busy&&this.phase==='running'||p.online_pending_request||p.online_execution_pending||r?.status==='reviewing'||['queued','starting','running','cancelling'].includes(r?.execution?.status));
  const showExec=r?.review&&this.hasExecutionSection(r,p);
  const reportReady=Boolean(r?.review&&(!running||r.terminated_at));
  const ended=Boolean(r&&!r.review&&['failed','cancelled'].includes(r.status)&&!running);
@@ -331,7 +331,7 @@ export class OnlineWorkspace{
  }
 
  // Final report: basic information → result (by purpose) → process timeline → collapsed appendix.
- reportStale(r,p){return Boolean(p?.online_report&&p.online_report.id===r?.id&&p.online_input_key!==inputKey(p));}
+ reportStale(r,p){return Boolean(r?.review&&p?.online_report?.id===r.id&&p.online_input_key&&p.online_input_key!==inputKey(p));}
  finalReport(r,p=this.current()){
   const e=v=>this.esc(v),self=this.isSelfReview(r),v=r.review||{};
   const conflicts=this.conflictState?.id===r.id?this.conflictState:null;
@@ -711,6 +711,7 @@ export class OnlineWorkspace{
        ...(resumeTask===true?{terminate:true}:{})}));
      if(execRunning||executionRequest||!p.online_report?.review||p.online_report?.id===cancelled.id){
       p.online_report=cancelled;
+      if(p.online_pending_request?.id===cancelled.id)p.online_input_key=p.online_pending_request.key;
      }
     }
     if(p.online_upload_pending?.id){
@@ -821,7 +822,10 @@ export class OnlineWorkspace{
     try{
      const polled=checkAssessment(await this.request('/assessments/'+p.online_pending_request.id));
      if(startGen!==(this.pollGeneration||0)||this.cancelling)return;
-     if(!p.online_report?.review||p.online_report?.id===polled.id)p.online_report=polled;
+     if(!p.online_report?.review||p.online_report?.id===polled.id){
+      p.online_report=polled;
+      if(p.online_pending_request?.id===polled.id)p.online_input_key=p.online_pending_request.key;
+     }
      await this.save(p);
      if(polled.status==='reviewing'&&this.isViewing(p)){this.error='';this.tab='process';}
      else if(polled.status==='completed'&&polled.review){p.online_pending_request=null;await this.save(p);this.error='';await this.notifyFinished(p);}
