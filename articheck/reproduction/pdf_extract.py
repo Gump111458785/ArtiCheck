@@ -32,6 +32,11 @@ def main():
             method_text = ordinary[:min(60_000, 400_000 - method_chars)]
             method_pages.append({'number': number, 'text': method_text})
             method_chars += len(method_text)
+        if number == 1 and '--bibliography' in sys.argv:
+            metadata = reader.metadata
+            title = metadata.title if metadata else None
+            if isinstance(title, str):
+                item['document_title'] = title[:350]
         if layout:
             if number == 1:
                 # Layout extraction drops rotated arXiv margin identifiers.

@@ -9,7 +9,7 @@ from pathlib import Path
 from .protocol import fingerprint,load_json
 
 
-def extract_paper(path, *, layout=False, timeout=20, method_context=False):
+def extract_paper(path, *, layout=False, timeout=20, method_context=False, bibliography=False):
     path=Path(path)
     with path.open('rb') as stream:signature=stream.read(5)
     if signature==b'%PDF-' or path.suffix.lower()=='.pdf':
@@ -28,6 +28,8 @@ def extract_paper(path, *, layout=False, timeout=20, method_context=False):
                 args = [sys.executable, str(worker), str(path), str(output)]
                 if layout:
                     args.append('--layout')
+                if bibliography:
+                    args.append('--bibliography')
                 if method_context:
                     args.append('--method-context')
                 result=subprocess.run(args,env=worker_env,capture_output=True,timeout=timeout)

@@ -643,7 +643,10 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     def import_kg_paper():
         owner = authorize()
         with kg.public_work_slot(owner):
-            return jsonify(kg.import_public_paper(owner, body().get('reference')))
+            payload = body()
+            material = material_body({'paper': payload['paper']})['paper'] if payload.get('paper') else None
+            return jsonify(kg.import_public_paper(owner, payload.get('reference'), material,
+                                                operation_id=payload.get('operation_id')))
 
     @app.get('/kg/papers/<paper_id>/pdf')
     def view_kg_paper_pdf(paper_id):

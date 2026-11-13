@@ -57,7 +57,9 @@ def work_metadata(work):
     if not identifier or not isinstance(title, str) or not title.strip():
         return None
     location = work.get('primary_location') or {}
-    source = location.get('source') or {}
+    sources = [item.get('source') or {} for item in [location, *(work.get('locations') or [])]
+               if isinstance(item, dict)]
+    source = next((item for item in sources if item.get('type') in {'journal', 'conference'}), {})
     topic = work.get('primary_topic') or {}
     year = work.get('publication_year')
     venue = str(source.get('display_name') or '')[:180] if source.get('type') in {'journal', 'conference'} else ''
@@ -88,7 +90,7 @@ def work_metadata(work):
         urls.append('https://arxiv.org/pdf/' + preprint[1])
     return {'id': identifier, 'title': title[:350], 'year': year if type(year) is int else None,
             'venue': venue, 'direction': str(topic.get('display_name') or '')[:180],
-            'source_url': url, 'fallback_url': fallback, 'doi': doi, 'author_names': [name for name in names if name], 'pdf_sources': list(dict.fromkeys(urls))[:2], 'authors': sorted(author_ids(work))[:30]}
+            'source_url': url, 'fallback_url': fallback, 'doi': doi, 'author_names': [name for name in names if name], 'pdf_sources': list(dict.fromkeys(sorted(urls, key=lambda url: urlsplit(url).hostname not in {'arxiv.org', 'export.arxiv.org'})))[:6], 'authors': sorted(author_ids(work))[:30]}
 
 
 def allowed_pdf(value):
@@ -150,7 +152,10 @@ def fetch_method_chunks(paper, query, deadline, *, verify=False, progress=lambda
                     continue
                 raw = bytes(data)
                 source = response.geturl()
-            if not allowed_pdf(source) or not raw.startswith(b'%PDF-') or len(raw) > PDF_LIMIT:
+            requested = paper.get('requested_arxiv_id')
+            if (not allowed_pdf(source) or not raw.startswith(b'%PDF-') or len(raw) > PDF_LIMIT
+                    or requested and urlsplit(source).hostname in {'arxiv.org', 'export.arxiv.org'}
+                    and urlsplit(source).path.removesuffix('.pdf') != '/pdf/' + requested):
                 continue
             status = 'unreadable_pdf' if verify else 'insufficient_evidence'
             if verify:
@@ -279,10 +284,16 @@ class OpenPDFSources:
 def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: None, sources=None, save_pdf=None):
     sources = sources or OpenPDFSources({})
     tried, status = set(), 'no_full_text'
+    requested = paper.get('requested_arxiv_id', '')
+
+    def is_arxiv(url):
+        return allowed_pdf(url) and urlsplit(url).hostname in {'arxiv.org', 'export.arxiv.org'}
 
     def attempt(urls):
         nonlocal status
-        candidates = [url for url in dict.fromkeys(urls) if allowed_pdf(url) and url not in tried]
+        candidates = [url for url in dict.fromkeys(urls) if allowed_pdf(url) and url not in tried
+                      and (not requested or not is_arxiv(url)
+                           or urlsplit(url).path.removesuffix('.pdf') == '/pdf/' + requested)]
         if not candidates:
             return []
         tried.update(candidates)
@@ -294,14 +305,14 @@ def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: 
         return chunks
 
     indexed = paper.get('pdf_sources', [])
-    arxiv = [url for url in indexed if urlsplit(url).hostname in {'arxiv.org','export.arxiv.org'}]
+    arxiv = [url for url in indexed if is_arxiv(url)]
     if paper.get('arxiv_id'):
         arxiv.insert(0,'https://arxiv.org/pdf/'+paper['arxiv_id'])
-    if not arxiv:
-        edition = sources.arxiv(title=paper['title'],deadline=deadline)
-        if edition:
-            arxiv = ['https://arxiv.org/pdf/'+edition['arxiv_id']]
     chunks = attempt(arxiv)
+    if status != 'verified' and not paper.get('arxiv_id'):
+        edition = sources.arxiv(title=paper['title'], deadline=deadline)
+        if edition:
+            chunks = attempt(['https://arxiv.org/pdf/' + edition['arxiv_id']])
     if status == 'verified':
         return chunks, status
     doi = (paper.get('doi') or '').removeprefix('https://doi.org/')
@@ -316,17 +327,24 @@ def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: 
             chunks = attempt(['https://arxiv.org/pdf/'+arxiv_id])
             if status == 'verified':
                 return chunks, status
-        chunks = attempt([(semantic.get('openAccessPdf') or {}).get('url')])
+    else:
+        semantic = {}
+    semantic_pdf = (semantic.get('openAccessPdf') or {}).get('url')
+    if is_arxiv(semantic_pdf):
+        chunks = attempt([semantic_pdf])
         if status == 'verified':
             return chunks, status
-    chunks = attempt(indexed)
-    if status == 'verified':
-        return chunks, status
+    alternates = []
     if paper.get('authors') and deadline-time.monotonic()>4:
         try:
-            chunks = attempt(provider.find_open_editions(paper))
+            alternates = provider.find_open_editions(paper)
         except (ReviewError, OSError, ValueError):
             pass
+    chunks = attempt([url for url in alternates if is_arxiv(url)])
+    if status == 'verified':
+        return chunks, status
+    for urls in ([semantic_pdf], indexed, alternates):
+        chunks = attempt(urls)
         if status == 'verified':
             return chunks, status
     chunks = attempt(sources.unpaywall(doi, deadline))
@@ -388,21 +406,32 @@ class OpenAlex:
                 metadata = work_metadata(hit)
                 if metadata:
                     sources.extend(metadata['pdf_sources'])
-        return list(dict.fromkeys(sources))[:2]
+        return list(dict.fromkeys(sorted(sources, key=lambda url: urlsplit(url).hostname
+                                         not in {'arxiv.org', 'export.arxiv.org'})))[:2]
 
     def identify(self, *, title, identifier='', doi=''):
+        doi = (doi or '').removeprefix('https://doi.org/').lower()
         if work_id(identifier):
             return self.request('/' + work_id(identifier))
         if re.fullmatch(r'10\.\d{4,9}/[-._;()/:a-z0-9]+', doi or '', re.I):
             hits = self.request(filter='doi:https://doi.org/' + doi, per_page=3).get('results', [])
             if len(hits) == 1:
-                return hits[0]
+                hit = hits[0]
+                if not doi.startswith('10.48550/arxiv.') or (work_metadata(hit) or {}).get('venue'):
+                    return hit
+                try:
+                    published = self.identify(title=hit.get('display_name') or '')
+                except ReviewError:
+                    return hit
+                if matching_edition(hit, published) and work_metadata(published).get('venue'):
+                    return {**published, 'locations': [*(published.get('locations') or []), *(hit.get('locations') or [])]}
+                return hit
         title_key = normalize_title(title)
         hits = self.request(search=title[:300], per_page=8).get('results', []) if title_key else []
         exact = [row for row in hits if normalize_title(row.get('display_name') or '') == title_key]
         if len(exact) == 1:
             return exact[0]
-        published = [row for row in exact if ((row.get('primary_location') or {}).get('source') or {}).get('type') in {'journal', 'conference'}]
+        published = [row for row in exact if (work_metadata(row) or {}).get('venue')]
         if len(published) == 1:
             candidate = published[0]
 

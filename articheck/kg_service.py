@@ -17,7 +17,7 @@ import time
 import uuid
 from urllib.parse import quote
 
-from .kg_literature import KINDS, LIMITS, OpenAlex, OpenPDFSources, normalize_title, paper_reference, pdf_text_status, retrieve_public_methods, verify_public_fulltext, work_metadata
+from .kg_literature import ARXIV_ID, KINDS, LIMITS, OpenAlex, OpenPDFSources, work_id, normalize_title, paper_reference, pdf_text_status, retrieve_public_methods, verify_public_fulltext, work_metadata
 from .kg_pdfs import PaperPDFs, markdown_index
 from .kg_methods import extract_contributions, method_key, retrieve_methods, synthesize
 from .reproduction.paper_text import extract_paper
@@ -600,69 +600,178 @@ return 1
                                files.get(wid)) for wid, paper in papers.items()
                               if not state['choices'].get(wid, {}).get('removed'))
 
-    def import_public_paper(self, owner, reference):
-        if not isinstance(reference,str) or not reference.strip() or len(reference)>600:
-            raise ReviewError('invalid_paper_reference','请填写论文标题、DOI、arXiv ID 或论文链接。')
+    def paper_record(self, kind, value, deadline):
+        edition = self.open_pdf_sources.arxiv(identifier=value, deadline=deadline) if kind == 'arxiv' else {}
+        semantic = self.open_pdf_sources.semantic(reference='URL:' + value, deadline=deadline) if kind == 'url' else {}
+        title = edition.get('title') or semantic.get('title') or (value if kind == 'title' else '')
+        identifiers = semantic.get('externalIds') or {}
+        doi = edition.get('doi') or identifiers.get('DOI') or (value if kind == 'doi' else '')
+        if kind == 'arxiv' and not doi:
+            doi = '10.48550/arxiv.' + re.sub(r'v[0-9]+$', '', value)
+        try:
+            record = work_metadata(self.literature.identify(
+                title=title, doi=doi, identifier=value if kind == 'openalex' else ''))
+        except ReviewError:
+            if not (edition or title or kind == 'doi'):
+                raise
+            record = None
+        if not record and kind == 'doi' and not title:
+            semantic = self.open_pdf_sources.semantic(reference='DOI:' + value, deadline=deadline)
+            title = semantic.get('title') or ''
+            identifiers = semantic.get('externalIds') or {}
+        if not record:
+            if not title:
+                raise ReviewError('literature_unmatched', '未能定位论文书目，请核对标题或标识。', 404)
+            if kind == 'title':
+                edition = self.open_pdf_sources.arxiv(title=title, deadline=deadline)
+                if not edition:
+                    raise ReviewError('literature_unmatched', '未能核实论文书目，请核对标题或输入标识。', 404)
+            identity = normalize_title(title)
+            record = {**edition, 'id': 'P' + hashlib.sha256(identity.encode()).hexdigest()[:20],
+                      'title': title, 'doi': doi, 'pdf_sources': [], 'authors': []}
+        arxiv_id = value if kind == 'arxiv' else identifiers.get('ArXiv') or edition.get('arxiv_id')
+        if isinstance(arxiv_id, str) and ARXIV_ID.fullmatch(arxiv_id):
+            record.update(arxiv_id=arxiv_id, fallback_url='https://arxiv.org/abs/' + arxiv_id)
+            if kind == 'arxiv' and re.search(r'v[0-9]+$', arxiv_id):
+                record['requested_arxiv_id'] = arxiv_id
+        if isinstance(semantic.get('openAccessPdf'), dict) and (url := semantic['openAccessPdf'].get('url')):
+            record['pdf_sources'] = [*record['pdf_sources'], url]
+        return record
+
+    def import_public_paper(self, owner, reference=None, material=None, *, operation_id=None):
+        operation_key = self.graph_operation_key(owner, operation_id)
+        check = self.operation_checkpoint(operation_key)
+        check()
+        deadline = time.monotonic() + 38
+        raw = None
+        pages = []
+        if material is not None:
+            raw, identity = decode_material(material, '.pdf', 20 * 1024**2)
+            try:
+                with tempfile.TemporaryDirectory(prefix='articheck-kg-import-') as directory:
+                    path = Path(directory) / 'paper.pdf'
+                    path.write_bytes(raw)
+                    pages, _ = extract_paper(path, timeout=14, bibliography=True)
+            except (OSError, ValueError) as error:
+                raise ReviewError('unreadable_pdf', FULLTEXT_LABELS['unreadable_pdf'], 422) from error
+            first = pages[0] if pages else {'text': ''}
+            header = first['text'][:1800]
+            arxiv = re.search(r'arXiv\s*:\s*((?:[a-z-]+/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?)', header, re.I)
+            doi = re.search(r'(?:doi\s*:\s*|https://doi\.org/)(10\.\d{4,9}/[^\s<>]+)', header, re.I)
+            title_lines = [line.strip() for line in header.splitlines() if re.search(r'[^\W\d_]', line)
+                           and not re.match(r'\s*(arxiv\s*:|doi\s*:|https?://)', line, re.I)]
+            embedded = (first.get('document_title') or '').strip()
+            if normalize_title(embedded) not in normalize_title(header):
+                embedded = ''
+            title = embedded or next(iter(title_lines), '')
+            reference = arxiv[1] if arxiv else doi[1].rstrip('.,;)') if doi else title
+            if not reference:
+                raise ReviewError('paper_title_missing', 'PDF 中未找到可识别的论文标题或标识。', 422)
+        if not isinstance(reference, str) or not reference.strip() or len(reference) > 600:
+            raise ReviewError('invalid_paper_reference', '请填写论文标题、arXiv 或 DOI。')
         try:
             kind, value = paper_reference(reference)
         except ValueError as exc:
-            raise ReviewError('invalid_paper_reference','论文链接格式无效。') from exc
-        deadline = time.monotonic()+38
-        edition = self.open_pdf_sources.arxiv(identifier=value, deadline=deadline) if kind=='arxiv' else {}
-        semantic = self.open_pdf_sources.semantic(reference='URL:'+value,deadline=deadline) if kind=='url' else {}
-        if kind=='url' and not semantic.get('title'):
-            raise ReviewError('literature_unmatched','未能从链接识别论文，请输入标题、DOI 或 arXiv ID。',404)
-        title = edition.get('title') or semantic.get('title') or (value if kind=='title' else '')
-        doi = edition.get('doi') or (semantic.get('externalIds') or {}).get('DOI') or (value if kind=='doi' else '')
-        if kind=='arxiv' and not doi:
-            doi='10.48550/arxiv.'+re.sub(r'v[0-9]+$','',value)
+            raise ReviewError('invalid_paper_reference', '论文链接格式无效。') from exc
         try:
-            raw = self.literature.identify(title=title, doi=doi, identifier=value if kind=='openalex' else '')
-            paper = work_metadata(raw)
+            paper = self.paper_record(kind, value, deadline)
         except ReviewError:
-            if not edition:
+            if raw is None or not title:
                 raise
-            paper = {**edition,'id':'P'+hashlib.sha256(value.encode()).hexdigest()[:20],
-                     'pdf_sources':[],'authors':[]}
-
-        if not paper:
-            raise ReviewError('literature_unmatched','未能定位论文书目。',404)
-        if kind=='arxiv':
-            paper['arxiv_id']=value
+            paper = {'id': 'P' + hashlib.sha256(normalize_title(title).encode()).hexdigest()[:20],
+                     'title': title, 'pdf_sources': [], 'authors': []}
         _, state = self.literature_state(owner)
-        prior = state['papers'].get(paper['id'],{})
-        if not prior and len(state['papers'])>=75:
-            raise ReviewError('literature_capacity','图谱的公开条目已达上限，请先移除部分条目。',409)
-        file = state.get('pdf_files',{}).get(paper['id'])
+        own = {item['id']: item for item in self.owned_papers(owner)}
+        canonical = paper['id']
+        by_hash = {wid for wid, file in state.get('pdf_files', {}).items()
+                   if raw is not None and file.get('sha256') == identity['sha256']}
+        doi_key = lambda row: (row.get('doi') or '').lower().removeprefix('https://doi.org/')
+        arxiv_key = lambda row: re.sub(r'v[0-9]+$', '', row.get('arxiv_id') or '')
+        matches = [wid for wid, row in {**state['papers'], **own}.items()
+                   if wid in by_hash or raw is not None and row.get('paper_sha256') == identity['sha256']
+                   or state['matches'].get(wid, wid) == canonical or row.get('literature_id') == canonical
+                   or doi_key(paper) and doi_key(paper) == doi_key(row)
+                   or arxiv_key(paper) and arxiv_key(paper) == arxiv_key(row)
+                   or normalize_title(row['title']) == normalize_title(paper['title'])]
+        paper_id = next((wid for wid in matches if wid in own), matches[0] if matches else canonical)
+        record_id = state['matches'].get(paper_id, paper_id) if paper_id in own else paper_id
+        prior = state['papers'].get(record_id, {})
+        if not prior and len(state['papers']) >= 75:
+            raise ReviewError('literature_capacity', '图谱的公开条目已达上限，请先移除部分条目。', 409)
+        paper = {**prior, **{key: item for key, item in paper.items() if item}, 'id': record_id,
+                 'literature_id': canonical if work_id(canonical) else prior.get('literature_id', '')}
+        file = state.get('pdf_files', {}).get(paper_id) or state.get('pdf_files', {}).get(record_id)
         status = 'verified' if file else 'not_checked'
-        if not file:
-            _, status, file = self.acquire_paper_pdf(owner,paper,deadline)
-        def save(current):
-            if paper['id'] not in current['papers'] and len(current['papers'])>=75:
-                raise ReviewError('literature_capacity','图谱的公开条目已达上限，请先移除部分条目。',409)
-            existing = current['papers'].get(paper['id'],prior)
-            current['papers'][paper['id']]={**existing,**paper,'fulltext_status':status}
-            if file:
-                current['papers'][paper['id']].update(self.method_fields(existing.get('contributions',[]),'pending'))
-            current['choices'].setdefault(paper['id'],{}).pop('removed',None)
-            if file:
-                current.setdefault('pdf_files',{})[paper['id']]=file
-        self.update_literature(owner,save)
-        return {**self.build_graph_response(owner,focus_paper_id=paper['id']),
-                'method_notice': '' if file else FULLTEXT_LABELS.get(status,'开放 PDF 暂不可用。')}
+        notice = ''
+        checked_priority = prior.get('pdf_priority_checked', False)
+        if raw is not None:
+            status = pdf_text_status(pages, paper['title'])
+            if status == 'identity_mismatch':
+                raise ReviewError('paper_identity_mismatch', FULLTEXT_LABELS[status], 422)
+            if status != 'verified':
+                notice = FULLTEXT_LABELS[status]
+            file = self.pdfs.save(self._owner_hash(owner), raw, paper)
+        else:
+            preferred = 'https://arxiv.org/pdf/' + value if kind == 'arxiv' else ''
+            saved_source = (file or {}).get('source', '')
+            check_priority = bool(saved_source and not saved_source.startswith(
+                ('https://arxiv.org/pdf/', 'https://export.arxiv.org/pdf/')) and not checked_priority)
+            if not file or check_priority or preferred and saved_source != preferred:
+                _, attempted, downloaded = self.acquire_paper_pdf(owner, paper, deadline,
+                    progress=lambda phase: self.graph_progress(operation_key, phase))
+                checked_priority = True
+                notice = '' if downloaded else FULLTEXT_LABELS.get(attempted, '')
+                if downloaded or not file:
+                    status, file = attempted, downloaded
+        if (not paper.get('requested_arxiv_id') and file
+                and file.get('source', '').startswith(('https://arxiv.org/pdf/', 'https://export.arxiv.org/pdf/'))):
+            source_kind, downloaded_id = paper_reference(file['source'])
+            if source_kind == 'arxiv':
+                paper['fallback_url'] = 'https://arxiv.org/abs/' + downloaded_id
+        check()
 
-    def discover_literature(self, metadata, groups, *, kinds, depth, total, state, deadline, check=lambda: None):
+        def save(current):
+            existing = current['papers'].get(record_id, {})
+            if not existing and len(current['papers']) >= 75:
+                raise ReviewError('literature_capacity','图谱的公开条目已达上限，请先移除部分条目。',409)
+            bibliography = {key: paper[key] for key in ('id', 'title', 'doi', 'arxiv_id', 'requested_arxiv_id', 'literature_id',
+                            'year', 'venue', 'direction', 'authors', 'author_names', 'pdf_sources',
+                            'source_url', 'fallback_url') if key in paper}
+            current['papers'][record_id] = {**existing, **bibliography, 'fulltext_status': status,
+                                            'pdf_priority_checked': checked_priority}
+            if paper_id in own:
+                current['matches'][paper_id] = record_id
+            flags = current['choices'].setdefault(paper_id, {})
+            flags.pop('removed', None)
+            flags['hidden'] = False
+            if raw is not None:
+                flags.setdefault('read', True)
+            if file:
+                files = current.setdefault('pdf_files', {})
+                files[record_id] = file
+                files[paper_id] = file
+                current['papers'][record_id].update(self.method_fields(
+                    existing.get('contributions', []), existing.get('method_detail_status', 'pending')))
+        self.update_literature(owner, save, operation_key=operation_key)
+        return {**self.build_graph_response(owner,focus_paper_id=paper_id), 'method_notice': notice}
+
+    def discover_literature(self, metadata, groups, *, kinds, depth, total, state, deadline,
+                            check=lambda: None, resolve=lambda paper: paper):
         anchor = metadata['id']
-        papers, links = {}, {}
+        papers, links, visited = {}, {}, {anchor}
         frontier = [(metadata, groups)]
+        known = set(state.get('papers', {}))
+        added = 0
 
         def neighborhood(paper):
             check()
             if time.monotonic() >= deadline:
                 return paper, {}
             try:
-                return self.literature.neighborhood(title=paper['title'], identifier=paper['id'],
-                                                    kinds=set(kinds), limit=min(5, total))
+                _, related = self.literature.neighborhood(
+                    title=paper['title'], identifier=paper.get('literature_id') or paper['id'],
+                    kinds=set(kinds), limit=5)
+                return paper, related
             except ReviewError as error:
                 if error.code == 'graph_operation_closed':
                     raise
@@ -677,21 +786,29 @@ return 1
                     for kind in kinds:
                         items = group.get(kind, [])
                         if rank < len(items):
-                            candidates.append((source['id'], kind, items[rank]))
+                            candidates.append((source['id'], kind, resolve(items[rank])))
+            candidates.sort(key=lambda row: row[2]['id'] not in known)
             next_papers = []
-            allowance = max(1, (total - len(papers)) // (depth - level))
+            allowance = max(1, (total - added) // (depth - level))
+            new_this_level = 0
             for source, kind, target in candidates:
                 wid = target['id']
                 if wid == source or state['choices'].get(wid, {}).get('removed'):
                     continue
-                if wid != anchor and wid not in papers:
-                    if len(next_papers) >= allowance or len(papers) >= total:
-                        continue
+                if wid not in visited:
+                    if wid not in known:
+                        if added >= total or new_this_level >= allowance:
+                            continue
+                        added += 1
+                        new_this_level += 1
                     papers[wid] = target
                     next_papers.append(target)
+                    visited.add(wid)
                 links[(source, kind, wid)] = (source, kind, wid)
-            if level + 1 == depth or not next_papers or len(papers) >= total or time.monotonic() >= deadline:
+            if level + 1 == depth or not next_papers or time.monotonic() >= deadline:
                 break
+            # Keep the second hop bounded even when the user's graph already has many matches.
+            next_papers = next_papers[:5]
             with ThreadPoolExecutor(max_workers=min(3, len(next_papers))) as pool:
                 frontier = list(pool.map(neighborhood, next_papers))
         return papers, list(links.values())
@@ -716,20 +833,40 @@ return 1
         check()
         deadline = time.monotonic() + 38
         self.graph_progress(operation_key, 'searching')
+        saved_id = state['matches'].get(paper_id, paper_id)
+        saved_record = state['papers'].get(saved_id, {})
         metadata, groups = self.literature.neighborhood(
-            title=paper['title'], identifier=state['matches'].get(paper_id, paper_id if paper_id in state['papers'] else ''),
+            title=paper['title'], identifier=saved_record.get('literature_id') or (saved_id if work_id(saved_id) else ''),
             doi=paper.get('doi', ''), kinds=set(kinds), limit=limit,
         )
 
+        def resolve(record):
+            wid = record['id']
+            title = normalize_title(record['title'])
+            if wid == (metadata.get('literature_id') or metadata['id']):
+                stored = metadata['id']
+            else:
+                stored = next((key for key, item in state['papers'].items()
+                               if key == wid or item.get('literature_id') == wid or normalize_title(item['title']) == title), None)
+                if stored is None:
+                    match = next((key for key, item in own.items() if normalize_title(item['title']) == title), wid)
+                    stored = state['matches'].get(match, match)
+            return {**record, 'id': stored, 'literature_id': wid} if stored != wid else record
+
+        # Keep the saved anchor's ID even if OpenAlex identifies a different edition.
+        if saved_id in state['papers']:
+            metadata = {**metadata, 'literature_id': metadata['id'], 'id': saved_id}
         anchor = metadata['id']
         if depth == 1 and total is None:
+            groups = {kind: [resolve(item) for item in rows] for kind, rows in groups.items()}
             discovered = {item['id']: item for items in groups.values() for item in items
                           if item['id'] != anchor and not state['choices'].get(item['id'], {}).get('removed')}
             links = [(anchor, kind, item['id']) for kind, items in groups.items() for item in items
                      if item['id'] in discovered]
         else:
+            known = {**state, 'papers': {**own, **state['papers']}}
             discovered, links = self.discover_literature(metadata, groups, kinds=kinds, depth=depth,
-                total=total or 10, state=state, deadline=deadline, check=check)
+                total=total or 10, state=known, deadline=deadline, check=check, resolve=resolve)
         available = {anchor: metadata, **discovered}
         existing = {
             wid: [row for row in state['papers'].get(wid, {}).get('contributions', []) if row.get('method_grounded')]
@@ -777,8 +914,10 @@ return 1
             for wid, item in available.items():
                 if not current['choices'].get(wid, {}).get('removed'):
                     prior = current['papers'].get(wid, {})
-                    metadata_fields = {key: value for key, value in item.items() if key != 'contributions'}
+                    metadata_fields = {key: value for key, value in item.items() if key != 'contributions' and value}
                     current['papers'][wid] = {**prior, **metadata_fields}
+                    if wid in own:
+                        current['matches'][wid] = wid
             for origin, kind, target in links:
                 if any(current['choices'].get(wid, {}).get('removed') for wid in (origin, target)):
                     continue
@@ -910,6 +1049,19 @@ return 1
                 chunks, status = [], 'no_full_text'
                 notice = '请从审查项目重新提供原始 PDF，以提取方法贡献。'
 
+            publication = None
+            arxiv_source = (file or {}).get('source', '')
+            if arxiv_source.startswith(('https://arxiv.org/pdf/', 'https://export.arxiv.org/pdf/')):
+                source_kind, downloaded_id = paper_reference(arxiv_source)
+                if source_kind == 'arxiv':
+                    publication = {**(public or paper), 'arxiv_id': downloaded_id,
+                                   'fallback_url': 'https://arxiv.org/abs/' + downloaded_id}
+            if material is not None and not (public or paper).get('venue') and isinstance(self.literature, OpenAlex):
+                try:
+                    publication = work_metadata(self.literature.identify(
+                        title=paper['title'], doi=(public or paper).get('doi', '')))
+                except ReviewError:
+                    pass
             check()
             extracted = []
             if chunks and self.reviewer and self.reviewer.configured and self.budget:
@@ -936,6 +1088,17 @@ return 1
                     fulltext = 'verified'
                 else:
                     fulltext = fulltext_status
+                if publication and (publication.get('venue') or publication.get('arxiv_id')):
+                    if own:
+                        canonical = public['id'] if public else paper_id
+                        current['matches'][paper_id] = canonical
+                        book = current['papers'].get(canonical, {})
+                        current['papers'][canonical] = {**book, **{key: value for key, value in publication.items() if value},
+                                                        'id': canonical, 'literature_id': publication.get('literature_id') or publication['id']}
+                    else:
+                        record = {**record, **{key: publication[key] for key in
+                                              ('venue', 'source_url', 'arxiv_id', 'fallback_url') if publication.get(key)},
+                                  'literature_id': publication.get('literature_id') or publication['id']}
                 bucket[paper_id] = {**record, 'contributions': contributions, 'fulltext_status': fulltext,
                                     **self.method_fields(contributions, status)}
 
@@ -1321,7 +1484,7 @@ return 1
             if source == target or source not in contributions_by_paper or target not in contributions_by_paper:
                 continue
             if link['kind'] == 'citation':
-                add_edge(source, target, 'CITED_BY', '被后续论文引用', '箭头由被引用论文指向引用它的论文。', 'https://openalex.org/' + link['target'])
+                add_edge(source, target, 'CITED_BY', '被后续论文引用', '箭头由被引用论文指向引用它的论文。', 'https://openalex.org/' + (library['papers'].get(link['target'], {}).get('literature_id') or link['target']))
             elif link.get('depth'):
                 add_edge(source, target, 'RELATED_WORK', '公开书目相关', 'OpenAlex 提供的相关论文线索。')
         for relation in library.get('method_links', {}).values():

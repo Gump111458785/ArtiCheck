@@ -200,5 +200,96 @@ class ContributionExtractionTests(unittest.TestCase):
         self.assertEqual(fetch.call_args.args[0]['pdf_sources'], [alternate])
 
 
+    def test_imports_reuse_paper_and_keep_published_venue_and_arxiv_version(self):
+        graph = KnowledgeGraphService({}, SimpleNamespace(namespace='import-test'))
+        owner = 'a' * 64
+        title = 'ArtiCheck: Artifact Evaluation Fixture'
+        sample = Path(__file__).resolve().parents[1] / 'web/dist/samples/articheck-method-note.pdf'
+        raw = sample.read_bytes()
+        material = {'name': sample.name, 'content_base64': base64.b64encode(raw).decode()}
+        work = {'id': 'https://openalex.org/W42', 'display_name': title, 'doi': 'https://doi.org/10.1000/demo',
+                'primary_location': {'source': {'type': 'repository'}},
+                'locations': [{'source': {'type': 'conference', 'display_name': 'Test Conference'}}]}
+        arxiv_url = 'https://arxiv.org/pdf/1706.03762v2'
+        graph.literature = SimpleNamespace(identify=lambda **kwargs: work)
+        graph.open_pdf_sources = SimpleNamespace(
+            arxiv=lambda **kwargs: {'title': title, 'arxiv_id': '1706.03762v2'},
+            semantic=lambda **kwargs: {'title': title, 'externalIds': {'DOI': '10.1000/demo'}})
+        fetches = []
+
+        def acquire(account, paper, _deadline, **kwargs):
+            fetches.append(paper.get('arxiv_id'))
+            return [], 'verified', graph.pdfs.save(graph._owner_hash(account), raw, paper, arxiv_url)
+
+        with patch.object(graph, 'acquire_paper_pdf', side_effect=acquire):
+            first = graph.import_public_paper(owner, title)
+            second = graph.import_public_paper(owner, 'https://doi.org/10.1000/demo')
+            third = graph.import_public_paper(owner, 'https://arxiv.org/abs/1706.03762v2')
+            uploaded = graph.import_public_paper(owner, material=material)
+        self.assertEqual(fetches, [None])
+        for result in (first, second, third, uploaded):
+            self.assertEqual(result['focus_paper_id'], 'W42')
+            self.assertEqual(result['stats']['paper_count'], 1)
+            self.assertEqual(result['timeline'][0]['venue'], 'Test Conference')
+            self.assertEqual(result['nodes'][0]['metadata']['venue']['source'], 'OpenAlex')
+        self.assertEqual(third['papers'][0]['fallback_url'], 'https://arxiv.org/abs/1706.03762v2')
+        self.assertEqual(graph.paper_file(owner, 'W42')[0], raw)
+
+    def test_all_bibliography_inputs_try_arxiv_before_other_pdf_hosts(self):
+        title = 'A Routing Study'
+        for reference in (title, '10.1000/routing', 'https://example.org/routing',
+                          'https://arxiv.org/abs/1706.03762v2'):
+            with self.subTest(reference=reference):
+                graph = KnowledgeGraphService({}, SimpleNamespace(namespace='priority-test'))
+                graph.literature = SimpleNamespace(identify=lambda **kwargs: {
+                    'id': 'https://openalex.org/W42', 'display_name': title, 'locations': [
+                        {'is_oa': True, 'pdf_url': 'https://openaccess.thecvf.com/routing.pdf'}]})
+                graph.open_pdf_sources = SimpleNamespace(
+                    arxiv=lambda **kwargs: {'title': title, 'arxiv_id': kwargs.get('identifier', '1706.03762')},
+                    semantic=lambda **kwargs: {'title': title, 'externalIds': {'DOI': '10.1000/routing',
+                                                                              'ArXiv': '1706.03762'},
+                                               'openAccessPdf': {'url': 'https://pdfs.semanticscholar.org/routing.pdf'}})
+                attempts = []
+
+                def download(record, *args, **kwargs):
+                    url = record['pdf_sources'][0]
+                    attempts.append(url)
+                    if 'arxiv.org' in url:
+                        return [], 'download_failed'
+                    kwargs['save_pdf'](b'%PDF-test', url)
+                    return [], 'verified'
+
+                with patch('articheck.kg_literature.fetch_method_chunks', side_effect=download):
+                    result = graph.import_public_paper('a' * 64, reference)
+                suffix = '1706.03762v2' if 'arxiv.org' in reference else '1706.03762'
+                self.assertEqual(attempts, ['https://arxiv.org/pdf/' + suffix,
+                                            'https://pdfs.semanticscholar.org/routing.pdf'])
+                self.assertTrue(result['papers'][0]['pdf_available'])
+
+    def test_auto_expansion_reuses_existing_nodes_and_caps_new_papers_across_two_hops(self):
+        graph = KnowledgeGraphService({}, SimpleNamespace(namespace='expansion-test'))
+        owner = 'a' * 64
+        record = lambda i: {'id': f'W{i}', 'title': f'Paper {i}'}
+        graph.update_literature(owner, lambda state: state['papers'].update(
+            {key: value for key, value in [('W1', record(1)), ('W8', record(8))]}))
+        visited = []
+
+        def neighborhood(*, identifier, **kwargs):
+            visited.append(identifier)
+            if identifier == 'W1':
+                return record(1), {'previous': [record(i) for i in (2, 3, 4, 8)]}
+            number = int(identifier[1:])
+            return record(number), {'previous': [record(i) for i in (10, 11, 12, 13)]}
+
+        graph.literature = SimpleNamespace(neighborhood=neighborhood)
+        expanded = graph.expand_literature(owner, 'W1', kinds=['previous'], limit=5, depth=2, total=5)
+        self.assertEqual(expanded['stats']['paper_count'], 7)
+        self.assertIn('W8', visited[1:])
+        self.assertNotIn('W10', visited)
+        edges = {(edge['source'], edge['target']) for edge in expanded['edges']}
+        self.assertIn(('W8', 'W1'), edges)
+        self.assertIn(('W10', 'W8'), edges)
+
+
 if __name__ == '__main__':
     unittest.main()

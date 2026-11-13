@@ -2505,7 +2505,7 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .kg-pdf-upload:focus-within{outline:2px solid #3265df;outline-offset:2px}
 .kg-import-paper{grid-column:1/4;margin:0}
 .kg-import-paper input{flex:1;min-width:0}
-.kg-filters>[data-kg-action="index"]{justify-self:end}
+.kg-filters>.kg-import-file{justify-self:end;align-self:center}
 @media(max-width:900px){.kg-import-paper{grid-column:1/-1}}
 :is(.kg-filters,.account-access-note,.account-auth>aside,.process-ready-banner,.interruption-remedy-box,
     .interruption-cmd-box,.order-card-body,.online-notice,.role-node-block,.start-acceptance){border-radius:0!important}
@@ -2630,7 +2630,6 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
  .rpt-kv{grid-template-columns:1fr}
 }
 
-.archive-view-tabs{display:flex;gap:10px;margin-bottom:18px}
 .archive-filter-grid{column-gap:22px;row-gap:14px}
 .shared-cases{display:grid;gap:18px}
 .shared-cases-community{border:1px solid var(--line);background:#fff;padding:16px}
@@ -2652,3 +2651,8 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .kg-lineage li.current{background:#edf4fd}
 .shared-case-evidence{grid-column:1/-1}
 .shared-case-evidence summary{cursor:pointer;color:var(--muted)}
+
+.start-repo-points{list-style:none;margin:10px 0 14px;padding:0;display:grid;gap:8px}
+.start-repo-points li{display:flex;align-items:flex-start;gap:8px}
+.start-repo-points svg{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:0 0 16px;width:16px;height:16px;margin-top:3px}
+.kg-empty{position:relative}

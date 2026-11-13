@@ -249,7 +249,7 @@ export class ExecutionCenter {
  async loadRoles(row){try{this.roleCache.set(row.key,await this.h.request('/api/reproduction/runs/'+encodeURIComponent(row.id)+'/roles'));}catch(error){this.roleCache.set(row.key,{...this.roleCache.get(row.key),error:error.message});}}
  async init(){try{this.rep.catalogCase=this.rep.catalogCase||await this.rep.loadPublicCase();this.rep.caseReport=null;}catch(error){this.error='公开案例读取失败：'+error.message;}this.rep.openExecution=key=>this.open(key);this.rep.onReviewNavigate=(_key,tab)=>{if(!['workbench','evidence','trace'].includes(this.h.state().page)||!this.detail)return false;this.tab=tab;return true;};}
  async refresh(){this.error='';try{await this.h.refresh();await this.rep.loadRegistry();const row=this.current();if(this.detail&&row?.source==='runtime')await this.open(row.key,this.tab,false);if(this.h.state().page==='roles'){const selected=this.roleRun().row;if(selected?.kind==='full'&&selected.source==='runtime')await this.loadRoles(selected);}this.updatedAt=new Date().toISOString();}catch(error){this.error=error.message;}this.h.render();}
- async open(key,tab='overview',navigate=true){const row=this.rows().find(r=>r.key===key);if(!row)return;const version=++this.selectionVersion;this.selected=key;this.tab=tab;this.detail=true;this.loading=true;this.error='';if(navigate)this.h.navigate('workbench');else this.h.render();try{
+ async open(key,tab='overview',navigate=true){const row=this.rows().find(r=>r.key===key);if(!row)return;const version=++this.selectionVersion;this.selected=key;this.tab=tab;this.detail=true;this.loading=true;this.error='';if(navigate){if(this.h.state().page==='public-cases'||row.source!=='runtime'&&this.h.state().mode!=='runtime')this.archiveView='public';this.h.navigate('workbench');}else this.h.render();try{
   if(row.kind==='full'&&row.source==='runtime'){
    const job=await this.h.request('/api/reproduction/runs/'+encodeURIComponent(row.id));
    const report=job.report_ready?validateReproductionReport(await this.h.request(job.report_url)):null;
@@ -260,14 +260,20 @@ export class ExecutionCenter {
  resetList(status=this.filters.status){this.selectionVersion++;this.detail=false;this.loading=false;this.filters.status=status;this.error='';}
  route(page,originProject=null){
   if(page==='roles')return;
+  if(['personal-archive','public-cases'].includes(page)){
+   this.archiveView=page==='public-cases'?'public':'personal';
+   this.filters={...this.filters,source:'all',status:'all',query:''};
+   this.resetList();
+   return;
+  }
   const tab=page==='trace'?'trace':page==='evidence'?'evidence':'overview';
   if(originProject){const id=originProject.assessment?.reproduction?.job?.id,key=id?'full:'+id:originProject.run_id?'probe:'+originProject.run_id:null;if(key&&this.rows().some(r=>r.key===key)){this.open(key,tab,false);return;}this.selected=null;}
-  if(page==='workbench')this.resetList();else if(this.current()){return this.open(this.current().key,tab,false);}else{this.resetList(page==='evidence'?'attention':'all');}
+  if(page==='workbench'){this.archiveView='personal';this.resetList();}else if(this.current()){return this.open(this.current().key,tab,false);}else{this.resetList(page==='evidence'?'attention':'all');}
  }
- heading(page){if(page==='roles')return '角色协作';if(this.detail&&this.current())return this.current().title;return page==='evidence'?'证据复核':'案例与归档';}
+ heading(page){if(page==='roles')return '角色协作';if(this.detail&&this.current())return this.current().title;return page==='public-cases'?'公共案例':page==='personal-archive'?'个人归档':page==='evidence'?'证据复核':'案例与归档';}
  subtitle(page){if(page==='roles')return '六个角色 · 短时核查与完整实验的职责、输入输出与实际事件';if(this.detail&&this.current()){const row=this.current();return `${kindLabels[row.kind]} · ${sourceLabels[row.source]} · ${statusLabels[row.status]||row.status}`;}return '';}
  actions(page){if(page==='roles')return '<button class="btn" data-center-refresh>刷新核查记录</button>';if(this.detail)return '<button class="btn" data-center-back>返回案例与归档</button>';return `<button class="btn" data-center-refresh>${this.h.icon('refresh')}刷新记录</button><button class="btn primary" data-action="new">${this.h.icon('plus')}新建复现</button>`;}
- render(page){return `${this.error?`<p class="error-box" role="alert">${this.h.esc(this.error)}</p>`:''}${page==='roles'?this.rolesView():this.detail&&this.current()?this.detailView():this.listView(page)}`;}
+ render(page){return `${this.error?`<p class="error-box" role="alert">${this.h.esc(this.error)}</p>`:''}${page==='roles'?this.rolesView():!['personal-archive','public-cases'].includes(page)&&this.detail&&this.current()?this.detailView():this.listView(page)}`;}
  async loadPublicCases(before){
   const owner=this.h.accountId?.();
   if(!owner||this.caseBusy)return;
@@ -319,10 +325,11 @@ export class ExecutionCenter {
    ${cases?.next?`<button type="button" class="btn small" data-archive-action="more-cases" ${this.caseBusy?'disabled':''}>查看更多案例</button>`:''}</section>`:''}
    ${this.recordList(this.rows().filter(row=>row.source!=='runtime'),'系统内置基线档案',true)}</section>`;
  }
- listView(){
-  const publicView=this.archiveView==='public';
-  return `<nav class="archive-view-tabs" aria-label="案例与归档分区"><button type="button" class="btn ${publicView?'':'primary'}" data-archive-view="personal" aria-pressed="${!publicView}">个人归档</button><button type="button" class="btn ${publicView?'primary':''}" data-archive-view="public" aria-pressed="${publicView}">公共案例</button></nav>
-  ${publicView?this.publicCaseView():this.renderOrderCenter()+(this.rows().some(row=>row.source==='runtime')?this.recordList(this.rows().filter(row=>row.source==='runtime'),'本机执行记录',false):'')}`;
+ listView(page){
+  const publicView=page==='public-cases'||page!=='personal-archive'&&this.archiveView==='public';
+  if(publicView)return this.publicCaseView();
+  const local=this.rows().filter(row=>row.source==='runtime');
+  return this.renderOrderCenter()+(local.length?this.recordList(local,'本机执行记录',false):'');
  }
  recordList(all,title,publicView){const e=this.h.esc,base=filterRecords(all,{...this.filters,status:'all'}),counts=recordCounts(base),rows=filterRecords(all,this.filters),statusTabs=[['all','全部归档',counts.all],['active','执行中',counts.active],['attention','需关注',counts.attention],['completed','已完成',counts.completed]];return `<section class="execution-list"><div class="execution-list-head"><h3>${title}</h3><div class="execution-state-tabs" role="group" aria-label="任务状态筛选">${statusTabs.map(([id,label,count])=>`<button data-center-status="${id}" aria-pressed="${this.filters.status===id}" class="${this.filters.status===id?'active':''}">${label}<span>${count}</span></button>`).join('')}</div></div><div class="execution-toolbar"><label class="execution-search">${this.h.icon('search')}<span class="sr-only">搜索任务、版本或运行 ID</span><input data-center-query value="${e(this.filters.query)}" placeholder="${publicView?'搜索基线案例、计划版本或运行 ID':'搜索本机记录、计划版本或运行 ID'}"></label><div class="execution-filters"><label><span class="sr-only">执行方式</span><select data-center-filter="kind" aria-label="执行方式">${[['all','全部执行方式'],['full','完整实验'],['probe','短时核查']].map(([id,label])=>`<option value="${id}" ${this.filters.kind===id?'selected':''}>${label}</option>`).join('')}</select></label><label><span class="sr-only">记录来源</span><select data-center-filter="source" aria-label="记录来源">${[['all','全部来源'],...(publicView?[['public_case','公开 CI 归档'],['teaching','教学归档']]:[['runtime','本机执行']])].map(([id,label])=>`<option value="${id}" ${this.filters.source===id?'selected':''}>${label}</option>`).join('')}</select></label></div></div><div class="execution-table-meta"><p>显示 ${Math.min(rows.length,this.limit)} / ${rows.length} 条记录</p><span>${this.updatedAt?'更新于 '+date(this.updatedAt):this.h.state().mode==='runtime'?'已读取本机记录':'预览模式 · 归档数据'}</span></div><div class="execution-table-wrap"><table class="execution-table"><thead><tr><th>复现任务</th><th>执行方式 / 来源</th><th>状态</th><th class="num">执行进度</th><th>更新时间</th><th><span class="sr-only">任务操作</span></th></tr></thead><tbody>${rows.slice(0,this.limit).map(row=>`<tr><td class="record-identity"><button data-center-open="${e(row.key)}">${e(row.title)}</button><small>${row.plan_sha256?'计划 '+e(row.plan_sha256.slice(0,12)):row.id?'运行 '+e(row.id.slice(0,12)):'独立公开案例'}${row.source==='public_case'?' · 有限范围验收':''}</small></td><td><span>${kindLabels[row.kind]}</span><small>${sourceLabels[row.source]}</small></td><td><span class="record-status ${row.status}"><i aria-hidden="true"></i>${statusLabels[row.status]||e(row.status)}</span></td><td class="record-progress num"><span>${e(progressText(row))}</span><small>${row.phases===null?row.kind==='full'?'完整计划见任务详情':'六角色核查流程':row.phases+' 个阶段'}</small></td><td class="record-date">${e(date(row.created_at))}</td><td class="record-action"><button class="btn text" data-center-open="${e(row.key)}">查看任务 ${this.h.icon('chevron')}</button></td></tr>`).join('')}</tbody></table>${rows.length?'':`<div class="execution-empty"><h2>${all.length?'没有符合条件的记录':'还没有执行记录'}</h2><p>${all.length?'调整任务状态、执行方式或来源，继续查找。':'从论文项目准备材料，绑定计划后启动实验。'}</p><button class="btn" ${all.length?'data-center-clear':'data-action="new"'}>${all.length?'清除筛选':'新建复现项目'}</button></div>`}</div>${rows.length>this.limit?'<button class="btn" data-center-more>再显示 25 条</button>':''}</section>`;}
  detailView(){const row=this.current(),e=this.h.esc,full=row.kind==='full',data=full?(row.source==='public_case'?{report:row.report,source:row.source}:this.fullCache.get(row.key)):null,report=data?.report;return `<section class="execution-detail"><div class="record-context-bar"><span><span class="record-status ${row.status}"><i aria-hidden="true"></i>${statusLabels[row.status]||e(row.status)}</span></span><span>${sourceLabels[row.source]}</span><span>${date(row.created_at)}</span><div class="record-context-actions">${row.source==='runtime'?'<button class="btn text" data-center-refresh>刷新任务</button>':''}${(row.source==='runtime'||row.kind==='probe')&&['running','queued'].includes(row.status)?'<button class="btn danger" data-center-stop>停止执行</button>':''}${report||this.probe(row)?.report?`<button class="btn" data-center-export>${full?'导出证据包':'导出核查报告'}</button>`:''}${!full&&!['running','queued'].includes(row.status)?`<button class="btn" data-action="rerun">${row.source==='teaching'?'回放此核查':'重新核查'}</button>`:''}</div></div>${row.plan_sha256?`<div class="record-version"><span>冻结计划 <code>${e(row.plan_sha256.slice(0,16))}</code></span>${report?.source_manifest_sha256?`<span>源码清单 <code>${e(report.source_manifest_sha256.slice(0,16))}</code></span>`:''}<span>${e(progressText(row))}${row.phases===null?'':' · '+row.phases+' 个阶段'}</span></div>`:''}${row.source==='public_case'?'<p class="record-provenance">公开 CI 证据 · 仅覆盖 LIBLINEAR 的 news20 CPU 实验，Figure 1、rcv1 与效率结论尚未覆盖。<a href="'+e(report.provenance?.workflow_url||'#')+'" target="_blank" rel="noopener">查看来源</a></p>':row.source==='teaching'?'<p class="record-provenance">自制教学仓库的归档证据 · 用于体验核查流程。</p>':''}<div class="execution-detail-tabs" role="group" aria-label="任务详情视图">${tabsFor(row.kind).map(([id,label])=>`<button data-center-tab="${id}" aria-pressed="${this.tab===id}" class="${this.tab===id?'active':''}">${label}</button>`).join('')}</div>${this.loading?'<div class="execution-loading" role="status">正在读取任务证据…</div>':full?this.tab==='roles'?this.roleFlow(this.fullRoles(row))+this.roleBody(this.fullRoles(row),row):report?this.rep.review.render(report,{source:row.source,job:data.job||row.job},e,{embedded:true,tab:this.tab}):`<div class="execution-empty"><h2>${row.status==='failed'?'执行未生成报告':'报告尚未生成'}</h2><p>${e(data?.job?.error||'任务状态已保留，刷新后读取最新证据。')}</p></div>`:this.tab==='roles'?this.roleFlow(this.probe())+this.roleBody(this.probe(),row):this.tab==='overview'?this.probeOverview(row):this.h.probeView(this.tab)}</section>`;}
@@ -346,7 +353,7 @@ export class ExecutionCenter {
   }
  }
  afterRender(){clearTimeout(this.timer);const state=this.h.state();
- if(['workbench','evidence','trace'].includes(state.page)&&!this.detail&&this.archiveView==='public'&&this.h.accountId?.()&&this.caseRequestOwner!==this.h.accountId())void this.loadPublicCases();
+ if((state.page==='public-cases'||['workbench','evidence','trace'].includes(state.page)&&!this.detail&&this.archiveView==='public')&&this.h.accountId?.()&&this.caseRequestOwner!==this.h.accountId())void this.loadPublicCases();
  if(state.mode!=='runtime'||!['workbench','evidence','trace','roles'].includes(state.page)||this.loading)return;const row=this.current(),roleRow=state.page==='roles'?this.roleRun().row:null;const active=this.rows().some(r=>r.source==='runtime'&&['running','queued'].includes(r.status));if(!active||document.querySelector('.role-event[open],.review-station details[open],.review-decision:focus-within')||document.activeElement?.matches('input,textarea,select'))return;this.timer=setTimeout(async()=>{try{await this.h.refresh();await this.rep.loadRegistry();if(this.detail&&row?.kind==='full'&&row.source==='runtime'&&this.selected===row.key){const job=await this.h.request('/api/reproduction/runs/'+encodeURIComponent(row.id));const report=job.report_ready?validateReproductionReport(await this.h.request(job.report_url)):null;if(report&&report.plan_sha256!==job.plan_sha256)throw Error('报告版本不匹配');if(this.selected===row.key){this.fullCache.set(row.key,{job,report});await this.loadRoles(row);}}if(roleRow?.kind==='full'&&roleRow.source==='runtime')await this.loadRoles(roleRow);this.updatedAt=new Date().toISOString();}catch(error){this.error=error.message;}this.h.render();},3000);}
  bind(){
   document.addEventListener('toggle',event=>{if(event.target.matches?.('.role-event,.trace-run,.trace-stage'))this.afterRender();},true);
@@ -382,16 +389,9 @@ export class ExecutionCenter {
    this.h.render();
   });
   document.addEventListener('click',async event=>{
-   const el=event.target.closest('[data-archive-view],[data-archive-action],[data-order-filter],[data-order-open],[data-order-cancel],[data-order-terminate],[data-center-open],[data-center-status],[data-center-tab],[data-center-back],[data-center-clear],[data-center-more],[data-center-refresh],[data-center-stop],[data-center-export],[data-center-role],[data-role-nav]');
+   const el=event.target.closest('[data-archive-action],[data-order-filter],[data-order-open],[data-order-cancel],[data-order-terminate],[data-center-open],[data-center-status],[data-center-tab],[data-center-back],[data-center-clear],[data-center-more],[data-center-refresh],[data-center-stop],[data-center-export],[data-center-role],[data-role-nav]');
    if(!el)return;
    try{
-    if(el.dataset.archiveView){
-     this.archiveView=el.dataset.archiveView;
-     this.filters={...this.filters,source:'all',status:'all',query:''};
-     if(this.archiveView==='public'&&this.h.accountId?.())await this.loadPublicCases();
-     else this.h.render();
-     return;
-    }
     if(el.dataset.archiveAction==='share'){this.openCaseShare();return;}
     if(el.dataset.archiveAction==='reload-cases'){await this.loadPublicCases();return;}
     if(el.dataset.archiveAction==='more-cases'){await this.loadPublicCases(this.publicCases?.next);return;}
@@ -408,7 +408,7 @@ export class ExecutionCenter {
     if(el.dataset.centerOpen){await this.open(el.dataset.centerOpen,this.h.state().page==='evidence'?'evidence':'overview');return;}
     if(el.dataset.centerStatus){this.filters.status=el.dataset.centerStatus;this.limit=25;}
     if(el.dataset.centerTab)this.tab=el.dataset.centerTab;
-    if(el.hasAttribute('data-center-back')){this.resetList();this.h.navigate('workbench');return;}
+    if(el.hasAttribute('data-center-back')){this.resetList();this.h.navigate(this.h.state().mode==='runtime'?'workbench':this.archiveView==='public'?'public-cases':'personal-archive');return;}
     if(el.hasAttribute('data-center-clear'))this.filters={query:'',kind:'all',source:'all',status:'all',project:'all'};
     if(el.hasAttribute('data-center-more'))this.limit+=25;
     if(el.hasAttribute('data-center-refresh')){await this.refresh();return;}
