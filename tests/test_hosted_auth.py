@@ -81,6 +81,22 @@ class HostedAccountsTests(unittest.TestCase):
         admin = self.app.test_client()
         self.invite({**self.data, 'username': 'operator'}, client=admin, role='admin')
         self.assertIsNone(admin.get('/test-model-budget', headers=self.headers).json['attempt'])
+
+    def test_admin_can_create_upload_and_launch_after_compute_quota_is_exhausted(self):
+        self.invite(role='admin')
+        job = 'd' * 32
+        with patch.object(self.store, 'reserve_compute', side_effect=ReviewError('compute_budget_exhausted', 'full', 429)) as reserve:
+            with patch('articheck.hosted_api.HostedUploads.create', return_value={'id': job}) as create:
+                self.assertEqual(self.client.post('/uploads', json={}, headers=self.headers).status_code, 200)
+                self.assertTrue(create.call_args.kwargs['unlimited'])
+            report = self.client.post('/assessments', json={**materials(), 'request_id': job}, headers=self.headers)
+            self.assertEqual(report.status_code, 200)
+            plan = report.json['review']['plan_sha256']
+            result = self.client.post('/assessments/'+job+'/execute',
+                json={'code': materials()['code'], 'plan_sha256': plan}, headers=self.headers)
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(result.json['execution']['status'], 'running')
+            reserve.assert_not_called()
     def test_avatar_accepts_presets_and_small_inline_images_only(self):
         self.invite()
         self.assertEqual(self.post('profile',{'name':'甲','avatar':'preset:atom'}).json['user']['avatar'],'preset:atom')

@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import json
 import unittest
 
@@ -22,6 +24,32 @@ class CaseStore(RedisMemory):
         return owner, job
 
     def command(self, name, *args):
+        if name == 'EVAL' and "ARGV[6]" in args[0]:
+            count = int(args[1])
+            source, _, marker, detail, owned, *files = args[2:2+count]
+            expected, member, snapshot, legacy, case, job = args[2+count:]
+            if detail in self.redis or (self.redis.get(marker) or '') != legacy:
+                return -1
+            if json.dumps(self.records.get(source), ensure_ascii=False) != expected or not all(key in self.redis for key in files):
+                return 0
+            for key in files:
+                self.expiry.pop(key, None)
+            self.public[member] = 0
+            self.redis.update({detail: snapshot, marker: case})
+            self.redis.setdefault(owned, set()).add(job)
+            return 1
+        if name == 'EVAL' and 'current.owner' in args[0]:
+            count = int(args[1])
+            detail, _, marker, owned, *files = args[2:2+count]
+            identity, member, job = args[2+count:]
+            current = json.loads(self.redis[detail])
+            if current['owner'] != identity or current['member'] != member:
+                return 0
+            self.public.pop(member)
+            self.redis[owned].discard(job)
+            for key in [detail, marker, *files]:
+                self.redis.pop(key, None)
+            return 1
         if name == 'EVAL' and "redis.call('ZADD'" in args[0]:
             _, key_count, source, _, marker, expected, member, snapshot = args
             assert key_count == '3'
@@ -112,6 +140,8 @@ class SharedCaseTests(unittest.TestCase):
         register_accounts(app, {}, Reviewer(), Budget(), store=self.store, executor=Executor())
         accounts = app.extensions['articheck_accounts']
         clients = []
+        raw = {'paper': b'%PDF-1.7 test bytes', 'code': b'PK test zip bytes' * 160_000}
+        self.report['materials'] = {kind: hashlib.sha256(data).hexdigest() for kind, data in raw.items()}
         headers = {'X-ArtiCheck-Client': 'review-api'}
         for name in ('publisher', 'reader'):
             user = accounts.create_user(name, 'test-password-for-cases', name)
@@ -125,7 +155,33 @@ class SharedCaseTests(unittest.TestCase):
         publish = {'assessment_id': self.report['id'], 'title': '邀请账户分享的案例'}
         self.assertEqual(clients[1].get('/cases', headers=headers).json['items'], [])
         self.assertEqual(clients[1].post('/cases', headers=headers, json=publish).status_code, 404)
+        self.assertEqual(clients[0].post('/cases', headers=headers, json=publish).status_code, 422)
+        for kind, data in raw.items():
+            publish[kind] = {'name': 'sample.' + ('pdf' if kind == 'paper' else 'zip'),
+                             'content_base64': base64.b64encode(data).decode()}
+        select = {'assessments': [self.report['id']]}
+        self.assertEqual(clients[0].post('/cases/eligible', headers=headers, json=select).json, select)
         shared = clients[0].post('/cases', headers=headers, json=publish)
         self.assertEqual(shared.status_code, 200)
-        self.assertEqual(clients[1].get('/cases', headers=headers).json['items'], [shared.json])
+        case_id = shared.json['id']
+        path = '/cases/' + case_id
+        self.assertEqual(shared.json['publisher'], 'publisher')
+        self.assertTrue(clients[0].get('/cases', headers=headers).json['items'][0]['can_delete'])
+        self.assertFalse(clients[1].get('/cases', headers=headers).json['items'][0]['can_delete'])
+        self.assertEqual(clients[0].post('/cases/eligible', headers=headers, json=select).json, {'assessments': []})
+        self.assertEqual(clients[1].get(path, headers=headers).json['report']['review']['paper_title'], 'private title')
         self.assertEqual(clients[1].get('/assessments/' + self.report['id'], headers=headers).status_code, 404)
+        self.assertEqual(app.test_client().get(path, headers=headers).status_code, 401)
+        for kind, expected in raw.items():
+            first = clients[1].get(path+'/files/'+kind+'?chunk=0', headers=headers)
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(first.data, expected[:2_000_000])
+            if len(expected)>2_000_000:
+                second = clients[1].get(path+'/files/'+kind+'?chunk=1', headers=headers)
+                self.assertEqual(second.data, expected[2_000_000:])
+        self.assertEqual(clients[1].post(path+'/retract', headers=headers, json={}).status_code, 404)
+        self.assertEqual(clients[0].post(path+'/retract', headers=headers, json={}).status_code, 200)
+        self.assertEqual(clients[1].get(path, headers=headers).status_code, 404)
+        self.assertEqual(clients[1].get(path+'/files/paper?chunk=0', headers=headers).status_code, 404)
+        self.assertEqual(clients[1].get('/cases', headers=headers).json['items'], [])
+        self.assertFalse(any(':file:' in key for key in self.store.redis))

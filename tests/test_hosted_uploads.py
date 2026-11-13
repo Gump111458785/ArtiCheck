@@ -61,6 +61,17 @@ class LargeMaterialTests(unittest.TestCase):
         with self.assertRaises(ReviewError):uploads.resolve(OWNER,{'upload_id':[]},'code')
         with self.assertRaises(ReviewError):resolve_repository({'repository':'example/project','commit':[],'sha256':'f'*64})
 
+    def test_admin_upload_skips_compute_reservation(self):
+        store=MemoryStore();uploads=HostedUploads({'E2B_API_KEY':'test'},store)
+        files=[{'kind':'paper','name':'paper.pdf','bytes':100,'sha256':'a'*64}]
+        sandbox=MagicMock()
+        sandbox.sandbox_id='fixture'
+        sandbox.upload_url.return_value='https://fixture.e2b.app/upload'
+        with patch('e2b.Sandbox.create', return_value=sandbox):
+            result=uploads.create(OWNER,{'request_id':'a'*32,'files':files},unlimited=True)
+        self.assertIsNone(result['reserved_attempt'])
+        self.assertEqual(store.reservations,0)
+
     def test_upload_bytes_are_owner_scoped_and_fingerprint_checked(self):
         raw=b'test-source';store=MemoryStore();uploads=HostedUploads({'E2B_API_KEY':'test'},store)
         record={'id':'2'*32,'type':'material_upload','status':'ready','deadline':9999999999,

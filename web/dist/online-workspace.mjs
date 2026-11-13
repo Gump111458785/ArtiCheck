@@ -365,7 +365,7 @@ export class OnlineWorkspace{
    (cov.gaps||[]).length?`覆盖缺口 ${(cov.gaps||[]).length} 项`:''].filter(Boolean);
   return `<header class="rpt-info">
    <div class="rpt-title-row"><h2 class="rpt-project">${e(p?.title||r.project_title||'未命名审查项目')}</h2><span class="rpt-chip ${self?'neutral':'info'}">${self?'审查自己':'审查别人'}</span>
-    <div class="rpt-actions"><button class="btn primary" data-online="export">${self?'导出修改清单':'导出报告'}</button><button class="btn" data-online-tab="process">查看过程详情</button></div></div>
+    ${p?.shared?'':'<div class="rpt-actions"><button class="btn primary" data-online="export">'+(self?'导出修改清单':'导出报告')+'</button><button class="btn" data-online-tab="process">查看过程详情</button></div>'}</div>
    <dl class="rpt-meta">${meta.map(([label,value])=>`<div><dt>${label}</dt><dd>${e(value)}</dd></div>`).join('')}</dl>
    <p class="rpt-scope"><strong>核验范围</strong>${e(scope.join(' · ')||'仅限提交的材料')}${(cov.gaps||[]).length?' · <button type="button" class="rpt-link" data-report-anchor="rpt-appendix-coverage">查看覆盖边界</button>':''}</p>
   </header>`;
@@ -423,7 +423,7 @@ export class OnlineWorkspace{
   if(n.id==='audit')return n.withdrawn?.length?`<p>撤回的条目不会出现在结果中：</p><ul class="rpt-list">${n.withdrawn.map(w=>`<li><strong>${e(w.title)}</strong> · ${e(w.reason)}</li>`).join('')}</ul>`:`<p>${e(n.summary)}</p>`;
   if(n.id==='related')return this.conflictsSection(r)||`<p>${e(n.summary)}</p>`;
   if(n.id==='plan')return n.stages.length?`<ol class="rpt-list">${n.stages.map(s=>`<li><strong>${e(s.id)} ${e(s.title)}</strong> <span class="rpt-loc">${e(s.file||'')}</span><code class="rpt-cmd">${e(concise(s.command,200))}</code></li>`).join('')}</ol>${(v.plan?.needs||[]).length?`<p class="rpt-note">所需资源：${e(v.plan.needs.map(x=>x.name+(x.required?'（必需）':'')).join('、'))}</p>`:''}`:`<p>${e(n.summary)}</p>`;
-  if(n.id==='run')return n.stages.length?`<div class="online-table-wrap"><table class="online-table rpt-table"><thead><tr><th scope="col">阶段</th><th scope="col" class="number">用时</th><th scope="col" class="number">退出码</th><th scope="col">记录</th></tr></thead><tbody>${n.stages.map(s=>`<tr class="${s.status==='failed'?'is-fail':''}"><td>${e(s.id)} ${e(s.title)}</td><td class="number">${e(s.duration||'—')}</td><td class="number">${s.exit==null?'—':e(s.exit)}</td><td>${e(s.status==='skipped'?s.reason||'已跳过':s.reason||s.tail.join(' / ')||({completed:'完成',failed:'失败',running:'执行中'}[s.status]||s.status))}</td></tr>`).join('')}</tbody></table></div>${x?.runtime?`<p class="rpt-note">运行环境：Python ${e(x.runtime.python||'3.x')}${(x.runtime.auto_provisioned_packages||[]).length?` · 自动补齐依赖 ${x.runtime.auto_provisioned_packages.length} 个`:''}${x.runtime.workspace_cleaned?' · 隔离环境与临时依赖已清理':''}</p>`:''}<button type="button" class="btn small" data-online-tab="process">查看逐阶段日志</button>`:`<p>${e(n.summary)}</p>`;
+  if(n.id==='run')return n.stages.length?`<div class="online-table-wrap"><table class="online-table rpt-table"><thead><tr><th scope="col">阶段</th><th scope="col" class="number">用时</th><th scope="col" class="number">退出码</th><th scope="col">记录</th></tr></thead><tbody>${n.stages.map(s=>`<tr class="${s.status==='failed'?'is-fail':''}"><td>${e(s.id)} ${e(s.title)}</td><td class="number">${e(s.duration||'—')}</td><td class="number">${s.exit==null?'—':e(s.exit)}</td><td>${e(s.status==='skipped'?s.reason||'已跳过':s.reason||s.tail.join(' / ')||({completed:'完成',failed:'失败',running:'执行中'}[s.status]||s.status))}</td></tr>`).join('')}</tbody></table></div>${x?.runtime?`<p class="rpt-note">运行环境：Python ${e(x.runtime.python||'3.x')}${(x.runtime.auto_provisioned_packages||[]).length?` · 自动补齐依赖 ${x.runtime.auto_provisioned_packages.length} 个`:''}${x.runtime.workspace_cleaned?' · 隔离环境与临时依赖已清理':''}</p>`:''}${p?.shared?'':'<button type="button" class="btn small" data-online-tab="process">查看逐阶段日志</button>'}`:`<p>${e(n.summary)}</p>`;
   if(n.id==='metrics'){
    if(!n.rows?.length)return `<p>${e(n.summary)}</p>`;
    const bad=n.rows.filter(m=>m.status==='outside_tolerance');
@@ -442,7 +442,7 @@ export class OnlineWorkspace{
    ${item('rpt-appendix-code','核心代码与实现解析','关键实现片段',o.code?this.coreCodeSection(r,p):'')}
    ${item('rpt-appendix-criteria','八项审查条件','按维度的材料依据',this.criteriaSection(r,p)+this.criteriaDetails(r,p))}
    ${item('rpt-appendix-coverage','覆盖边界与公开资料',`${(v.coverage?.gaps||[]).length} 项覆盖缺口`,this.evidence(r,{omitMetrics:true}))}
-   <div class="rpt-appendix-item rpt-appendix-link"><span>原始日志与角色事件</span><button type="button" class="rpt-link" data-online-tab="process">前往过程详情</button></div>
+   ${p?.shared?'':'<div class="rpt-appendix-item rpt-appendix-link"><span>原始日志与角色事件</span><button type="button" class="rpt-link" data-online-tab="process">前往过程详情</button></div>'}
   </section>`;
  }
 

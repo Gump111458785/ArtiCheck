@@ -19,7 +19,7 @@ class HostedUploads:
     def __init__(self,env,store):
         self.key=env.get('E2B_API_KEY','');self.store=store
 
-    def create(self,owner,payload):
+    def create(self,owner,payload,*,unlimited=False):
         files=payload.get('files');job=payload.get('request_id')
         if not isinstance(job,str) or not re.fullmatch(r'[a-f0-9]{32}',job):
             raise ReviewError('invalid_request_id','上传编号无效。')
@@ -47,7 +47,7 @@ class HostedUploads:
         sandbox=None
         starting = {**record}
         try:
-            record['reservation']=self.store.reserve_compute()
+            record['reservation']=None if unlimited else self.store.reserve_compute()
             if not self.store.replace(owner,starting,record):
                 raise ReviewError('upload_expired','本次传输已关闭。',410)
             starting = {**record}

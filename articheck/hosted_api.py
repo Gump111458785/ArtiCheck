@@ -1,5 +1,6 @@
 """Hosted v2 routes. v1 remains available for existing API clients."""
 import hmac
+import hashlib
 import io
 import json
 import re
@@ -7,11 +8,12 @@ import time
 import uuid
 import copy
 from types import SimpleNamespace
+from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError
 
-from .hosted_cases import SharedCases
+from .hosted_cases import SharedCases, shared_case_summary
 from .hosted_github import import_repository, repository, resolve_repository
-from .hosted_uploads import HostedUploads
+from .hosted_uploads import HostedUploads, LIMITS
 from .hosted_review import assess, material_identity, prepare_assessment, digest
 from .hosted_gpu import HybridExecutor
 from .hosted_store import HostedStore
@@ -19,7 +21,7 @@ from .hosted_images import text_materials
 from .hosted_sources import lookup, public_identifier
 from .hosted_audit import cross_audit
 from .kg_service import KnowledgeGraphService
-from .review_api import ReviewError, now
+from .review_api import ReviewError, decode_material, now
 
 
 def register(app, env, reviewer, budget, *, store=None, executor=None):
@@ -38,7 +40,10 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             accounts.guard()
             owner=request.headers.get('X-ArtiCheck-Session','')
             if session and not re.fullmatch(r'[a-f0-9]{64}',owner):raise ReviewError('invalid_session','会话无效。',401)
-            return accounts.owner() or owner
+            account_owner = accounts.owner()
+            if account_owner:
+                g.articheck_admin = accounts.require().get('role') == 'admin'
+            return account_owner or owner
         user = accounts.require()
         g.articheck_admin = user.get('role') == 'admin'
         return accounts.owner()
@@ -48,6 +53,9 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
 
     def reserve_model():
         return None if is_admin() else budget.reserve()
+
+    def reserve_compute():
+        return None if is_admin() else store.reserve_compute()
 
     model_budget = SimpleNamespace(reserve=reserve_model) if budget else None
     kg = KnowledgeGraphService(env, store, reviewer, model_budget, is_admin=is_admin)
@@ -75,11 +83,14 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
 
     @app.get('/cases')
     def list_shared_cases():
-        authorize()
+        owner = authorize()
         before = request.args.get('before')
         if before and not re.fullmatch(r'[0-9]{20}-[a-f0-9]{32}', before):
             raise ReviewError('invalid_case_cursor', '公开案例分页位置无效。')
-        response = jsonify(SharedCases(store).list(before))
+        jobs = request.args.get('jobs', '').split(',')[:100]
+        jobs = [job for job in jobs if re.fullmatch(r'[a-f0-9]{32}', job)]
+        response = jsonify(SharedCases(store).list(before,
+            owner=None if env.get('ARTICHECK_AUTH_MODE') == 'legacy' else owner, jobs=jobs))
         response.headers['Cache-Control'] = 'private, no-store'
         return response
 
@@ -90,12 +101,88 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         job = payload.get('assessment_id')
         if not isinstance(job, str) or not re.fullmatch(r'[a-f0-9]{32}', job):
             raise ReviewError('not_found', '未找到该审查记录。', 404)
-        return jsonify(SharedCases(store).publish(owner, job, payload.get('title')))
+        cases = SharedCases(store)
+        if env.get('ARTICHECK_AUTH_MODE') == 'legacy':
+            return jsonify(cases.publish(owner, job, payload.get('title')))
+        report = store.get(owner, job)
+        shared_case_summary(report)
+        material = material_body({kind: payload.get(kind) for kind in LIMITS})
+        files = {}
+        for kind, (suffix, limit) in LIMITS.items():
+            expected = (report.get('materials') or {}).get(kind)
+            if not expected:
+                continue
+            if not material.get(kind):
+                raise ReviewError('case_material_missing', '请提供与归档对应的原始材料。', 422)
+            raw, info = decode_material(material[kind], suffix, limit)
+            if info['sha256'] != expected:
+                raise ReviewError('case_material_changed', '文件与归档版本不一致。', 409)
+            files[kind] = (raw, info)
+        return jsonify(cases.publish_full(owner, job, payload.get('title'), accounts.require()['name'], report, files))
+
+    @app.post('/cases/eligible')
+    def eligible_shared_cases():
+        owner = authorize()
+        jobs = body().get('assessments')
+        if not isinstance(jobs, list) or len(jobs) > 100 or any(
+                not isinstance(job, str) or not re.fullmatch(r'[a-f0-9]{32}', job) for job in jobs):
+            raise ReviewError('invalid_case_selection', '归档列表格式无效。')
+        cases = SharedCases(store)
+        identity = hashlib.sha256(owner.encode()).hexdigest()
+        # Each report is at most 500 kB. Limit parallel reads to avoid a single
+        # large Redis response or a serialized request per archive.
+        owned = set(store.command('SMEMBERS', cases.index + ':owned:' + identity) or [])
+
+        def eligible(job):
+            if job in owned:
+                return False
+            try:
+                shared_case_summary(store.get(owner, job))
+                return True
+            except ReviewError as error:
+                if error.code in {'not_found', 'case_not_completed'}:
+                    return False
+                raise
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            return jsonify(assessments=[job for job, valid in zip(jobs, pool.map(eligible, jobs)) if valid])
+
+    @app.get('/cases/<case_id>')
+    def shared_case_report(case_id):
+        authorize()
+        if not re.fullmatch(r'[a-f0-9]{32}', case_id):
+            raise ReviewError('case_not_found', '该共享案例已撤回或不存在。', 404)
+        detail = SharedCases(store).get_shared(case_id)
+        return jsonify(case=detail['case'], report=detail['report'])
+
+    @app.get('/cases/<case_id>/files/<kind>')
+    def shared_case_file(case_id, kind):
+        authorize()
+        if not re.fullmatch(r'[a-f0-9]{32}', case_id) or kind not in LIMITS:
+            raise ReviewError('case_not_found', '该共享文件不存在。', 404)
+        cases = SharedCases(store)
+        detail = cases.get_shared(case_id)
+        chunk = request.args.get('chunk', type=int)
+        if chunk is None or chunk < 0:
+            raise ReviewError('case_file_range', '请求的文件位置无效。', 416)
+        raw, record = cases.read_file(detail, kind, chunk)
+        return Response(raw, mimetype='application/octet-stream', headers={'Cache-Control':'private, no-store',
+            'X-Content-Type-Options':'nosniff','X-ArtiCheck-File-Bytes':str(record['bytes']),
+            'X-ArtiCheck-File-SHA256':record['sha256']})
+
+    @app.post('/cases/<case_id>/retract')
+    def retract_shared_case(case_id):
+        owner = authorize()
+        if not re.fullmatch(r'[a-f0-9]{32}', case_id):
+            raise ReviewError('case_not_found', '该共享案例已撤回或不存在。', 404)
+        job = body().get('assessment_id')
+        if not isinstance(job, str) or not re.fullmatch(r'[a-f0-9]{32}', job):
+            job = None
+        return jsonify(SharedCases(store).retract(owner, case_id, job))
 
     @app.post('/uploads')
     def create_upload():
         owner=authorize()
-        return jsonify(uploads.create(owner,body()))
+        return jsonify(uploads.create(owner,body(),unlimited=is_admin()))
 
     @app.post('/uploads/<job>/cancel')
     def cancel_upload(job):
@@ -392,7 +479,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         try:
             if store.get(owner, job) != starting:
                 return jsonify(finish_unlaunched_cancel(owner, job, attempt_id))
-            attempt = store.reserve_compute()
+            attempt = reserve_compute()
         except ReviewError:
             store.replace(owner, starting, previous)
             store.unlock_before_launch(owner, job, attempt_number)
