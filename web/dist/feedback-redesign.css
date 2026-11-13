@@ -2535,11 +2535,15 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .rpt-kicker{margin:0;font-size:13px;color:var(--muted)}
 .rpt-flag{margin:0;padding:8px 12px;border-radius:6px;background:var(--amber-soft);color:#92400e;font-size:14px}
 .rpt-headline{margin:0;font-size:clamp(24px,3vw,30px);line-height:1.3;display:flex;flex-wrap:wrap;gap:4px 16px;align-items:baseline}
-.rpt-result.tone-fail .rpt-head-main,.rpt-verdict.tone-fail{color:var(--negative)}
-.rpt-result.tone-warn .rpt-head-main,.rpt-verdict.tone-warn{color:#92400e}
-.rpt-result.tone-pass .rpt-head-main,.rpt-verdict.tone-pass{color:var(--positive)}
+.rpt-verdict.tone-fail,.rpt-count-fix{color:var(--negative)}
+.rpt-verdict.tone-warn{color:#92400e}
+.rpt-verdict.tone-pass{color:var(--positive)}
 .rpt-verdict.tone-wait{color:#475569}
-.rpt-head-sub{font-size:18px;font-weight:500;color:#334155}
+.rpt-self-counts{column-gap:6px}
+.rpt-self-counts>span{white-space:nowrap}
+.rpt-count-optimize{color:#8a6100}
+.rpt-count-confirm{color:#687582}
+.rpt-count-divider{margin-right:6px;color:#a5adb7}
 .rpt-reason{margin:0;font-size:15px;line-height:1.7;color:#334155}
 .rpt-facts{margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));border-top:2px solid var(--ink)}
 .rpt-facts>div{padding:14px 16px 14px 0;border-bottom:1px solid var(--line)}
@@ -2549,7 +2553,7 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .rpt-innov,.rpt-issues,.rpt-group{display:flex;flex-direction:column;gap:4px}
 .rpt-innov h3,.rpt-issues h3{margin:0;font-size:18px}
 .rpt-group h3{margin:6px 0 2px;display:flex;gap:10px;align-items:center;font-size:15px}
-.rpt-group h3>span:last-child{font-weight:500;color:var(--muted);font-size:14px}
+.rpt-group-hint{font-weight:500;color:var(--muted);font-size:14px}
 .rpt-item{display:grid;grid-template-columns:36px minmax(0,1fr);gap:4px 12px;padding:14px 0;border-bottom:1px solid var(--line)}
 .rpt-num{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:14px;color:var(--muted);padding-top:2px}
 .rpt-num-lg{font-size:20px;color:#1d4ed8}

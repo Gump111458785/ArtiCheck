@@ -377,7 +377,7 @@ export class OnlineWorkspace{
  reportItems(r,groups,nodes,{numbered=0}={}){
   const e=v=>this.esc(v),title=Object.fromEntries(nodes.map((n,i)=>[n.id,`${'①②③④⑤⑥⑦⑧⑨'[i]||i+1} ${n.title}`]));
   let n=numbered;
-  return groups.filter(([,,,items])=>items.length).map(([key,label,hint,items])=>`<section class="rpt-group" data-report-group="${key}"><h3><span class="rpt-chip ${{fix:'fail',weakens:'fail',optimize:'warn',gaps:'warn',confirm:'neutral'}[key]}">${label}</span><span>${hint} · ${items.length}</span></h3>
+  return groups.filter(([,,,items])=>items.length).map(([key,label,hint,items])=>`<section class="rpt-group" data-report-group="${key}"><h3><span class="rpt-chip ${{fix:'fail',weakens:'fail',optimize:'warn',gaps:'warn',confirm:'neutral'}[key]}">${label}</span>${hint?`<span class="rpt-group-hint">${hint} · ${items.length}</span>`:''}</h3>
    ${items.map(item=>{n++;const actions=!r.terminated_at&&item.dimension?(item.status==='needs_review'?`<button type="button" class="btn small" data-confirm-criterion="${e(item.dimension)}">标记为已确认</button>`:`<button type="button" class="btn small" data-supply-criterion="${e(item.dimension)}">补充材料</button>`):'';
     return `<article class="rpt-item"><span class="rpt-num">${String(n).padStart(2,'0')}</span><div class="rpt-item-body">
      <div class="rpt-item-head"><strong>${e(item.title)}</strong>${item.location?`<span class="rpt-loc">${e(item.location)}</span>`:''}${title[item.node]?`<button type="button" class="rpt-link" data-report-anchor="rpt-node-${e(item.node)}">流程 ${e(title[item.node])}</button>`:''}</div>
@@ -385,10 +385,14 @@ export class OnlineWorkspace{
  }
  selfResult(r,o,nodes){
   const e=v=>this.esc(v);
-  const groups=[['fix','修改建议','有直接证据的错误',o.groups.fix],['optimize','优化建议','结论可能成立，但不够扎实',o.groups.optimize],['confirm','待你确认','我们没看到，不算你的错',o.groups.confirm]];
+  const groups=[['fix','修改建议','',o.groups.fix],['optimize','优化建议','',o.groups.optimize],['confirm','待你确认','',o.groups.confirm]];
   return `<section class="rpt-result tone-${e(o.tone)}" aria-labelledby="rpt-result-title"><p class="rpt-kicker">审查结果</p>
    ${o.note?`<p class="rpt-flag" role="status">${e(o.note)}</p>`:''}
-   <h2 id="rpt-result-title" class="rpt-headline"><span class="rpt-head-main">${e(o.headline)}</span>${o.sub?`<span class="rpt-head-sub">${e(o.sub)}</span>`:''}</h2>
+   <h2 id="rpt-result-title" class="rpt-headline rpt-self-counts">
+    <span class="rpt-count-fix">需要修改 ${o.groups.fix.length} 处</span>
+    <span><span class="rpt-count-divider" aria-hidden="true">｜</span><span class="rpt-count-optimize">可优化 ${o.groups.optimize.length} 处</span></span>
+    <span><span class="rpt-count-divider" aria-hidden="true">｜</span><span class="rpt-count-confirm">待你确认 ${o.groups.confirm.length} 项</span></span>
+   </h2>
    ${o.code&&o.run?`<p class="rpt-reason">代码${e(o.run.label)}${o.run.total?`（${o.run.done}/${o.run.total} 个阶段）`:''}${o.run.reason?' · '+e(o.run.reason):''}</p>`:''}
    ${this.reportItems(r,groups,nodes)||'<p class="rpt-empty">核验范围内没有需要修改或确认的内容。</p>'}</section>`;
  }

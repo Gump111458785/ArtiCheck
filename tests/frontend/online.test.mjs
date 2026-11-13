@@ -146,7 +146,8 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  const idxContrib=finalHtml.indexOf('提出残差学习框架解决深层网络退化问题');
  assert.ok(idxProject>=0 && idxProject<idxPaper && idxPaper<idxResult && idxResult<idxFlow && idxFlow<idxContrib);
  assert.match(finalHtml,/审查自己/);
- assert.match(finalHtml,/核验范围内未发现需要修改的问题/);
+ assert.match(finalHtml,/需要修改 0 处[\s\S]*｜<\/span><span class="rpt-count-optimize">可优化 0 处[\s\S]*｜<\/span><span class="rpt-count-confirm">待你确认 \d+ 项/);
+ assert.doesNotMatch(finalHtml,/有直接证据的错误|结论可能成立，但不够扎实|我们没看到，不算你的错/);
  assert.match(finalHtml,/论文审阅/);
  assert.match(finalHtml,/相关工作对比/);
  assert.match(finalHtml,/代码审阅 · 执行计划 · 环境与运行 · 指标比对<\/span><span class="rpt-chip neutral">不适用/);
