@@ -4,17 +4,23 @@ import {encoded,sessionCapability} from './online-core.mjs';
 const NODE_TYPES={Paper:['论文','#2258b4'],Contribution:['主贡献','#7754ba'],Detail:['细分贡献','#157b78']};
 const MIN_NODE_GAP=68;
 const PDF_CHUNK_BYTES=2_000_000;
+const SEARCH_FIELDS=[
+ ['paper_id','论文名称','输入论文名称'],
+ ['year','年份','输入年份'],
+ ['direction','研究方向','输入研究方向'],
+ ['venue','期刊 / 会议','输入期刊或会议']
+];
 const titleKey=value=>String(value||'').normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' ');
 const RELATIONS={previous:'前序引用',next:'后续引用',similar:'相似研究'};
 
 const expansionPhases={downloading:'正在获取开放原文…',reading:'正在解析并核验原文…',searching:'正在检索公开文献…',extracting:'正在核验已有贡献的关联…'};
 
 export class KnowledgeGraphWorkspace{
- constructor(h){this.h=h;this.data=null;this.loading=false;this.error='';this.filters={year:'',direction:'',venue:''};this.generation=0;this.selected=null;this.inspectorTab='detail';this.expanded=new Set();this.pinned=new Set();this.zoom=1;this.pan={x:0,y:0};this.query='';this.focusMode=false;this.mutating=false;this.searching=false;this.expansionPaper=null;this.notice='';this.enableKg=true;this.focusProject=null;this.drag=null;this.layoutQueue=Promise.resolve();this.initialPositions=new WeakMap();}
+ constructor(h){this.h=h;this.data=null;this.loading=false;this.error='';this.filters={paper_id:'',year:'',direction:'',venue:''};this.generation=0;this.selected=null;this.inspectorTab='detail';this.expanded=new Set();this.pinned=new Set();this.zoom=1;this.pan={x:0,y:0};this.focusMode=false;this.mutating=false;this.searching=false;this.expansionPaper=null;this.notice='';this.enableKg=true;this.focusProject=null;this.drag=null;this.layoutQueue=Promise.resolve();this.initialPositions=new WeakMap();}
  esc(v){return this.h.esc(v??'');}
  headers(json){let s='';try{s=sessionCapability();}catch{}return {'X-ArtiCheck-Client':'review-api',...(s?{'X-ArtiCheck-Session':s}:{}),...(json?{'Content-Type':'application/json'}:{})};}
  async api(path,payload){const res=await fetch('/v1/kg'+path,{method:payload===undefined?'GET':'POST',headers:this.headers(payload!==undefined),body:payload===undefined?undefined:JSON.stringify(payload),keepalive:path==='/layout',credentials:'same-origin',signal:AbortSignal.timeout(path==='/layout'||path.endsWith('/progress')?8000:110000)});let v;try{v=await res.json();}catch{throw Error('知识图谱服务暂未返回有效响应。');}if(!res.ok)throw Error(v?.error?.message||'知识图谱请求失败。');return v;}
- clear(){this.generation++;this.data=null;this.selected=null;this.linkSource=null;this.linkDraft=null;this.operationFeedback=null;this.graphOperation=null;this.contextNode=null;this.mutating=false;this.searching=false;this.expansionPaper=null;this.notice='';this.loading=false;this.error='';this.attachedPDF=null;this.expanded.clear();this.pinned.clear();this.query='';this.focusMode=false;this.inspectorTab='detail';this.zoom=1;this.pan={x:0,y:0};this.filters={year:'',direction:'',venue:''};}
+ clear(){this.generation++;this.data=null;this.selected=null;this.linkSource=null;this.linkDraft=null;this.operationFeedback=null;this.graphOperation=null;this.contextNode=null;this.mutating=false;this.searching=false;this.expansionPaper=null;this.notice='';this.loading=false;this.error='';this.attachedPDF=null;this.expanded.clear();this.pinned.clear();this.focusMode=false;this.inspectorTab='detail';this.zoom=1;this.pan={x:0,y:0};this.filters={paper_id:'',year:'',direction:'',venue:''};}
  async open(projectId){
   await this.layoutQueue;
   this.clear();
@@ -36,56 +42,91 @@ export class KnowledgeGraphWorkspace{
   finally{if(version===this.generation){this.loading=false;this.h.render();}}
   if(payload&&version===this.generation&&this.selected)await this.expandImported(this.selected);
  }
- matchingPapers(){
-  return (this.data?.timeline||[]).filter(p=>Object.entries(this.filters).every(([key,value])=>!value||value===(String(p[key]||'unknown'))));
+ matchingPapers(except=''){
+  return (this.data?.timeline||[]).filter(paper=>!paper.hidden&&Object.entries(this.filters)
+   .every(([key,value])=>key==='paper_id'||key===except||!value||value===String(paper[key]||'unknown')));
  }
  filterControls(){
-  const e=v=>this.esc(v),papers=this.data?.timeline||[];
-  const year=`<label class="kg-filter"><span>年份</span><input type="text" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" data-kg-filter="year" value="${e(this.filters.year)}" placeholder="YYYY"></label>`;
-  return year+[['direction','研究方向'],['venue','期刊 / 会议']].map(([key,label])=>{
-   const values=[...new Set(papers.map(p=>(String(p[key]||'unknown'))))].sort((a,b)=>a.localeCompare(b,'zh'));
-   return `<label class="kg-filter"><span>${label}</span><select data-kg-filter="${key}"><option value="">全部</option>${values.map(v=>`<option value="${e(v)}" ${this.filters[key]===v?'selected':''}>${v==='unknown'?'未知':e(v)}</option>`).join('')}</select></label>`;
+  const e=v=>this.esc(v);
+  return SEARCH_FIELDS.map(([key,label,placeholder])=>{
+   const value=this.filters[key];
+   const current=key==='paper_id'?(this.data?.timeline||[]).find(p=>p.paper_id===value)?.title:value;
+   return `<div class="kg-filter"><label for="kg-filter-${key}">${label}</label><input id="kg-filter-${key}" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="kg-options-${key}" autocomplete="off" data-kg-combo="${key}" value="${e(current==='unknown'?'未知':current)}" placeholder="${placeholder}"><div class="kg-option-menu" hidden><div id="kg-options-${key}" role="listbox" aria-label="${label}"></div><p class="kg-option-empty" role="status" hidden>没有匹配项</p></div></div>`;
   }).join('');
  }
  node(id){return this.data?.nodes?.find(n=>n.id===id);}
- searchMatches(){
-  const query=titleKey(this.query);
-  if(!query)return [];
-  return this.matchingPapers().filter(paper=>!paper.hidden&&titleKey(paper.title).includes(query))
-   .map(paper=>this.node(paper.paper_id)).filter(Boolean);
- }
- searchStatus(matches){
-  if(!titleKey(this.query))return '';
-  return matches.length?`找到 ${matches.length} 篇`:'未找到匹配的论文';
- }
- locateSearch(){
-  const matches=this.searchMatches();
-  const paper=matches.find(node=>titleKey(node.full_title||node.label)===titleKey(this.query))||matches[0];
-  if(paper){
-   this.selected=paper.id;
-   this.focusMode=true;
-   this.inspectorTab='detail';
-   this.contextNode=null;
-   this.pan={x:520-paper.x*this.zoom,y:340-paper.y*this.zoom};
-  }else if(titleKey(this.query)){
-   this.selected=null;
-   this.focusMode=false;
+ updateOptions(input){
+  const key=input.dataset.kgCombo, q=titleKey(input.value);
+  const menu=input.nextElementSibling, list=menu.firstElementChild;
+  const choices=new Map();
+  for(const paper of this.matchingPapers(key)){
+   const value=String(paper[key]||'unknown');
+   choices.set(value,key==='paper_id'?paper.title:value==='unknown'?'未知':value);
   }
-  return matches;
+  const options=[...choices].filter(([,label])=>titleKey(label).includes(q))
+   .sort((a,b)=>key==='year'?b[1].localeCompare(a[1]):a[1].localeCompare(b[1],'zh'));
+  if(!q||this.filters[key])options.unshift(['','全部']);
+  list.innerHTML=options.map(([value,label],index)=>`<div id="${list.id}-${index}" role="option" aria-selected="false" data-kg-option="${this.esc(value)}">${this.esc(label)}</div>`).join('');
+  menu.lastElementChild.hidden=options.length>0;
+  menu.hidden=false;
+  input.setAttribute('aria-expanded','true');
+  input.removeAttribute('aria-activedescendant');
  }
- search(input){
-  this.query=input.value;
-  this.expansionPaper=null;
-  this.locateSearch();
-  const {selectionStart,selectionEnd}=input;
-  this.h.render();
-  const current=document.querySelector('[data-kg-search]');
-  current?.focus({preventScroll:true});
-  if(selectionStart!=null)current?.setSelectionRange(selectionStart,selectionEnd);
+ closeOptions(input){
+  input.nextElementSibling.hidden=true;
+  input.setAttribute('aria-expanded','false');
+  input.removeAttribute('aria-activedescendant');
+  input.value=input.defaultValue;
+ }
+ applyFilter(input,value){
+  const key=input.dataset.kgCombo;
+  this.filters[key]=value;
+  const node=this.node(this.filters.paper_id);
+  if(node&&this.matchingPapers().some(p=>p.paper_id===node.id)){
+   this.linkSource=null;
+   this.select(node.id,true);
+  }else{
+   this.filters.paper_id='';
+   if(!this.matchingPapers().some(p=>p.paper_id===this.paperId(this.selected))){
+    this.selected=null;
+    this.focusMode=false;
+   }
+   if(!value&&key==='paper_id')this.focusMode=false;
+   this.h.render();
+  }
+  const replacement=document.getElementById(input.id);
+  replacement?.focus({preventScroll:true});
+  if(replacement)this.closeOptions(replacement);
+ }
+ comboKey(event,input){
+  if(event.isComposing)return;
+  const menu=input.nextElementSibling;
+  if(event.key==='Escape'&&!menu.hidden){
+   event.preventDefault();
+   event.stopImmediatePropagation();
+   this.closeOptions(input);
+   return;
+  }
+  if(!['ArrowDown','ArrowUp','Enter'].includes(event.key))return;
+  if(menu.hidden)this.updateOptions(input);
+  const options=[...menu.querySelectorAll('[role="option"]')];
+  const index=options.findIndex(option=>option.id===input.getAttribute('aria-activedescendant'));
+  event.preventDefault();
+  if(!options.length)return;
+  if(event.key==='Enter'){
+   const match=options.find(option=>titleKey(option.textContent)===titleKey(input.value));
+   const choice=options[index]||(input.value.trim()?match||options.find(option=>option.dataset.kgOption):options[0]);
+   if(choice)this.applyFilter(input,choice.dataset.kgOption);
+   return;
+  }
+  const next=event.key==='ArrowDown'?Math.min(index+1,options.length-1):index<0?options.length-1:Math.max(0,index-1);
+  options.forEach((option,i)=>option.setAttribute('aria-selected',String(i===next)));
+  input.setAttribute('aria-activedescendant',options[next].id);
+  options[next].scrollIntoView({block:'nearest'});
  }
  visibleNodes(){
   const d=this.data;if(!d)return [];
-  const papers=new Set(this.matchingPapers().filter(p=>!p.hidden).map(p=>p.paper_id));
+  const papers=new Set(this.matchingPapers().map(p=>p.paper_id));
   return d.nodes.filter(n=>{
    if(!papers.has(n.node_type==='Paper'?n.id:n.paper_id))return false;
    if(n.layer===1)return true;
@@ -132,10 +173,10 @@ export class KnowledgeGraphWorkspace{
 
  render(){
   const e=v=>this.esc(v),d=this.data;
-  const toolbar=`<div class="kg-filters"><label class="kg-filter"><span>搜索</span><input type="search" aria-label="搜索论文名称" data-kg-search value="${e(this.query)}" placeholder="论文名称" aria-describedby="kg-search-status"><small id="kg-search-status" class="kg-search-status" role="status">${e(this.searchStatus(this.searchMatches()))}</small></label>${this.filterControls()}<form class="kg-import-paper" data-kg-import><input name="reference" maxlength="600" aria-label="标题、arXiv 或 DOI" placeholder="标题、arXiv 或 DOI" required><button class="btn small" type="submit" ${this.mutating?'disabled':''}>添加论文</button></form><label class="btn small kg-pdf-upload kg-import-file">插入论文<input type="file" aria-label="插入论文" accept="application/pdf,.pdf" data-kg-import-pdf ${this.mutating?'disabled':''}></label></div>`;
+  const toolbar=`<div class="kg-filters">${this.filterControls()}<form class="kg-import-paper" data-kg-import><input name="reference" maxlength="600" aria-label="标题、arXiv 或 DOI" placeholder="标题、arXiv 或 DOI" required><button class="btn small" type="submit" ${this.mutating?'disabled':''}>添加论文</button></form><label class="btn small kg-pdf-upload kg-import-file">插入论文<input type="file" aria-label="插入论文" accept="application/pdf,.pdf" data-kg-import-pdf ${this.mutating?'disabled':''}></label></div>`;
   if(this.loading&&!d)return `<section class="kg-workspace">${toolbar}<div class="kg-loading" role="status">正在读取知识图谱…</div></section>`;
   if(!d)return `<section class="kg-workspace">${toolbar}<div class="kg-empty">${this.error?`<p role="alert">${e(this.error)}</p>`:''}${this.operationStatus()}<button class="btn primary" data-kg-action="load">加载我的图谱</button></div></section>`;
-  const count=this.matchingPapers().filter(p=>!p.hidden).length;
+  const count=this.matchingPapers().length;
   const expansion=this.expansionPaper&&this.node(this.expansionPaper);
   return `<section class="kg-workspace">${toolbar}<div class="kg-stats"><span><strong>${count}</strong> / ${d.stats?.paper_count||0} 篇论文</span>${this.focusMode?'<button class="btn text small" data-kg-action="exit-focus">退出聚焦模式</button>':''}</div>${expansion?this.literatureForm(expansion):''}<div class="kg-main">${count?this.canvasView():`<div class="kg-empty kg-empty-canvas">${this.operationStatus()}没有匹配的论文。可以调整筛选，或从论文报告打开一篇论文。</div>`}<aside class="kg-inspector">${this.inspector()}</aside></div></section>`;
  }
@@ -278,12 +319,9 @@ export class KnowledgeGraphWorkspace{
    if(right===selectedPaper)related.add(left);
   }
   const inFocus=id=>!this.focusMode||related.has(this.paperId(id));
-  const q=titleKey(this.query);
-  const hit=n=>!q||n.node_type==='Paper'&&titleKey(n.full_title||n.label).includes(q);
   const labels=new Map(),occupied=[];
   const priority=n=>n.id===this.selected?0:n.node_type==='Paper'?1:inFocus(n.id)?2:3;
   for(const n of [...visible].sort((a,b)=>priority(a)-priority(b))){
-   if(n.id!==this.selected&&!hit(n))continue;
    const label=Array.from(n.label||'').slice(0,32).join(''),w=Math.min(225,Math.max(30,Array.from(label).reduce((sum,char)=>sum+(char.codePointAt(0)>255?14:8),12)));
    const box={x:n.x-w/2,y:n.y+13,w,h:16};
    if(n.id!==this.selected&&occupied.some(b=>box.x<b.x+b.w&&box.x+box.w>b.x&&box.y<b.y+b.h&&box.y+box.h>b.y))continue;
@@ -297,7 +335,7 @@ export class KnowledgeGraphWorkspace{
    return `<g class="kg-edge ${similar?'similar':candidate?'candidate':''} ${active?'active':!inFocus(edge.source)||!inFocus(edge.target)?'dim':''}"><line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/><title>${e(edge.description||edge.label)}</title>${(active||similar&&similarityCount<=3)?`<text x="${(a.x+b.x)/2}" y="${(a.y+b.y)/2-5}" class="kg-edge-label">${e(edge.label)}</text>`:''}</g>`;
   }).join('')}${nodes.map(n=>{
    const r=n.node_type==='Paper'?11:n.node_type==='Contribution'?7:5,selected=n.id===this.selected;
-   return `<g class="kg-node ${n.node_type==='Paper'?(n.read?'read':'unread'):''} ${selected?'selected':!hit(n)||!inFocus(n.id)?'dim':''}" data-kg-node="${e(n.id)}" transform="translate(${n.x} ${n.y})" tabindex="0" role="button" aria-pressed="${selected}" aria-label="${e(n.full_title||n.label)}">${selected?`<circle class="kg-node-halo" r="${r+4}"/>`:''}<circle class="kg-node-mark" r="${r}" fill="${n.node_type==='Paper'&&!n.read?'#b36b19':NODE_TYPES[n.node_type][1]}"/>${labels.has(n.id)?`<text y="25" text-anchor="middle">${e(labels.get(n.id))}</text>`:''}<title>${e(n.full_title||n.label)}</title></g>`;
+   return `<g class="kg-node ${n.node_type==='Paper'?(n.read?'read':'unread'):''} ${selected?'selected':!inFocus(n.id)?'dim':''}" data-kg-node="${e(n.id)}" transform="translate(${n.x} ${n.y})" tabindex="0" role="button" aria-pressed="${selected}" aria-label="${e(n.full_title||n.label)}">${selected?`<circle class="kg-node-halo" r="${r+4}"/>`:''}<circle class="kg-node-mark" r="${r}" fill="${n.node_type==='Paper'&&!n.read?'#b36b19':NODE_TYPES[n.node_type][1]}"/>${labels.has(n.id)?`<text y="25" text-anchor="middle">${e(labels.get(n.id))}</text>`:''}<title>${e(n.full_title||n.label)}</title></g>`;
   }).join('')}</g></svg>${this.canvasControls()}<div class="kg-legend"><span><i style="background:#2258b4"></i>已读论文</span><span><i style="background:#b36b19"></i>未读论文</span>${Object.values(NODE_TYPES).slice(1).map(([name,color])=>`<span><i style="background:${color}"></i>${name}</span>`).join('')}</div></div>`;
  }
  paperManagement(paper){
@@ -422,9 +460,9 @@ export class KnowledgeGraphWorkspace{
  focusImported(id){
   const paper=this.node(id);
   if(!paper)return;
-  const visible=this.matchingPapers().some(row=>row.paper_id===id&&!row.hidden);
-  if(!visible)this.filters={year:'',direction:'',venue:''};
-  this.query='';
+  this.filters.paper_id='';
+  const visible=this.matchingPapers().some(row=>row.paper_id===id);
+  if(!visible)this.filters={paper_id:'',year:'',direction:'',venue:''};
   this.linkSource=null;
   this.select(id,true);
  }
@@ -760,10 +798,20 @@ export class KnowledgeGraphWorkspace{
    if(t.dataset.kgExpand)return this.toggleExpand(t.dataset.kgExpand);
    if(t.dataset.kgAction)return this.action(t.dataset.kgAction);
   },true);
-  document.addEventListener('input',ev=>{
-   if(ev.target.matches?.('[data-kg-search]')&&!ev.isComposing)this.search(ev.target);
+  const combo='[data-kg-combo]';
+  document.addEventListener('focusin',ev=>{if(ev.target.matches?.(combo))this.updateOptions(ev.target);});
+  document.addEventListener('focusout',ev=>{if(ev.target.matches?.(combo))this.closeOptions(ev.target);});
+  document.addEventListener('input',ev=>{if(ev.target.matches?.(combo)&&!ev.isComposing)this.updateOptions(ev.target);});
+  document.addEventListener('compositionend',ev=>{if(ev.target.matches?.(combo))this.updateOptions(ev.target);});
+  document.addEventListener('keydown',ev=>{if(ev.target.matches?.(combo))this.comboKey(ev,ev.target);},true);
+  document.addEventListener('pointerdown',ev=>{
+   if(ev.target.closest('[data-kg-option]'))ev.preventDefault();
   });
-  document.addEventListener('compositionend',ev=>{if(ev.target.matches?.('[data-kg-search]'))this.search(ev.target);});
+  document.addEventListener('click',ev=>{
+   const option=ev.target.closest('[data-kg-option]');
+   if(option)this.applyFilter(option.closest('.kg-filter').querySelector(combo),option.dataset.kgOption);
+   else if(ev.target.matches?.(combo)&&ev.target.nextElementSibling.hidden)this.updateOptions(ev.target);
+  });
   document.addEventListener('change',ev=>{
    if(ev.target.matches?.('[data-kg-manage]')){
     const action=ev.target.value;
@@ -771,17 +819,6 @@ export class KnowledgeGraphWorkspace{
     if(action&&(action!=='remove'||confirm('从个人图谱移除此公开文献？')))this.changeLiterature('/literature/paper',{paper_id:ev.target.dataset.kgManage,action});
     return;
    }
-   const key=ev.target.dataset?.kgFilter;
-   if(!Object.hasOwn(this.filters,key))return;
-   const value=ev.target.value.trim();
-   if(key==='year'&&value&&!/^[0-9]{4}$/.test(value)){
-    ev.target.reportValidity();
-    return;
-   }
-   this.filters[key]=value;
-   if(!this.visibleNodes().some(node=>node.id===this.selected)){this.selected=null;this.focusMode=false;}
-   if(this.query)this.locateSearch();
-   this.h.render();
   });
  }
 }
