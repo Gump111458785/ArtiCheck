@@ -1,11 +1,13 @@
 """Read bounded, public citation neighborhoods from OpenAlex."""
 from concurrent.futures import ThreadPoolExecutor
-from threading import BoundedSemaphore
+import difflib
+from html.parser import HTMLParser
 import json
 from pathlib import Path
-import tempfile
-import time
 import re
+import tempfile
+from threading import BoundedSemaphore
+import time
 import xml.etree.ElementTree as ET
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, unquote, urlencode, urlsplit
@@ -38,6 +40,22 @@ def work_id(value):
 
 def normalize_title(title):
     return ''.join(char for char in title.casefold() if char.isalnum())
+
+
+def same_arxiv_paper(paper, edition):
+    title = normalize_title(paper.get('title') or '')
+    edition_title = normalize_title(edition.get('title') or '')
+    doi = (paper.get('doi') or '').lower().removeprefix('https://doi.org/')
+    edition_doi = (edition.get('doi') or '').lower().removeprefix('https://doi.org/')
+    if doi and doi == edition_doi:
+        return True
+    authors = {normalize_title(name) for name in paper.get('author_names', []) if name}
+    other = {normalize_title(name) for name in edition.get('author_names', []) if name}
+    if title and title == edition_title:
+        return not authors or not other or bool(authors & other)
+    return (len(title) >= 25 and len(edition_title) >= 25 and bool(authors & other)
+            and len(authors & other) >= min(2, len(authors), len(other))
+            and difflib.SequenceMatcher(None, title, edition_title, autojunk=False).ratio() >= .92)
 
 
 def author_ids(work):
@@ -78,16 +96,20 @@ def work_metadata(work):
         pdf, landing = location.get('pdf_url'), location.get('landing_page_url')
         if allowed_pdf(pdf):
             urls.append(pdf)
-        if isinstance(landing, str) and re.fullmatch(r'https://arxiv\.org/abs/(?:[a-z-]+/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?', landing):
-            urls.append(landing.replace('/abs/', '/pdf/', 1))
+        if isinstance(landing, str) and landing.startswith(
+                ('https://arxiv.org/abs/', 'https://export.arxiv.org/abs/')):
+            kind, arxiv_id = paper_reference(landing)
+            if kind == 'arxiv':
+                urls.append('https://arxiv.org/pdf/' + arxiv_id)
         if isinstance(landing, str) and landing.startswith('https://openreview.net/forum?'):
             candidate = landing.replace('/forum?', '/pdf?', 1)
             if allowed_pdf(candidate):
                 urls.append(candidate)
     doi = work.get('doi') or ''
-    preprint = re.fullmatch(r'https://doi\.org/10\.48550/arxiv\.(\d{4}\.\d{4,5})(?:v\d+)?', doi, re.I)
-    if preprint:
-        urls.append('https://arxiv.org/pdf/' + preprint[1])
+    if doi:
+        kind, arxiv_id = paper_reference(doi)
+        if kind == 'arxiv':
+            urls.append('https://arxiv.org/pdf/' + arxiv_id)
     return {'id': identifier, 'title': title[:350], 'year': year if type(year) is int else None,
             'venue': venue, 'direction': str(topic.get('display_name') or '')[:180],
             'source_url': url, 'fallback_url': fallback, 'doi': doi, 'author_names': [name for name in names if name], 'pdf_sources': list(dict.fromkeys(sorted(urls, key=lambda url: urlsplit(url).hostname not in {'arxiv.org', 'export.arxiv.org'})))[:6], 'authors': sorted(author_ids(work))[:30]}
@@ -271,6 +293,56 @@ class OpenPDFSources:
         exact = [row for row in result.get('data', []) if normalize_title(row.get('title') or '')==normalize_title(title)]
         return exact[0] if len(exact)==1 else {}
 
+    def doi_metadata(self, doi, deadline):
+        data = self.json('https://api.crossref.org/works/'+quote(doi, safe='/'), deadline).get('message') or {}
+        if (data.get('DOI') or '').casefold() != doi.casefold():
+            return {}
+        titles = data.get('title') or []
+        return {'title': titles[0] if titles else '', 'doi': doi,
+                'author_names': [' '.join(filter(None, (row.get('given'), row.get('family'))))
+                                 for row in (data.get('author') or [])[:40]]}
+
+    def arxiv_record(self, identifier, deadline):
+        record = self.arxiv(identifier=identifier, deadline=deadline)
+        if record:
+            return record
+
+        class CitationMetadata(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.fields = {}
+
+            def handle_starttag(self, tag, attrs):
+                if tag == 'meta':
+                    attrs = dict(attrs)
+                    name, value = attrs.get('name', ''), attrs.get('content', '')
+                    if name and value:
+                        self.fields.setdefault(name, []).append(value)
+
+        parser = CitationMetadata()
+        parser.feed(self.get('https://arxiv.org/abs/'+identifier, deadline).decode('utf-8', 'replace'))
+        title = parser.fields.get('citation_title', [''])[0]
+        if not title:
+            return {}
+        return {'arxiv_id': identifier, 'title': title,
+                'author_names': parser.fields.get('citation_author', [])[:40],
+                'doi': parser.fields.get('citation_doi', [''])[0]}
+
+    def search_arxiv_catalog(self, paper, deadline):
+        title = paper.get('title') or ''
+        if not title:
+            return {}
+        query = urlencode({'query': title[:280], 'searchtype': 'title', 'size': 25})
+        html = self.get('https://arxiv.org/search/?'+query, deadline).decode('utf-8', 'replace')
+        identifiers = dict.fromkeys(re.findall(r'href=["\x27](?:https://arxiv\.org)?/abs/([^"\x27?#]+)', html))
+        for identifier in [value for value in identifiers if ARXIV_ID.fullmatch(value)][:3]:
+            if deadline-time.monotonic()<3:
+                break
+            edition = self.arxiv_record(identifier, deadline)
+            if same_arxiv_paper(paper, edition):
+                return edition
+        return {}
+
     def unpaywall(self, doi, deadline):
         if not self.email or not DOI.fullmatch(doi or ''):
             return []
@@ -281,7 +353,8 @@ class OpenPDFSources:
         return list(dict.fromkeys(row['url_for_pdf'] for row in locations if row and allowed_pdf(row.get('url_for_pdf'))))[:2]
 
 
-def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: None, sources=None, save_pdf=None):
+def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: None, sources=None, save_pdf=None,
+                           locate_arxiv=None):
     sources = sources or OpenPDFSources({})
     tried, status = set(), 'no_full_text'
     requested = paper.get('requested_arxiv_id', '')
@@ -289,7 +362,7 @@ def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: 
     def is_arxiv(url):
         return allowed_pdf(url) and urlsplit(url).hostname in {'arxiv.org', 'export.arxiv.org'}
 
-    def attempt(urls):
+    def attempt(urls, title=None):
         nonlocal status
         candidates = [url for url in dict.fromkeys(urls) if allowed_pdf(url) and url not in tried
                       and (not requested or not is_arxiv(url)
@@ -298,7 +371,7 @@ def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: 
             return []
         tried.update(candidates)
         progress('downloading')
-        chunks, candidate_status = fetch_method_chunks({**paper,'pdf_sources':candidates}, paper['title'], deadline,
+        chunks, candidate_status = fetch_method_chunks({**paper,'title':title or paper['title'],'pdf_sources':candidates}, paper['title'], deadline,
                                                         verify=True, progress=progress, save_pdf=save_pdf)
         if candidate_status == 'verified' or status in {'no_full_text','download_failed'}:
             status = candidate_status
@@ -311,8 +384,8 @@ def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: 
     chunks = attempt(arxiv)
     if status != 'verified' and not paper.get('arxiv_id'):
         edition = sources.arxiv(title=paper['title'], deadline=deadline)
-        if edition:
-            chunks = attempt(['https://arxiv.org/pdf/' + edition['arxiv_id']])
+        if edition and same_arxiv_paper(paper, edition):
+            chunks = attempt(['https://arxiv.org/pdf/' + edition['arxiv_id']], edition['title'])
     if status == 'verified':
         return chunks, status
     doi = (paper.get('doi') or '').removeprefix('https://doi.org/')
@@ -343,6 +416,19 @@ def verify_public_fulltext(paper, provider, deadline, *, progress=lambda phase: 
     chunks = attempt([url for url in alternates if is_arxiv(url)])
     if status == 'verified':
         return chunks, status
+    need_identifier = not requested and (not any(map(is_arxiv, tried)) or status == 'identity_mismatch')
+    if isinstance(sources, OpenPDFSources) and need_identifier:
+        edition = sources.search_arxiv_catalog(paper, min(deadline-8, time.monotonic()+6))
+        if edition:
+            chunks = attempt(['https://arxiv.org/pdf/'+edition['arxiv_id']], edition['title'])
+            if status == 'verified':
+                return chunks, status
+    if locate_arxiv and need_identifier:
+        edition = locate_arxiv(paper, deadline)
+        if edition:
+            chunks = attempt(['https://arxiv.org/pdf/'+edition['arxiv_id']], edition['title'])
+            if status == 'verified':
+                return chunks, status
     for urls in ([semantic_pdf], indexed, alternates):
         chunks = attempt(urls)
         if status == 'verified':
@@ -432,9 +518,8 @@ class OpenAlex:
         if len(exact) == 1:
             return exact[0]
         published = [row for row in exact if (work_metadata(row) or {}).get('venue')]
-        if len(published) == 1:
-            candidate = published[0]
-
+        if exact:
+            candidate = published[0] if len(published) == 1 else exact[0]
             if all(row is candidate or matching_edition(candidate, row) for row in exact):
                 locations = [location for row in exact if row is not candidate for location in row.get('locations', [])]
                 return {**candidate, 'locations': [*(candidate.get('locations') or []), *locations]}

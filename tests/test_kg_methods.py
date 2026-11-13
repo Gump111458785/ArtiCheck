@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from articheck.kg_literature import OpenAlex, allowed_pdf, paper_reference, pdf_text_status, retrieve_public_methods, verify_public_fulltext
+from articheck.kg_literature import OpenAlex, OpenPDFSources, allowed_pdf, paper_reference, pdf_text_status, retrieve_public_methods, verify_public_fulltext
 from articheck.kg_methods import grounded_contributions, method_key, retrieve_methods
 from articheck.kg_service import KnowledgeGraphService
 from articheck.review_api import ReviewError
@@ -155,7 +155,7 @@ class ContributionExtractionTests(unittest.TestCase):
         self.assertEqual(paper_reference('https://example.org/paper'), ('url','https://example.org/paper'))
         urls = ['https://arxiv.org/pdf/1706.03762','https://pdfs.semanticscholar.org/sample.pdf',
                 'https://openaccess.thecvf.com/routing.pdf','https://aclanthology.org/routing.pdf']
-        sources = SimpleNamespace(arxiv=lambda **kw:{'arxiv_id':'1706.03762'},
+        sources = SimpleNamespace(arxiv=lambda **kw:{'arxiv_id':'1706.03762','title':'Routing'},
             semantic=lambda **kw:{'title':'Routing','openAccessPdf':{'url':urls[1]}},
             unpaywall=lambda doi, deadline:[urls[3]])
         paper = {'title':'Routing','doi':'10.1000/example','pdf_sources':[urls[2]]}
@@ -265,6 +265,52 @@ class ContributionExtractionTests(unittest.TestCase):
                 self.assertEqual(attempts, ['https://arxiv.org/pdf/' + suffix,
                                             'https://pdfs.semanticscholar.org/routing.pdf'])
                 self.assertTrue(result['papers'][0]['pdf_available'])
+
+    def test_doi_can_resolve_to_arxiv_with_unavailable_bibliographic_indexes(self):
+        graph = KnowledgeGraphService({}, SimpleNamespace(namespace='arxiv-doi-test'))
+        title = 'A Routing Study'
+        graph.literature = SimpleNamespace(identify=lambda **kwargs: {})
+        sources = graph.open_pdf_sources
+        with patch.object(sources, 'semantic', return_value={}), patch.object(
+                sources, 'doi_metadata', return_value={'title': title, 'author_names': ['Alice Example']}):
+            record = graph.paper_record('doi', '10.1000/routing', time.monotonic()+20)
+        self.assertEqual(record['title'], title)
+        self.assertEqual(record['doi'], '10.1000/routing')
+
+    def test_title_falls_back_to_arxiv_catalog_when_atom_and_indexes_are_unavailable(self):
+        graph = KnowledgeGraphService({}, SimpleNamespace(namespace='arxiv-catalog-test'))
+        graph.literature = SimpleNamespace(identify=lambda **kwargs: {})
+        title = 'A Routing Study'
+        pages = {
+            'https://arxiv.org/search/': '<a href="https://arxiv.org/abs/1706.03762">paper</a>',
+            'https://arxiv.org/abs/1706.03762': '<meta name="citation_title" content="A Routing Study">',
+        }
+        def get(url, *args):
+            return next((body.encode() for prefix, body in pages.items() if url.startswith(prefix)), b'')
+        with patch.object(graph.open_pdf_sources, 'get', side_effect=get):
+            record = graph.paper_record('title', title, time.monotonic()+20)
+        self.assertEqual(record['arxiv_id'], '1706.03762')
+
+    def test_agent_checks_arxiv_identity_before_other_pdf_sources(self):
+        title = 'A Routing Study'
+        graph = KnowledgeGraphService({}, SimpleNamespace(namespace='arxiv-agent-test'))
+        graph.budget = SimpleNamespace(reserve=lambda: None)
+        graph.reviewer = SimpleNamespace(configured=True, model='fixture', post=lambda _: {
+            'choices': [{'message': {'content': '{"arxiv_id":"1706.03762"}'}}]})
+        sources = OpenPDFSources({})
+        graph.open_pdf_sources = sources
+        other_pdf = 'https://openreview.net/pdf?id=Paper_1'
+        paper = {'title': title, 'pdf_sources': [other_pdf], 'author_names': ['Alice Example']}
+        for author, expected in [('Alice Example', 'https://arxiv.org/pdf/1706.03762'),
+                                 ('Unrelated Author', other_pdf)]:
+            with self.subTest(author=author), patch.object(sources, 'arxiv', return_value={}), patch.object(
+                    sources, 'semantic', return_value={}), patch.object(sources, 'search_arxiv_catalog', return_value={}), patch.object(
+                    sources, 'arxiv_record', return_value={'arxiv_id':'1706.03762', 'title':title, 'author_names':[author]}), patch(
+                    'articheck.kg_literature.fetch_method_chunks', return_value=([], 'verified')) as fetch:
+                _, status = verify_public_fulltext(paper, None, time.monotonic()+25, sources=sources,
+                                                     locate_arxiv=graph.locate_arxiv_with_agent)
+            self.assertEqual(status, 'verified')
+            self.assertEqual(fetch.call_args.args[0]['pdf_sources'], [expected])
 
     def test_auto_expansion_reuses_existing_nodes_and_caps_new_papers_across_two_hops(self):
         graph = KnowledgeGraphService({}, SimpleNamespace(namespace='expansion-test'))
