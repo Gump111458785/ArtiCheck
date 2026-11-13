@@ -369,6 +369,7 @@ export class ExecutionCenter {
   button.disabled=true;
   button.textContent='正在发布…';
   error.hidden=true;
+  const dismiss=this.h.toast?.('正在发布分享…',{persistent:true,tone:'pending'});
   let transfer;
   try{
    const project=this.h.projects().find(p=>p.online_report?.id===job);
@@ -378,9 +379,11 @@ export class ExecutionCenter {
    await this.h.caseRequest('/cases',{assessment_id:job,title:data.get('title'),...transfer.payload});
    if(owner!==this.h.accountId())return;
    this.h.closeModal();
+   this.h.toast?.('分享已发布…',{tone:'success'});
    await this.loadPublicCases();
-  }catch(exc){error.textContent=exc.message;error.hidden=false;}
+  }catch(exc){error.textContent=exc.message;error.hidden=false;this.h.toast?.('发布分享失败…',{tone:'error'});}
   finally{
+   dismiss?.();
    if(transfer?.close)await transfer.close();
    button.disabled=false;
    button.textContent='发布案例';
@@ -391,9 +394,9 @@ export class ExecutionCenter {
   const {case:item,report}=await this.h.caseRequest('/cases/'+id);
   if(owner!==this.h.accountId())return;
   const html=document.createElement('template');
-  html.innerHTML=this.h.caseReport(report,{title:item.title,paper:{name:item.files?.paper},repository:{name:item.files?.code}});
+  html.innerHTML=this.h.caseReport(report,{title:item.title,paper:{name:item.files?.paper},repository:{name:item.files?.code},shared:{id,files:item.files}});
   for(const link of html.content.querySelectorAll('a[href]')){
-   if(!/^https?:\/\//i.test(link.getAttribute('href')))link.removeAttribute('href');
+   if(!link.matches('.shared-case-download')&&!/^https?:\/\//i.test(link.getAttribute('href')))link.removeAttribute('href');
   }
   for(const control of html.content.querySelectorAll('[data-online],[data-online-page],[data-online-tab],[data-confirm-criterion],[data-supply-criterion],[data-metric-audience],[data-metric-query]')){
    if(control.matches('[data-online-page]'))control.replaceWith(document.createTextNode(control.textContent));
@@ -425,13 +428,28 @@ export class ExecutionCenter {
   if(blob.size!==first.size||hash!==first.sha)throw Error('共享文件完整性校验失败。');
   this.h.download(name,blob,kind==='paper'?'application/pdf':'application/zip');
  }
+ sharedCaseRows(items){
+  const e=this.h.esc;
+  const cell=(name,placeholder='未提交')=>{
+   const text=name||placeholder;
+   const chars=Array.from(text);
+   return `<span class="shared-case-name" title="${e(text)}">${e(chars.length>48?chars.slice(0,47).join('')+'…':text)}</span>`;
+  };
+  return `<div class="shared-case-table-wrap"><table class="shared-case-table"><thead><tr><th scope="col">论文名称</th><th scope="col">代码名称</th><th scope="col">分享者</th><th scope="col">最终报告</th><th scope="col">操作</th></tr></thead><tbody>${items.map(item=>`<tr>
+   <td>${cell(item.paper_title||item.files?.paper,item.report_available?'未提交':'未记录')}${item.report_available?'':`<small class="shared-legacy-name">${cell(item.title,'旧版案例')}</small>`}</td>
+   <td>${cell(item.files?.code,item.report_available?'未提交':'未记录')}</td>
+   <td>${cell(item.publisher,'未记录')}</td>
+   <td>${item.report_available?`<button class="btn small primary" data-archive-action="case-report" data-case-id="${e(item.id)}">查看最终报告</button>`:'<span>旧版摘要</span>'}</td>
+   <td>${item.can_delete?`<button class="btn small danger" data-archive-action="case-retract" data-case-id="${e(item.id)}">撤回分享</button>`:'—'}</td>
+  </tr>`).join('')}</tbody></table></div>`;
+ }
  publicCaseView(){
   const e=this.h.esc, signedIn=Boolean(this.h.accountId?.());
   const cases=this.publicCaseOwner===this.h.accountId?.()?this.publicCases:null;
   const error=this.caseRequestOwner===this.h.accountId?.()?this.caseError:'';
   return `<section class="shared-cases"><div class="execution-list-head"><h2>公共复现案例与核查归档库</h2></div>
    ${signedIn?`<section class="shared-cases-community"><h3>平台用户分享</h3>${this.caseBusy?'<p role="status">正在加载案例…</p>':''}${error?`<p role="alert">${e(error)} <button type="button" class="btn small" data-archive-action="reload-cases">重试</button></p>`:''}
-   ${cases?.items.length?`<ul>${cases.items.map(item=>`<li class="shared-case-row"><div><strong>${e(item.title)}</strong><span>${e(item.publisher||'分享者未记录')}</span></div><div class="shared-case-actions">${item.report_available?`<button class="btn small primary" data-archive-action="case-report" data-case-id="${e(item.id)}">查看最终报告</button>`:'<span>旧版摘要</span>'}${[['paper','下载论文'],['code','下载代码']].map(([kind,label])=>item.files?.[kind]?`<button class="btn small" data-archive-action="case-download" data-case-id="${e(item.id)}" data-case-kind="${kind}">${label}</button>`:'').join('')}${item.can_delete?`<button class="btn small danger" data-archive-action="case-retract" data-case-id="${e(item.id)}">撤回分享</button>`:''}</div></li>`).join('')}</ul>`:cases&&!this.caseBusy?'<p>暂无用户分享的案例。</p>':''}
+   ${cases?.items.length?this.sharedCaseRows(cases.items):cases&&!this.caseBusy?'<p>暂无用户分享的案例。</p>':''}
    ${cases?.next?`<button type="button" class="btn small" data-archive-action="more-cases" ${this.caseBusy?'disabled':''}>查看更多案例</button>`:''}</section>`:''}
    ${this.recordList(this.rows().filter(row=>row.source!=='runtime'),'系统内置基线档案',true)}</section>`;
  }
@@ -505,16 +523,25 @@ export class ExecutionCenter {
     if(el.dataset.archiveAction==='share'){await this.openCaseShare();return;}
     if(el.dataset.archiveAction==='case-report'){await this.openSharedCase(el.dataset.caseId);return;}
     if(el.dataset.archiveAction==='case-download'){
-     el.disabled=true;
+     event.preventDefault();
+     if(el.getAttribute('aria-busy')==='true')return;
+     el.setAttribute('aria-busy','true');
      try{await this.downloadSharedCase(el.dataset.caseId,el.dataset.caseKind);}
-     finally{el.disabled=false;}
+     catch(error){this.h.toast?.(error.message,{tone:'error'});}
+     finally{el.removeAttribute('aria-busy');}
      return;
     }
     if(el.dataset.archiveAction==='case-retract'){
      if(confirm('撤回这条共享案例？其他用户将无法继续查看或下载。')){
       const item=this.publicCases?.items.find(row=>row.id===el.dataset.caseId);
-      await this.h.caseRequest('/cases/'+el.dataset.caseId+'/retract',{assessment_id:item?.source_job});
-      await this.loadPublicCases();
+      el.disabled=true;
+      const dismiss=this.h.toast?.('正在撤回分享…',{persistent:true,tone:'pending'});
+      try{
+       await this.h.caseRequest('/cases/'+el.dataset.caseId+'/retract',{assessment_id:item?.source_job});
+       this.h.toast?.('分享已撤回…',{tone:'success'});
+       await this.loadPublicCases();
+      }catch(error){this.h.toast?.('撤回分享失败…',{tone:'error'});}
+      finally{dismiss?.();el.disabled=false;}
      }
      return;
     }

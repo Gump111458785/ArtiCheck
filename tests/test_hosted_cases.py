@@ -166,6 +166,7 @@ class SharedCaseTests(unittest.TestCase):
         case_id = shared.json['id']
         path = '/cases/' + case_id
         self.assertEqual(shared.json['publisher'], 'publisher')
+        self.assertEqual(shared.json['paper_title'], 'private title')
         self.assertTrue(clients[0].get('/cases', headers=headers).json['items'][0]['can_delete'])
         self.assertFalse(clients[1].get('/cases', headers=headers).json['items'][0]['can_delete'])
         self.assertEqual(clients[0].post('/cases/eligible', headers=headers, json=select).json, {'assessments': []})

@@ -311,8 +311,7 @@ test('detail expansion works without expanding literature and shortens available
 
 test('verified relationships collapse to paper edges and expansion never searches public sources',async()=>{
  const {KnowledgeGraphWorkspace}=await import('../../web/dist/knowledge-graph.mjs');
- const messages=[];
- const graph=new KnowledgeGraphWorkspace({esc:String,render(){},toast:message=>messages.push(message)});
+ const graph=new KnowledgeGraphWorkspace({esc:String,render(){}});
  const nodes=[
   {id:'a',node_type:'Paper'}, {id:'b',node_type:'Paper'}, {id:'c',node_type:'Paper'},
   {id:'a1',paper_id:'a',parent_id:'a',node_type:'Contribution'},
@@ -327,7 +326,10 @@ test('verified relationships collapse to paper edges and expansion never searche
  graph.selected='c';
  graph.api=()=>assert.fail('expansion must not call any endpoint');
  await graph.togglePaperDetails();
- assert.deepEqual(messages,['这篇论文暂无可展示的子贡献。']);
+ assert.deepEqual([...graph.taskFeedback.values()],[{
+  text:'暂无可展开的子贡献',tone:'contribution',failed:true
+ }]);
+ assert.equal(graph.operationText('暂无可展开的子贡献。'),'暂无可展开的子贡献...');
  assert.deepEqual(graph.displayedEdges(new Set(['a','b','c'])),[{...edge,source:'a',target:'b'}]);
  assert.deepEqual(graph.displayedEdges(new Set(['a','b','a1','b1'])),[edge]);
  graph.filters.direction='Computer Vision';

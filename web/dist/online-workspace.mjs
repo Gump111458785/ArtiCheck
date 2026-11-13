@@ -351,8 +351,8 @@ export class OnlineWorkspace{
   const finished=Math.max(...times,typeof x?.finished_at==='number'?x.finished_at:0);
   const repo=p?.repository,repoName=repo?.repo_name||repo?.remote?.repository||repo?.name?.replace(/\.zip$/i,'')||'名称未记录',commit=repo?.commit||repo?.remote?.commit;
   const meta=[
-   ['论文',o.paper?`${paperMeta?.title||p?.paper?.name||'已提交'} · ${cov.total_paper_pages??p?.paper?.pages?.length??'—'} 页`:'未提交'],
-   ['代码',o.code?`${repoName}${commit?' @'+String(commit).slice(0,7):''} · ${cov.total_code_files??repo?.files?.length??'—'} 个文件`:'未提交'],
+   ['论文',o.paper?(paperMeta?.title||p?.paper?.name||'已提交'):'未提交','paper',o.paper?` · ${cov.total_paper_pages??p?.paper?.pages?.length??'—'} 页`:''],
+   ['代码',o.code?(p?.shared?repo?.name||repoName:repoName+(commit?' @'+String(commit).slice(0,7):'')):'未提交','code',o.code?` · ${cov.total_code_files??repo?.files?.length??'—'} 个文件`:''],
    ['完成时间',finished>0?new Date(finished*1000).toLocaleString('zh-CN',{hour12:false}):'未记录'],
    ['用时',[reviewSeconds!=null?'审阅 '+duration(reviewSeconds):'',x?.elapsed_seconds!=null?'执行 '+duration(x.elapsed_seconds):''].filter(Boolean).join(' · ')||'未记录']];
   const observed=(x?.metrics||[]).filter(m=>typeof m.observed==='number').length;
@@ -366,7 +366,11 @@ export class OnlineWorkspace{
   return `<header class="rpt-info">
    <div class="rpt-title-row"><h2 class="rpt-project">${e(p?.title||r.project_title||'未命名审查项目')}</h2><span class="rpt-chip ${self?'neutral':'info'}">${self?'审查自己':'审查别人'}</span>
     ${p?.shared?'':'<div class="rpt-actions"><button class="btn primary" data-online="export">'+(self?'导出修改清单':'导出报告')+'</button><button class="btn" data-online-tab="process">查看过程详情</button></div>'}</div>
-   <dl class="rpt-meta">${meta.map(([label,value])=>`<div><dt>${label}</dt><dd>${e(value)}</dd></div>`).join('')}</dl>
+   <dl class="rpt-meta">${meta.map(([label,value,kind,suffix=''])=>{
+    const file=p?.shared?.files?.[kind];
+    const name=file?`<a class="shared-case-download" href="#public-cases" data-archive-action="case-download" data-case-id="${e(p.shared.id)}" data-case-kind="${kind}" title="${e(file)}">${e(value)}</a>`:e(value);
+    return `<div><dt>${label}</dt><dd>${name}${e(suffix)}</dd></div>`;
+   }).join('')}</dl>
    <p class="rpt-scope"><strong>核验范围</strong>${e(scope.join(' · ')||'仅限提交的材料')}${(cov.gaps||[]).length?' · <button type="button" class="rpt-link" data-report-anchor="rpt-appendix-coverage">查看覆盖边界</button>':''}</p>
   </header>`;
  }

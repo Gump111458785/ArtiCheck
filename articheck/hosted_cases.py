@@ -71,6 +71,19 @@ class SharedCases:
         upper = f'({before}' if before else '+'
         rows = self.store.command('ZREVRANGEBYLEX', self.index, upper, '-', 'LIMIT', '0', '21')
         entries = [json.loads(row.split('|', 1)[1]) for row in rows[:20]]
+        missing_titles = [entry for entry in entries if 'paper_title' not in entry
+                          and entry.get('report_available') and (entry.get('files') or {}).get('paper')]
+        def restore_title(entry):
+            try:
+                detail = self.get_shared(entry['id'])
+            except ReviewError as error:
+                if error.code == 'case_not_found':
+                    return
+                raise
+            entry['paper_title'] = (detail['report'].get('review') or {}).get('paper_title', '')
+        if missing_titles:
+            with ThreadPoolExecutor(max_workers=5) as pool:
+                list(pool.map(restore_title, missing_titles))
         if owner is not None:
             identity = hashlib.sha256(owner.encode()).hexdigest()
             mine = set(self.store.command('SMEMBERS', self.index + ':owned:' + identity) or [])
@@ -173,7 +186,9 @@ class SharedCases:
             snapshot['execution']['stages'] = [
                 {key: stage[key] for key in allowed if key in stage} for stage in execution.get('stages', [])]
         case = {'id': case_id, 'title': title.strip(), 'publisher': publisher, 'published_at': now(),
-                'verdict': summary['verdict'], 'report_available': True, 'files': {}}
+                'verdict': summary['verdict'], 'report_available': True, 'files': {},
+                'paper_title': str((report.get('review') or {}).get('paper_title') or '')[:350]
+                if 'paper' in files else ''}
         published = False
         attempted = False
         try:
