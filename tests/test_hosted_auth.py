@@ -68,6 +68,19 @@ class HostedAccountsTests(unittest.TestCase):
         self.assertEqual(self.post('profile',{'name':'新名称'}).json['user']['name'],'新名称')
         self.post('logout');self.assertIsNone(self.client.get('/auth/me',headers=self.headers).json['user'])
         self.assertEqual(self.post('login',self.data).status_code,200)
+
+    def test_only_authenticated_admin_bypasses_model_quota(self):
+        @self.app.get('/test-model-budget')
+        def model_budget():
+            self.app.extensions['articheck_authorize']()
+            return jsonify(attempt=self.app.extensions['articheck_reserve_model']())
+
+        self.assertEqual(self.client.get('/test-model-budget', headers=self.headers).status_code, 401)
+        self.invite()
+        self.assertEqual(self.client.get('/test-model-budget', headers=self.headers).json['attempt'], 1)
+        admin = self.app.test_client()
+        self.invite({**self.data, 'username': 'operator'}, client=admin, role='admin')
+        self.assertIsNone(admin.get('/test-model-budget', headers=self.headers).json['attempt'])
     def test_avatar_accepts_presets_and_small_inline_images_only(self):
         self.invite()
         self.assertEqual(self.post('profile',{'name':'甲','avatar':'preset:atom'}).json['user']['avatar'],'preset:atom')

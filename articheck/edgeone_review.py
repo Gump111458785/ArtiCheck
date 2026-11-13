@@ -143,9 +143,9 @@ def create_app(env=None, *, reviewer=None, budget=None, prepare=None):
 
     @app.post('/reviews')
     def review():
-        if not configured():
-            raise ReviewError('provider_not_configured','模型与费用计数尚未配置。',503)
         app.extensions['articheck_authorize'](session=False)
+        if not app.extensions['articheck_model_configured']():
+            raise ReviewError('provider_not_configured','模型与费用计数尚未配置。',503)
         if not request.is_json:
             raise ReviewError('invalid_request', 'Expected application/json', 415)
         body = request.get_json(silent=True)
@@ -161,7 +161,7 @@ def create_app(env=None, *, reviewer=None, budget=None, prepare=None):
             raise
         except Exception as exc:
             raise ReviewError('invalid_material', 'PDF or ZIP could not be safely parsed', 422) from exc
-        attempt = budget.reserve()  # Must precede the sole supplier HTTP request.
+        attempt = app.extensions['articheck_reserve_model']()
         try:
             output = reviewer.review(context, scope)
         except ReviewError:
@@ -176,7 +176,7 @@ def create_app(env=None, *, reviewer=None, budget=None, prepare=None):
                   'source': 'model_api_static_review', 'execution_performed': False,
                   'scientific_validation': False,
                   'materials': {k: context[k] for k in ('paper', 'code', 'coverage')}, **output,
-                  'budget': {'reserved_attempts': attempt, 'max_attempts': getattr(budget,'max_attempts',MAX_ATTEMPTS),
+                  'budget': {'reserved_attempts': attempt, 'max_attempts': None if attempt is None else getattr(budget,'max_attempts',MAX_ATTEMPTS),
                              'reserved_cny_per_attempt': RESERVATION_CNY},
                   'notice': 'Static model suggestions; no artifact execution. Report is stored in this browser, not on the cloud function.'}
         return jsonify(job=job, report=report)

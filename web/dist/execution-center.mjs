@@ -98,6 +98,8 @@ export class ExecutionCenter {
     paperOnly,
     codeBound,
     reportId:r?.id,
+    shareable:r?.status==='completed'&&!terminated&&!isCancelling&&!reviewingNow&&!p.online_execution_pending&&!ex?.needs_user&&
+     !r.termination_requested&&!['queued','starting','running','cancelled'].includes(ex?.status),
     statusKey,
     retryCancel:Boolean(p.online_cancel_error),
     statusLabel,
@@ -300,10 +302,10 @@ export class ExecutionCenter {
   }
  }
  openCaseShare(){
-  const e=this.h.esc, eligible=this.onlineOrderItems().filter(item=>item.verdictKey==='passed'&&item.reportId);
+  const e=this.h.esc, eligible=this.onlineOrderItems().filter(item=>item.shareable&&item.reportId);
   this.h.modal('分享个人归档',eligible.length?
-   `<form id="share-archive-form" class="stack"><label>已通过的归档<select name="assessment_id" required><option value="">选择项目</option>${eligible.map(item=>`<option value="${e(item.reportId)}">${e(item.title)}</option>`).join('')}</select></label><label>公开案例名称<input name="title" maxlength="120" required></label><p>其他平台账户可查看案例名称、材料类型、运行阶段数、实测指标数，以及前 20 项指标的数值比对。</p><p data-share-error role="alert" hidden></p><button type="submit" class="btn primary">发布案例</button></form>`:
-   '<p>目前没有可分享的通过记录。请选择服务端已有通过结论的在线归档。</p>');
+   `<form id="share-archive-form" class="stack"><label>已完成的归档<select name="assessment_id" required><option value="">选择项目</option>${eligible.map(item=>`<option value="${e(item.reportId)}">${e(item.title)}</option>`).join('')}</select></label><label>公开案例名称<input name="title" maxlength="120" required></label><p>其他平台账户可查看案例名称、材料类型、运行阶段数、实测指标数，以及前 20 项指标的数值比对。</p><p data-share-error role="alert" hidden></p><button type="submit" class="btn primary">发布案例</button></form>`:
+   '<p>目前没有已完成的在线归档可供分享。</p>');
  }
  async publishCase(form){
   const data=new FormData(form);
@@ -327,7 +329,7 @@ export class ExecutionCenter {
   const error=this.caseRequestOwner===this.h.accountId?.()?this.caseError:'';
   return `<section class="shared-cases"><div class="execution-list-head"><h2>公共复现案例与核查归档库</h2></div>
    ${signedIn?`<section class="shared-cases-community"><h3>平台用户分享</h3>${this.caseBusy?'<p role="status">正在加载案例…</p>':''}${error?`<p role="alert">${e(error)} <button type="button" class="btn small" data-archive-action="reload-cases">重试</button></p>`:''}
-   ${cases?.items.length?`<ul>${cases.items.map(item=>`<li><strong>${e(item.title)}</strong><span>${e(archiveMaterials[item.materials])} · ${e(item.stages)} 个运行阶段 · ${e(item.metrics)} 项实测指标</span><span class="order-status-pill tone-green">通过</span>${item.checks?.length?`<details class="shared-case-evidence"><summary>查看数值比对（${item.checks.length} 项）</summary><table class="execution-table"><thead><tr><th>序号</th><th>论文值</th><th>实测值</th><th>容差</th></tr></thead><tbody>${item.checks.map((check,i)=>`<tr><td>${i+1}</td><td>${e(check.expected??'—')}</td><td>${e(check.observed??'—')}</td><td>${e(check.tolerance??'—')}</td></tr>`).join('')}</tbody></table></details>`:''}</li>`).join('')}</ul>`:cases&&!this.caseBusy?'<p>暂无用户分享的案例。</p>':''}
+   ${cases?.items.length?`<ul>${cases.items.map(item=>`<li><strong>${e(item.title)}</strong><span>${e(archiveMaterials[item.materials])} · ${e(item.stages)} 个运行阶段 · ${e(item.metrics)} 项实测指标</span><span class="order-status-pill ${item.verdict==='passed'?'tone-green':item.verdict==='failed'?'tone-red':'tone-amber'}">${({passed:'通过',failed:'未通过',issues:'发现问题',unassessed:'待核查'})[item.verdict]||'待核查'}</span>${item.checks?.length?`<details class="shared-case-evidence"><summary>查看数值比对（${item.checks.length} 项）</summary><table class="execution-table"><thead><tr><th>序号</th><th>论文值</th><th>实测值</th><th>容差</th></tr></thead><tbody>${item.checks.map((check,i)=>`<tr><td>${i+1}</td><td>${e(check.expected??'—')}</td><td>${e(check.observed??'—')}</td><td>${e(check.tolerance??'—')}</td></tr>`).join('')}</tbody></table></details>`:''}</li>`).join('')}</ul>`:cases&&!this.caseBusy?'<p>暂无用户分享的案例。</p>':''}
    ${cases?.next?`<button type="button" class="btn small" data-archive-action="more-cases" ${this.caseBusy?'disabled':''}>查看更多案例</button>`:''}</section>`:''}
    ${this.recordList(this.rows().filter(row=>row.source!=='runtime'),'系统内置基线档案',true)}</section>`;
  }

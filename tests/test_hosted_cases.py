@@ -78,21 +78,21 @@ class SharedCaseTests(unittest.TestCase):
         self.store.records.clear()
         self.assertEqual(self.client.get('/cases', headers=self.other).json['items'], [case])
 
-    def test_nonpassing_and_concurrent_changes_do_not_publish(self):
-        for overrides in (
-            {'execution': None},
-            {'terminated_at': 'now'},
-            {'execution': {**self.report['execution'], 'metrics': []}},
-            {'review': {**self.report['review'], 'criteria': []}},
-            {'review': {**self.report['review'], 'findings': [{'title': 'Issue'}]}},
-        ):
+    def test_finished_failures_publish_but_active_and_terminated_records_do_not(self):
+        for overrides in ({'status': 'reviewing'}, {'terminated_at': 'now'},
+                          {'execution': {'status': 'running'}}, {'execution': {'needs_user': True}}):
             with self.subTest(overrides=overrides):
                 self.store.save(OWNER, {**self.report, **overrides})
-                self.assertEqual(self.publish().json['error']['code'], 'case_not_passed')
+                self.assertEqual(self.publish().json['error']['code'], 'case_not_completed')
         self.store.save(OWNER, self.report)
         self.store.change_before_publish = True
         self.assertEqual(self.publish().json['error']['code'], 'case_report_changed')
         self.assertEqual(self.client.get('/cases', headers=self.other).json['items'], [])
+        self.store.change_before_publish = False
+        execution = {**self.report['execution'], 'metrics': [{
+            'id': 'M1', 'expected': 1, 'observed': 0.5, 'tolerance': 0.01, 'status': 'outside_tolerance'}]}
+        self.store.save(OWNER, {**self.report, 'execution': execution})
+        self.assertEqual(self.publish().json['verdict'], 'failed')
 
     def test_shared_cases_paginate_without_repeating_the_boundary(self):
         for number in range(24):

@@ -266,6 +266,32 @@ class ContributionExtractionTests(unittest.TestCase):
                                             'https://pdfs.semanticscholar.org/routing.pdf'])
                 self.assertTrue(result['papers'][0]['pdf_available'])
 
+    def test_existing_title_skips_external_lookup_and_returns_original_node(self):
+        graph = KnowledgeGraphService({}, SimpleNamespace(namespace='known-paper-test'))
+        owner = 'a' * 64
+        graph.update_literature(owner, lambda state: state['papers'].update(
+            {'W1': {'id': 'W1', 'title': 'A Routing Study'}}))
+        with patch.object(graph, 'paper_record', side_effect=AssertionError('unexpected external lookup')):
+            result = graph.import_public_paper(owner, 'A Routing Study')
+        self.assertTrue(result['already_exists'])
+        self.assertEqual(result['focus_paper_id'], 'W1')
+        self.assertEqual(result['stats']['paper_count'], 1)
+
+    def test_admin_can_import_above_graph_capacity(self):
+        owner = 'a' * 64
+        for admin in (False, True):
+            with self.subTest(admin=admin), patch('articheck.kg_service.MAX_GRAPH_PAPERS', 1):
+                graph = KnowledgeGraphService({}, SimpleNamespace(namespace='capacity-test'), is_admin=lambda: admin)
+                graph.update_literature(owner, lambda state: state['papers'].update(
+                    {'W1': {'id': 'W1', 'title': 'First paper'}}))
+                with patch.object(graph, 'paper_record', return_value={'id': 'W2', 'title': 'Second paper'}), patch.object(
+                        graph, 'acquire_paper_pdf', return_value=([], 'no_full_text', None)):
+                    if admin:
+                        self.assertEqual(graph.import_public_paper(owner, 'Second paper')['stats']['paper_count'], 2)
+                    else:
+                        with self.assertRaisesRegex(ReviewError, '已达上限'):
+                            graph.import_public_paper(owner, 'Second paper')
+
     def test_doi_can_resolve_to_arxiv_with_unavailable_bibliographic_indexes(self):
         graph = KnowledgeGraphService({}, SimpleNamespace(namespace='arxiv-doi-test'))
         title = 'A Routing Study'

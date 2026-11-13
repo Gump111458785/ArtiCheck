@@ -6,6 +6,7 @@ import re
 import time
 import uuid
 import copy
+from types import SimpleNamespace
 from urllib.error import HTTPError
 
 from .hosted_cases import SharedCases
@@ -22,11 +23,10 @@ from .review_api import ReviewError, now
 
 
 def register(app, env, reviewer, budget, *, store=None, executor=None):
-    from flask import Response, jsonify, request, send_file
+    from flask import Response, g, jsonify, request, send_file
     store = store or HostedStore(env)
     executor = executor or HybridExecutor(env,store)
     uploads = HostedUploads(env,store)
-    kg = KnowledgeGraphService(env, store, reviewer, budget)
     from .hosted_auth import Accounts
     accounts = Accounts(app,env,store)
 
@@ -39,9 +39,20 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             owner=request.headers.get('X-ArtiCheck-Session','')
             if session and not re.fullmatch(r'[a-f0-9]{64}',owner):raise ReviewError('invalid_session','会话无效。',401)
             return accounts.owner() or owner
-        accounts.require()
+        user = accounts.require()
+        g.articheck_admin = user.get('role') == 'admin'
         return accounts.owner()
 
+    def is_admin():
+        return getattr(g, 'articheck_admin', False)
+
+    def reserve_model():
+        return None if is_admin() else budget.reserve()
+
+    model_budget = SimpleNamespace(reserve=reserve_model) if budget else None
+    kg = KnowledgeGraphService(env, store, reviewer, model_budget, is_admin=is_admin)
+    app.extensions['articheck_reserve_model'] = reserve_model
+    app.extensions['articheck_model_configured'] = lambda: reviewer.configured and (is_admin() or budget.configured)
     app.extensions['articheck_accounts']=accounts
     app.extensions['articheck_authorize']=authorize
 
@@ -94,7 +105,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     def capabilities():
         if env.get('ARTICHECK_AUTH_MODE')!='legacy':authorize()
         return jsonify(version=2, service='articheck-online', model=reviewer.model,
-                       review_configured=reviewer.configured and budget.configured,
+                       review_configured=app.extensions['articheck_model_configured'](),
                        sandbox_configured=executor.configured, auth_required=True,
                        accounts={'registration':False,'invitation_only':True,'session_days':30,'method':'username_password'},
                        compute={'capacity':getattr(executor,'capacity',{'provider':'e2b','cpu_count':2,'memory_mb':512,'gpu':False}),
@@ -209,7 +220,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             if stopped():
                 return jsonify(store.get(owner, job))
             activity('核对公开来源',['literature_reader' if context.get('paper') else 'code_inspector'],'正在识别可核对的公开出处；无有效标识时仅核对导入材料。')
-            lookup(context,budget,store)
+            lookup(context,model_budget,store)
             if stopped():
                 return jsonify(store.get(owner, job))
             while len(json.dumps(text_materials(context),ensure_ascii=False).encode())>175_000 and context.get('web_sources'):
@@ -231,7 +242,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             if stopped():
                 return jsonify(store.get(owner, job))
             failure_title, failure_roles = '模型调用额度检查未完成', review_roles
-            attempt = budget.reserve()
+            attempt = reserve_model()
             if stopped():
                 return jsonify(store.get(owner, job))
             failure_title = '主审请求未完成'
@@ -272,7 +283,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                 try:
                     if not activity('交叉核查依据',['cross_auditor'],'独立复核建议与图表数字，撤回依据不足的条目。'):
                         return jsonify(store.get(owner, job))
-                    attempt=budget.reserve()
+                    attempt=reserve_model()
                     if stopped():
                         return jsonify(store.get(owner, job))
                     value=cross_audit(reviewer,context,value,request_timeout=min(25,remaining))
@@ -291,7 +302,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         value.update(id=job, status='completed', input_sha256=identity)
         if identifier := public_identifier(context):
             value['public_paper_identifier'] = identifier
-        value['budget'] = {'model_reserved_attempts': attempt, 'model_max_attempts': getattr(budget,'max_attempts',10)}
+        value['budget'] = {'model_reserved_attempts': attempt, 'model_max_attempts': None if is_admin() else getattr(budget,'max_attempts',10)}
         if not publish(value):
             return jsonify(store.get(owner, job))
         return jsonify(value)

@@ -1,4 +1,4 @@
-"""Publish a small, account-authorized snapshot of a passed review."""
+"""Publish a small, account-authorized snapshot of a completed review."""
 import hashlib
 import json
 import math
@@ -22,7 +22,16 @@ def shared_case_summary(report):
     finished = {row.get('id') for row in stages}
     if (
         report.get('status') != 'completed' or report.get('terminated_at') or report.get('termination_requested')
-        or not (materials.get('paper') or materials.get('code'))
+        or execution.get('status') in {'queued', 'starting', 'running', 'cancelling', 'cancelled'} or execution.get('needs_user')
+    ):
+        raise ReviewError('case_not_completed', '只能分享已经完成的归档。', 409)
+    failed = any(row.get('status') == 'outside_tolerance' for row in metrics) or any(
+        row.get('status') == 'failed' or row.get('exit_code') not in {0, None} for row in stages
+    ) or execution.get('status') in {'failed', 'expired'} or any(
+        row.get('confirmed_error') and (row.get('page') or row.get('file')) for row in review.get('findings', [])
+    ) or (report.get('availability') or {}).get('answer') == 'unavailable' or execution.get('user_answer') == 'unavailable'
+    has_gaps = (
+        not (materials.get('paper') or materials.get('code'))
         or review.get('paper_type') in {None, 'nonpaper', 'unknown'}
         or (report.get('availability') or {}).get('answer') == 'unavailable'
         or execution and (execution.get('status') != 'completed' or execution.get('needs_user'))
@@ -40,11 +49,11 @@ def shared_case_summary(report):
         or not required.issubset(observed)
         or any(row.get('status') != 'within_tolerance' or type(row.get('observed')) not in (int, float)
                or not math.isfinite(row['observed']) for row in metrics)
-    ):
-        raise ReviewError('case_not_passed', '只能分享服务端已判定通过的归档。', 409)
+    )
+    verdict = 'failed' if failed else 'unassessed' if has_gaps else 'passed'
     return {'materials': 'both' if materials.get('paper') and materials.get('code') else
             'paper_only' if materials.get('paper') else 'code_only',
-            'stages': len(stages), 'metrics': len(metrics), 'verdict': 'passed',
+            'stages': len(stages), 'metrics': len(metrics), 'verdict': verdict,
             'checks': [{key: row[key] for key in ('expected', 'observed', 'tolerance')
                         if type(row.get(key)) in (int, float) and math.isfinite(row[key])}
                        for row in metrics[:20]]}

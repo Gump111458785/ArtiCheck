@@ -147,13 +147,17 @@ class GraphTraversal(unittest.TestCase):
         self.assertEqual(self.graph.cancel_graph_operation('second', operation_id)['status'], 'completed')
 
     def test_graph_concurrency_caps_accounts_and_releases_lease(self):
-        with self.graph.public_work_slot('first'), self.graph.public_work_slot('second'):
+        from contextlib import ExitStack
+        with ExitStack() as slots:
+            for owner in ('first', 'second', 'third'):
+                for _ in range(3):
+                    slots.enter_context(self.graph.public_work_slot(owner))
+                if owner == 'first':
+                    with self.assertRaises(ReviewError):
+                        with self.graph.public_work_slot('first'):
+                            self.fail('per-account limit exceeded')
             with self.assertRaises(ReviewError):
-                with self.graph.public_work_slot('first'):
-                    self.fail('duplicate account operation')
-            with self.graph.public_work_slot('third'):
-                with self.assertRaises(ReviewError):
-                    with self.graph.public_work_slot('fourth'):
-                        self.fail('global limit exceeded')
+                with self.graph.public_work_slot('fourth'):
+                    self.fail('global limit exceeded')
         with self.graph.public_work_slot('fourth'):
             pass
