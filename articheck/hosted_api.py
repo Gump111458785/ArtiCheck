@@ -8,6 +8,7 @@ import uuid
 import copy
 from urllib.error import HTTPError
 
+from .hosted_cases import SharedCases
 from .hosted_github import import_repository, repository, resolve_repository
 from .hosted_uploads import HostedUploads
 from .hosted_review import assess, material_identity, prepare_assessment, digest
@@ -60,6 +61,25 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             elif kind=='code' and material.get('repository'):
                 payload[kind]=resolve_repository(material)
         return payload
+
+    @app.get('/cases')
+    def list_shared_cases():
+        authorize()
+        before = request.args.get('before')
+        if before and not re.fullmatch(r'[0-9]{20}-[a-f0-9]{32}', before):
+            raise ReviewError('invalid_case_cursor', '公开案例分页位置无效。')
+        response = jsonify(SharedCases(store).list(before))
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+
+    @app.post('/cases')
+    def publish_shared_case():
+        owner = authorize()
+        payload = body()
+        job = payload.get('assessment_id')
+        if not isinstance(job, str) or not re.fullmatch(r'[a-f0-9]{32}', job):
+            raise ReviewError('not_found', '未找到该审查记录。', 404)
+        return jsonify(SharedCases(store).publish(owner, job, payload.get('title')))
 
     @app.post('/uploads')
     def create_upload():

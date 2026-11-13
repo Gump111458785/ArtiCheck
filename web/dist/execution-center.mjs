@@ -1,12 +1,12 @@
 import {ROLES,kindLabels,sourceLabels,statusLabels,executionRecords,filterRecords,recordCounts,progressText,roleEvents,rolePayload,roleState,fullRoleRun} from './execution-core.mjs';
 import {validateReproductionReport} from './reproduction-core.mjs';
 import {reportVerdict} from './report-verdict.mjs';
-import {hasCode,taskNames} from './online-core.mjs';
+import {hasCode,criterionNames} from './online-core.mjs';
 
 const date=value=>value?value.slice(0,16).replace('T',' '):'未记录时间';
 const archiveStates={draft:'待启动',reviewing:'正在审阅',queued:'执行中',reproducing:'正在复现',cancelling:'正在中断',waiting:'等待资源',interrupted:'已中断',completed:'已完成',terminated:'已终止'};
 const archiveInProgress=new Set(['reviewing','queued','reproducing','cancelling']);
-const archiveExecutionFilters={in_progress:'审查中',...Object.fromEntries(Object.entries(archiveStates).filter(([key])=>key!=='terminated'&&!archiveInProgress.has(key)))};
+const archiveExecutionFilters={in_progress:'执行中',...Object.fromEntries(Object.entries(archiveStates).filter(([key])=>!archiveInProgress.has(key)))};
 const matchesStatus=(item,key)=>key==='in_progress'?archiveInProgress.has(item.statusKey):item.statusKey===key;
 const archiveVerdicts={unassessed:'待验收',passed:'通过',issues:'发现问题',failed:'未通过',inapplicable:'不适用'};
 const archiveMaterials={paper_only:'仅论文',code_only:'仅代码',both:'论文与代码',none:'待提交材料'};
@@ -17,6 +17,12 @@ export class ExecutionCenter {
   this.h=hooks;
   this.filters={query:'',kind:'all',source:'all',status:'all',project:'all'};
   this.orderFilter='all';
+  this.archiveView='personal';
+  this.publicCases=null;
+  this.publicCaseOwner=null;
+  this.caseRequestOwner=null;
+  this.caseBusy=false;
+  this.caseError='';
   this.archiveFilters={
    projectName:'',
    paperName:'',
@@ -24,7 +30,6 @@ export class ExecutionCenter {
    verdict:'all',
    execution:'all',
    material:'all',
-   taskType:'all',
    dateRange:'all'
   };
   this.selected=null;
@@ -62,19 +67,26 @@ export class ExecutionCenter {
     waiting?'waiting':interrupted?'interrupted':r?.review?'completed':'draft';
    const completedCount=execStages.filter(stage=>stage.status==='completed').length;
    const totalStages=codeBound?stages.length:0;
-   const verdict=r?.review?reportVerdict(r,p):null;
-   const verdictKey=verdict?.label==='不适用'?'inapplicable':verdict?.state==='passed'?'passed':verdict?.state==='failed'?'failed':statusKey==='completed'&&r?.review?.findings?.length?'issues':'unassessed';
+   const verdict=r?.review?reportVerdict(r):null;
+   const completedEvidence=statusKey==='completed'&&r?.status==='completed'&&
+    Boolean(r?.materials?.paper||r?.materials?.code)&&!r.termination_requested&&
+    Object.keys(criterionNames).every(key=>r.review.criteria?.some(
+     row=>row.dimension===key&&['documented','not_applicable'].includes(row.status)))&&
+    (!r.materials.code||stages.length>0)&&(!ex||ex.status==='completed'&&!ex.needs_user)&&
+    (ex?.metrics||[]).every(metric=>Number.isFinite(metric.observed))&&
+    (!stages.length||execStages.length===stages.length&&stages.every(stage=>execStages.some(
+     run=>run.id===stage.id&&run.status==='completed'&&run.exit_code===0)));
+   const verdictKey=verdict?.label==='不适用'?'inapplicable':verdict?.state==='failed'?'failed':
+    statusKey==='completed'&&r?.review?.findings?.length?'issues':
+    verdict?.state==='passed'&&completedEvidence?'passed':'unassessed';
    const active=['reviewing','queued','reproducing'].includes(statusKey);
    const statusTone=['waiting','interrupted','cancelling'].includes(statusKey)?'amber':
-    statusKey==='completed'&&['failed','issues'].includes(verdictKey)?'red':statusKey==='completed'&&verdictKey==='passed'?'green':
-    active?'green':'neutral';
-   const statusLabel=active?'执行中':statusTone==='red'?'未通过':statusKey==='completed'&&statusTone!=='green'?(verdictKey==='inapplicable'?'不适用':'执行结束'):archiveStates[statusKey];
+    active||statusKey==='completed'&&verdictKey==='passed'?'green':'neutral';
+   const statusLabel=archiveInProgress.has(statusKey)?archiveExecutionFilters.in_progress:archiveStates[statusKey];
    const materialKey=paperOnly?'paper_only':codeBound?(p.paper||r?.materials?.paper?'both':'code_only'):'none';
    const rawTime=p.updated_at||r?.updated_at||p.created_at||new Date().toISOString();
    const ts=Date.parse(rawTime)||0;
    const priorityRank=['reviewing','queued','reproducing','cancelling'].includes(statusKey)?0:['waiting','interrupted'].includes(statusKey)?1:statusKey==='draft'?2:3;
-   const taskKey=r?.review?.task||p.online_task||(paperOnly?'self_review':'auto');
-   const taskLabel=paperOnly&&taskKey==='auto'?'仅论文审阅':(taskNames[taskKey]||'自动识别');
    return {
     id:p.id,
     title:p.title||'未命名审查项目',
@@ -85,8 +97,7 @@ export class ExecutionCenter {
     codeName:codeBound?(p.repository?.repo_name||p.repository?.name||p.repo_url||'已绑定代码'):'仅论文（无代码）',
     paperOnly,
     codeBound,
-    taskKey,
-    taskLabel,
+    reportId:r?.id,
     statusKey,
     retryCancel:Boolean(p.online_cancel_error),
     statusLabel,
@@ -112,7 +123,6 @@ export class ExecutionCenter {
   if(f.verdict!=='all'&&item.verdictKey!==f.verdict)return false;
   if(f.execution!=='all'&&!matchesStatus(item,f.execution))return false;
   if(f.material!=='all'&&item.materialKey!==f.material)return false;
-  if(f.taskType!=='all'&&item.taskKey!==f.taskType)return false;
   if(f.dateRange!=='all'&&item.timestamp){
    const now=Date.now();
    const diffDays=(now-item.timestamp)/(1000*3600*24);
@@ -126,13 +136,13 @@ export class ExecutionCenter {
   const e=this.h.esc;
   const items=this.onlineOrderItems();
   const filtered=items.filter(item=>this.matchesArchiveFilter(item));
-  const tabs=[['all','全部条目',items.length],['completed','已完成',items.filter(item=>matchesStatus(item,'completed')).length],['in_progress','审查中',items.filter(item=>matchesStatus(item,'in_progress')).length]];
+  const tabs=[['all','全部条目',items.length],['completed','已完成',items.filter(item=>matchesStatus(item,'completed')).length],['in_progress',archiveExecutionFilters.in_progress,items.filter(item=>matchesStatus(item,'in_progress')).length]];
   const f=this.archiveFilters;
   return `<section class="repro-order-center archive-table-center" aria-label="案例与归档表格条目中心">
    <header class="repro-order-header">
     <div>
      <h2>项目归档</h2>
-     <p>按材料或审查结果查找项目。进行中和待处理的项目排在前面。</p>
+
     </div>
     <div class="repro-order-tabs" role="group" aria-label="项目条目状态快速筛选">
      ${tabs.map(([id,label,cnt])=>`<button type="button" class="order-tab-btn ${this.orderFilter===id?'active':''}" data-order-filter="${id}">${label}<span>${cnt}</span></button>`).join('')}
@@ -155,8 +165,7 @@ export class ExecutionCenter {
      ${[
       ['verdict','审查结论',archiveVerdicts],
       ['execution','执行状态',archiveExecutionFilters],
-      ['material','材料类型',archiveMaterials],
-      ['taskType','任务类型',taskNames]
+      ['material','材料类型',archiveMaterials]
      ].map(([key,label,values])=>`<div class="archive-filter-field"><label for="af-${key}">${label}</label><select id="af-${key}" data-archive-select="${key}"><option value="all">全部</option>${Object.entries(values).map(([value,name])=>`<option value="${value}" ${f[key]===value?'selected':''}>${name}</option>`).join('')}</select></div>`).join('')}
      <div class="archive-filter-field">
       <label for="af-date">更新时间</label>
@@ -180,9 +189,10 @@ export class ExecutionCenter {
     <table class="archive-data-table" aria-label="案例与归档项目表格">
      <thead>
       <tr>
-       <th style="width:22%">项目名称与任务类型</th>
-       <th style="width:24%">论文与代码材料</th>
-       <th style="width:17%">执行状态与审查结论</th>
+       <th style="width:18%">项目名称</th>
+       <th style="width:23%">论文与代码材料</th>
+       <th style="width:11%">执行状态</th>
+       <th style="width:11%">审查结论</th>
        <th style="width:15%">指标与核查统计</th>
        <th style="width:11%">更新时间</th>
        <th style="width:11%">操作</th>
@@ -193,7 +203,6 @@ export class ExecutionCenter {
        <td class="archive-col-project">
         <div class="archive-project-cell">
          <button type="button" class="order-title-link" data-order-open="${e(item.id)}" data-order-tab="${item.statusKey==='completed'?'report':item.statusKey==='draft'?'materials':'process'}">${e(item.title)}</button>
-         <span class="archive-task-sub">${e(item.taskLabel)}</span>
         </div>
        </td>
        <td class="archive-col-materials">
@@ -201,8 +210,9 @@ export class ExecutionCenter {
         <div class="archive-material-line" title="${e(item.codeName)}"><span class="mat-tag ${item.codeBound?'code':'nocode'}">代码</span><span class="mat-name">${e(item.codeName)}</span></div>
        </td>
        <td class="archive-col-status">
-        <span class="order-status-pill tone-${item.statusTone}${item.active?' status-in-progress':''}">${e(item.statusLabel)}</span>
+        <span class="order-status-pill tone-${item.statusTone}${item.active?' status-in-progress':''}" >${e(item.statusLabel)}</span>
        </td>
+       <td class="archive-col-status"><span class="order-status-pill tone-${{passed:'green',failed:'red',issues:'amber'}[item.verdictKey]||'neutral'}">${e(archiveVerdicts[item.verdictKey])}</span></td>
        <td class="archive-col-metrics">
         <div class="archive-metrics-inline">
          ${item.codeBound&&item.totalStages?`<span>阶段 <strong>${item.completedCount}/${item.totalStages}</strong></span>`:`<span>模式 <strong>${item.paperOnly?'纯论文审阅':'材料审查'}</strong></span>`}
@@ -255,10 +265,66 @@ export class ExecutionCenter {
   if(page==='workbench')this.resetList();else if(this.current()){return this.open(this.current().key,tab,false);}else{this.resetList(page==='evidence'?'attention':'all');}
  }
  heading(page){if(page==='roles')return '角色协作';if(this.detail&&this.current())return this.current().title;return page==='evidence'?'证据复核':'案例与归档';}
- subtitle(page){if(page==='roles')return '六个角色 · 短时核查与完整实验的职责、输入输出与实际事件';if(this.detail&&this.current()){const row=this.current();return `${kindLabels[row.kind]} · ${sourceLabels[row.source]} · ${statusLabels[row.status]||row.status}`;}const rows=this.rows();return `${this.onlineOrderItems().length} 个在线审查项目 · ${rows.filter(r=>r.source!=='runtime').length} 份基线归档案例`;}
+ subtitle(page){if(page==='roles')return '六个角色 · 短时核查与完整实验的职责、输入输出与实际事件';if(this.detail&&this.current()){const row=this.current();return `${kindLabels[row.kind]} · ${sourceLabels[row.source]} · ${statusLabels[row.status]||row.status}`;}return '';}
  actions(page){if(page==='roles')return '<button class="btn" data-center-refresh>刷新核查记录</button>';if(this.detail)return '<button class="btn" data-center-back>返回案例与归档</button>';return `<button class="btn" data-center-refresh>${this.h.icon('refresh')}刷新记录</button><button class="btn primary" data-action="new">${this.h.icon('plus')}新建复现</button>`;}
  render(page){return `${this.error?`<p class="error-box" role="alert">${this.h.esc(this.error)}</p>`:''}${page==='roles'?this.rolesView():this.detail&&this.current()?this.detailView():this.listView(page)}`;}
- listView(page){const e=this.h.esc,all=this.rows(),base=filterRecords(all,{...this.filters,status:'all'}),counts=recordCounts(base),rows=filterRecords(all,this.filters),statusTabs=[['all','全部归档',counts.all],['active','执行中',counts.active],['attention','需关注',counts.attention],['completed','已完成',counts.completed]];return `${this.renderOrderCenter()}<section class="execution-list"><div class="execution-list-head"><div><span class="online-kicker">系统内置与本机基线档案</span><h3>公共复现案例与核查归档库</h3></div><div class="execution-state-tabs" role="group" aria-label="任务状态筛选">${statusTabs.map(([id,label,count])=>`<button data-center-status="${id}" aria-pressed="${this.filters.status===id}" class="${this.filters.status===id?'active':''}">${label}<span>${count}</span></button>`).join('')}</div></div><div class="execution-toolbar"><label class="execution-search">${this.h.icon('search')}<span class="sr-only">搜索任务、版本或运行 ID</span><input data-center-query value="${e(this.filters.query)}" placeholder="搜索公共案例名称、计划版本或运行 ID"></label><div class="execution-filters"><label><span class="sr-only">执行方式</span><select data-center-filter="kind" aria-label="执行方式">${[['all','全部执行方式'],['full','完整实验'],['probe','短时核查']].map(([id,label])=>`<option value="${id}" ${this.filters.kind===id?'selected':''}>${label}</option>`).join('')}</select></label><label><span class="sr-only">记录来源</span><select data-center-filter="source" aria-label="记录来源">${[['all','全部来源'],['runtime','本机执行'],['public_case','公开 CI 归档'],['teaching','教学归档']].map(([id,label])=>`<option value="${id}" ${this.filters.source===id?'selected':''}>${label}</option>`).join('')}</select></label></div></div><div class="execution-table-meta"><p>显示 ${Math.min(rows.length,this.limit)} / ${rows.length} 条记录</p><span>${this.updatedAt?'更新于 '+date(this.updatedAt):this.h.state().mode==='runtime'?'已读取本机记录':'预览模式 · 归档数据'}</span></div><div class="execution-table-wrap"><table class="execution-table"><thead><tr><th>复现任务</th><th>执行方式 / 来源</th><th>状态</th><th class="num">执行进度</th><th>更新时间</th><th><span class="sr-only">任务操作</span></th></tr></thead><tbody>${rows.slice(0,this.limit).map(row=>`<tr><td class="record-identity"><button data-center-open="${e(row.key)}">${e(row.title)}</button><small>${row.plan_sha256?'计划 '+e(row.plan_sha256.slice(0,12)):row.id?'运行 '+e(row.id.slice(0,12)):'独立公开案例'}${row.source==='public_case'?' · 有限范围验收':''}</small></td><td><span>${kindLabels[row.kind]}</span><small>${sourceLabels[row.source]}</small></td><td><span class="record-status ${row.status}"><i aria-hidden="true"></i>${statusLabels[row.status]||e(row.status)}</span></td><td class="record-progress num"><span>${e(progressText(row))}</span><small>${row.phases===null?row.kind==='full'?'完整计划见任务详情':'六角色核查流程':row.phases+' 个阶段'}</small></td><td class="record-date">${e(date(row.created_at))}</td><td class="record-action"><button class="btn text" data-center-open="${e(row.key)}">查看任务 ${this.h.icon('chevron')}</button></td></tr>`).join('')}</tbody></table>${rows.length?'':`<div class="execution-empty"><h2>${all.length?'没有符合条件的记录':'还没有执行记录'}</h2><p>${all.length?'调整任务状态、执行方式或来源，继续查找。':'从论文项目准备材料，绑定计划后启动实验。'}</p><button class="btn" ${all.length?'data-center-clear':'data-action="new"'}>${all.length?'清除筛选':'新建复现项目'}</button></div>`}</div>${rows.length>this.limit?'<button class="btn" data-center-more>再显示 25 条</button>':''}</section>`;}
+ async loadPublicCases(before){
+  const owner=this.h.accountId?.();
+  if(!owner||this.caseBusy)return;
+  this.caseBusy=true;
+  this.caseRequestOwner=owner;
+  this.caseError='';
+  this.h.render();
+  try{
+   const result=await this.h.caseRequest('/cases'+(before?'?before='+encodeURIComponent(before):''));
+   if(owner!==this.h.accountId())return;
+   this.publicCaseOwner=owner;
+   this.publicCases={...result,items:before?[...(this.publicCases?.items||[]),...result.items]:result.items};
+  }catch(error){
+   if(owner===this.h.accountId())this.caseError=error.message;
+  }finally{
+   this.caseBusy=false;
+   this.h.render();
+  }
+ }
+ openCaseShare(){
+  const e=this.h.esc, eligible=this.onlineOrderItems().filter(item=>item.verdictKey==='passed'&&item.reportId);
+  this.h.modal('分享个人归档',eligible.length?
+   `<form id="share-archive-form" class="stack"><label>已通过的归档<select name="assessment_id" required><option value="">选择项目</option>${eligible.map(item=>`<option value="${e(item.reportId)}">${e(item.title)}</option>`).join('')}</select></label><label>公开案例名称<input name="title" maxlength="120" required></label><p>其他平台账户可查看案例名称、材料类型、运行阶段数、实测指标数，以及前 20 项指标的数值比对。</p><p data-share-error role="alert" hidden></p><button type="submit" class="btn primary">发布案例</button></form>`:
+   '<p>目前没有可分享的通过记录。请选择服务端已有通过结论的在线归档。</p>');
+ }
+ async publishCase(form){
+  const data=new FormData(form);
+  const owner=this.h.accountId?.();
+  const button=form.querySelector('button[type=submit]');
+  const error=form.querySelector('[data-share-error]');
+  if(button.disabled)return;
+  button.disabled=true;
+  error.hidden=true;
+  try{
+   await this.h.caseRequest('/cases',{assessment_id:data.get('assessment_id'),title:data.get('title')});
+   if(owner!==this.h.accountId())return;
+   this.h.closeModal();
+   await this.loadPublicCases();
+  }catch(exc){error.textContent=exc.message;error.hidden=false;}
+  finally{button.disabled=false;}
+ }
+ publicCaseView(){
+  const e=this.h.esc, signedIn=Boolean(this.h.accountId?.());
+  const cases=this.publicCaseOwner===this.h.accountId?.()?this.publicCases:null;
+  const error=this.caseRequestOwner===this.h.accountId?.()?this.caseError:'';
+  return `<section class="shared-cases"><div class="execution-list-head"><h2>公共复现案例与核查归档库</h2>${signedIn?'<button type="button" class="btn primary" data-archive-action="share">分享个人归档</button>':''}</div>
+   ${signedIn?`<section class="shared-cases-community"><h3>平台用户分享</h3>${this.caseBusy?'<p role="status">正在加载案例…</p>':''}${error?`<p role="alert">${e(error)} <button type="button" class="btn small" data-archive-action="reload-cases">重试</button></p>`:''}
+   ${cases?.items.length?`<ul>${cases.items.map(item=>`<li><strong>${e(item.title)}</strong><span>${e(archiveMaterials[item.materials])} · ${e(item.stages)} 个运行阶段 · ${e(item.metrics)} 项实测指标</span><span class="order-status-pill tone-green">通过</span>${item.checks?.length?`<details class="shared-case-evidence"><summary>查看数值比对（${item.checks.length} 项）</summary><table class="execution-table"><thead><tr><th>序号</th><th>论文值</th><th>实测值</th><th>容差</th></tr></thead><tbody>${item.checks.map((check,i)=>`<tr><td>${i+1}</td><td>${e(check.expected??'—')}</td><td>${e(check.observed??'—')}</td><td>${e(check.tolerance??'—')}</td></tr>`).join('')}</tbody></table></details>`:''}</li>`).join('')}</ul>`:cases&&!this.caseBusy?'<p>暂无用户分享的案例。</p>':''}
+   ${cases?.next?`<button type="button" class="btn small" data-archive-action="more-cases" ${this.caseBusy?'disabled':''}>查看更多案例</button>`:''}</section>`:''}
+   ${this.recordList(this.rows().filter(row=>row.source!=='runtime'),'系统内置基线档案',true)}</section>`;
+ }
+ listView(){
+  const publicView=this.archiveView==='public';
+  return `<nav class="archive-view-tabs" aria-label="案例与归档分区"><button type="button" class="btn ${publicView?'':'primary'}" data-archive-view="personal" aria-pressed="${!publicView}">个人归档</button><button type="button" class="btn ${publicView?'primary':''}" data-archive-view="public" aria-pressed="${publicView}">公共案例</button></nav>
+  ${publicView?this.publicCaseView():this.renderOrderCenter()+(this.rows().some(row=>row.source==='runtime')?this.recordList(this.rows().filter(row=>row.source==='runtime'),'本机执行记录',false):'')}`;
+ }
+ recordList(all,title,publicView){const e=this.h.esc,base=filterRecords(all,{...this.filters,status:'all'}),counts=recordCounts(base),rows=filterRecords(all,this.filters),statusTabs=[['all','全部归档',counts.all],['active','执行中',counts.active],['attention','需关注',counts.attention],['completed','已完成',counts.completed]];return `<section class="execution-list"><div class="execution-list-head"><h3>${title}</h3><div class="execution-state-tabs" role="group" aria-label="任务状态筛选">${statusTabs.map(([id,label,count])=>`<button data-center-status="${id}" aria-pressed="${this.filters.status===id}" class="${this.filters.status===id?'active':''}">${label}<span>${count}</span></button>`).join('')}</div></div><div class="execution-toolbar"><label class="execution-search">${this.h.icon('search')}<span class="sr-only">搜索任务、版本或运行 ID</span><input data-center-query value="${e(this.filters.query)}" placeholder="${publicView?'搜索基线案例、计划版本或运行 ID':'搜索本机记录、计划版本或运行 ID'}"></label><div class="execution-filters"><label><span class="sr-only">执行方式</span><select data-center-filter="kind" aria-label="执行方式">${[['all','全部执行方式'],['full','完整实验'],['probe','短时核查']].map(([id,label])=>`<option value="${id}" ${this.filters.kind===id?'selected':''}>${label}</option>`).join('')}</select></label><label><span class="sr-only">记录来源</span><select data-center-filter="source" aria-label="记录来源">${[['all','全部来源'],...(publicView?[['public_case','公开 CI 归档'],['teaching','教学归档']]:[['runtime','本机执行']])].map(([id,label])=>`<option value="${id}" ${this.filters.source===id?'selected':''}>${label}</option>`).join('')}</select></label></div></div><div class="execution-table-meta"><p>显示 ${Math.min(rows.length,this.limit)} / ${rows.length} 条记录</p><span>${this.updatedAt?'更新于 '+date(this.updatedAt):this.h.state().mode==='runtime'?'已读取本机记录':'预览模式 · 归档数据'}</span></div><div class="execution-table-wrap"><table class="execution-table"><thead><tr><th>复现任务</th><th>执行方式 / 来源</th><th>状态</th><th class="num">执行进度</th><th>更新时间</th><th><span class="sr-only">任务操作</span></th></tr></thead><tbody>${rows.slice(0,this.limit).map(row=>`<tr><td class="record-identity"><button data-center-open="${e(row.key)}">${e(row.title)}</button><small>${row.plan_sha256?'计划 '+e(row.plan_sha256.slice(0,12)):row.id?'运行 '+e(row.id.slice(0,12)):'独立公开案例'}${row.source==='public_case'?' · 有限范围验收':''}</small></td><td><span>${kindLabels[row.kind]}</span><small>${sourceLabels[row.source]}</small></td><td><span class="record-status ${row.status}"><i aria-hidden="true"></i>${statusLabels[row.status]||e(row.status)}</span></td><td class="record-progress num"><span>${e(progressText(row))}</span><small>${row.phases===null?row.kind==='full'?'完整计划见任务详情':'六角色核查流程':row.phases+' 个阶段'}</small></td><td class="record-date">${e(date(row.created_at))}</td><td class="record-action"><button class="btn text" data-center-open="${e(row.key)}">查看任务 ${this.h.icon('chevron')}</button></td></tr>`).join('')}</tbody></table>${rows.length?'':`<div class="execution-empty"><h2>${all.length?'没有符合条件的记录':'还没有执行记录'}</h2><p>${all.length?'调整任务状态、执行方式或来源，继续查找。':'从论文项目准备材料，绑定计划后启动实验。'}</p><button class="btn" ${all.length?'data-center-clear':'data-action="new"'}>${all.length?'清除筛选':'新建复现项目'}</button></div>`}</div>${rows.length>this.limit?'<button class="btn" data-center-more>再显示 25 条</button>':''}</section>`;}
  detailView(){const row=this.current(),e=this.h.esc,full=row.kind==='full',data=full?(row.source==='public_case'?{report:row.report,source:row.source}:this.fullCache.get(row.key)):null,report=data?.report;return `<section class="execution-detail"><div class="record-context-bar"><span><span class="record-status ${row.status}"><i aria-hidden="true"></i>${statusLabels[row.status]||e(row.status)}</span></span><span>${sourceLabels[row.source]}</span><span>${date(row.created_at)}</span><div class="record-context-actions">${row.source==='runtime'?'<button class="btn text" data-center-refresh>刷新任务</button>':''}${(row.source==='runtime'||row.kind==='probe')&&['running','queued'].includes(row.status)?'<button class="btn danger" data-center-stop>停止执行</button>':''}${report||this.probe(row)?.report?`<button class="btn" data-center-export>${full?'导出证据包':'导出核查报告'}</button>`:''}${!full&&!['running','queued'].includes(row.status)?`<button class="btn" data-action="rerun">${row.source==='teaching'?'回放此核查':'重新核查'}</button>`:''}</div></div>${row.plan_sha256?`<div class="record-version"><span>冻结计划 <code>${e(row.plan_sha256.slice(0,16))}</code></span>${report?.source_manifest_sha256?`<span>源码清单 <code>${e(report.source_manifest_sha256.slice(0,16))}</code></span>`:''}<span>${e(progressText(row))}${row.phases===null?'':' · '+row.phases+' 个阶段'}</span></div>`:''}${row.source==='public_case'?'<p class="record-provenance">公开 CI 证据 · 仅覆盖 LIBLINEAR 的 news20 CPU 实验，Figure 1、rcv1 与效率结论尚未覆盖。<a href="'+e(report.provenance?.workflow_url||'#')+'" target="_blank" rel="noopener">查看来源</a></p>':row.source==='teaching'?'<p class="record-provenance">自制教学仓库的归档证据 · 用于体验核查流程。</p>':''}<div class="execution-detail-tabs" role="group" aria-label="任务详情视图">${tabsFor(row.kind).map(([id,label])=>`<button data-center-tab="${id}" aria-pressed="${this.tab===id}" class="${this.tab===id?'active':''}">${label}</button>`).join('')}</div>${this.loading?'<div class="execution-loading" role="status">正在读取任务证据…</div>':full?this.tab==='roles'?this.roleFlow(this.fullRoles(row))+this.roleBody(this.fullRoles(row),row):report?this.rep.review.render(report,{source:row.source,job:data.job||row.job},e,{embedded:true,tab:this.tab}):`<div class="execution-empty"><h2>${row.status==='failed'?'执行未生成报告':'报告尚未生成'}</h2><p>${e(data?.job?.error||'任务状态已保留，刷新后读取最新证据。')}</p></div>`:this.tab==='roles'?this.roleFlow(this.probe())+this.roleBody(this.probe(),row):this.tab==='overview'?this.probeOverview(row):this.h.probeView(this.tab)}</section>`;}
  probeOverview(row){const e=this.h.esc,run=this.probe(row),findings=run?.findings||run?.report?.findings||[],issues=findings.filter(f=>f.verdict==='issue'),missing=findings.filter(f=>f.verdict==='inconclusive');return `<div class="probe-task-overview"><section class="probe-verdict-summary"><h2>${!run?.report?(['running','queued'].includes(run?.status)?'核查正在执行':run?.status==='cancelled'?'本次核查已停止':'尚无核查报告'):issues.length?'发现 '+issues.length+' 条不一致':missing.length?'有 '+missing.length+' 条证据不足':'核查记录已生成'}</h2><p>${findings.length} 条主张已有判定 · ${run?.report?Number(run.report.elapsed_seconds).toFixed(2)+' 秒原始执行':'报告尚未生成'}</p><button class="btn" data-center-tab="evidence">打开逐条证据</button></section><section class="probe-role-overview"><div class="section-heading"><h2>角色协作状态</h2><button class="btn text" data-center-tab="roles">查看角色记录</button></</div>${this.roleFlow(run)}<p class="small-note">${e(run?.report?.policy||run?.planner||'策略未记录')} · ${run?.events?.length||0} 条原始事件</p></section><section class="probe-findings-overview"><div class="section-heading"><h2>主张判定</h2><button class="btn text" data-center-tab="trace">查看执行事件</button></div>${findings.map(f=>`<div class="probe-finding-row"><strong>${e(f.claim_id)}</strong><span class="${f.verdict==='issue'?'finding-negative':''}">${{issue:'发现不一致',supported:'证据支持',inconclusive:'证据不足'}[f.verdict]||e(f.verdict)}</span><p>${e(f.reason)}</p></div>`).join('')||'<p class="assessment-empty">尚无主张判定。</p>'}</section></div>`;}
  roleFlow(run){const e=this.h.esc,isFull=run?.mode==='full';const groups=isFull?[{title:'材料审计',ids:['literature','code']},{title:'冻结计划排程',ids:['planner']},{title:'构建与执行',ids:['experiment']},{title:'逐阶段核查',ids:['audit']},{title:'分层验收',ids:['report']}]:[{title:'并行预检',ids:['literature','code']},{title:'选择主张',ids:['planner']},{title:'取得证据',ids:['experiment']},{title:'逐条判定',ids:['audit']},{title:'保存记录',ids:['report']}];return `<div class="role-flow" aria-label="核查角色协作顺序">${groups.map(group=>`<div class="role-flow-group"><span>${group.title}</span>${group.ids.map(id=>{const role=ROLES.find(r=>r.id===id),state=roleState(run,id);return `<button data-center-role="${id}" class="${this.role===id?'selected':''}"><span class="role-state-dot ${state}" aria-hidden="true"></span>${e(role.name)}<small>${statusLabels[state]}</small></button>`;}).join('')}</div>`).join('')}</div><p class="role-flow-caption">${isFull?'材料审计在执行前完成；Planner 按冻结计划排程，执行与交叉核查逐阶段交替。':'文献与代码并行预检；规划、执行与交叉核查按主张迭代。'}</p>`;}
@@ -279,7 +345,9 @@ export class ExecutionCenter {
    else if(!prev&&next)root.appendChild(next);
   }
  }
- afterRender(){clearTimeout(this.timer);const state=this.h.state();if(state.mode!=='runtime'||!['workbench','evidence','trace','roles'].includes(state.page)||this.loading)return;const row=this.current(),roleRow=state.page==='roles'?this.roleRun().row:null;const active=this.rows().some(r=>r.source==='runtime'&&['running','queued'].includes(r.status));if(!active||document.querySelector('.role-event[open],.review-station details[open],.review-decision:focus-within')||document.activeElement?.matches('input,textarea,select'))return;this.timer=setTimeout(async()=>{try{await this.h.refresh();await this.rep.loadRegistry();if(this.detail&&row?.kind==='full'&&row.source==='runtime'&&this.selected===row.key){const job=await this.h.request('/api/reproduction/runs/'+encodeURIComponent(row.id));const report=job.report_ready?validateReproductionReport(await this.h.request(job.report_url)):null;if(report&&report.plan_sha256!==job.plan_sha256)throw Error('报告版本不匹配');if(this.selected===row.key){this.fullCache.set(row.key,{job,report});await this.loadRoles(row);}}if(roleRow?.kind==='full'&&roleRow.source==='runtime')await this.loadRoles(roleRow);this.updatedAt=new Date().toISOString();}catch(error){this.error=error.message;}this.h.render();},3000);}
+ afterRender(){clearTimeout(this.timer);const state=this.h.state();
+ if(['workbench','evidence','trace'].includes(state.page)&&!this.detail&&this.archiveView==='public'&&this.h.accountId?.()&&this.caseRequestOwner!==this.h.accountId())void this.loadPublicCases();
+ if(state.mode!=='runtime'||!['workbench','evidence','trace','roles'].includes(state.page)||this.loading)return;const row=this.current(),roleRow=state.page==='roles'?this.roleRun().row:null;const active=this.rows().some(r=>r.source==='runtime'&&['running','queued'].includes(r.status));if(!active||document.querySelector('.role-event[open],.review-station details[open],.review-decision:focus-within')||document.activeElement?.matches('input,textarea,select'))return;this.timer=setTimeout(async()=>{try{await this.h.refresh();await this.rep.loadRegistry();if(this.detail&&row?.kind==='full'&&row.source==='runtime'&&this.selected===row.key){const job=await this.h.request('/api/reproduction/runs/'+encodeURIComponent(row.id));const report=job.report_ready?validateReproductionReport(await this.h.request(job.report_url)):null;if(report&&report.plan_sha256!==job.plan_sha256)throw Error('报告版本不匹配');if(this.selected===row.key){this.fullCache.set(row.key,{job,report});await this.loadRoles(row);}}if(roleRow?.kind==='full'&&roleRow.source==='runtime')await this.loadRoles(roleRow);this.updatedAt=new Date().toISOString();}catch(error){this.error=error.message;}this.h.render();},3000);}
  bind(){
   document.addEventListener('toggle',event=>{if(event.target.matches?.('.role-event,.trace-run,.trace-stage'))this.afterRender();},true);
   document.addEventListener('focusout',event=>{if(event.target.closest?.('.execution-list,.review-decision'))setTimeout(()=>this.afterRender(),0);});
@@ -295,6 +363,10 @@ export class ExecutionCenter {
   });
   document.addEventListener('change',async event=>{
    const el=event.target;
+   if(el.matches('#share-archive-form select')){
+    el.form.elements.title.value=el.selectedOptions[0]?.textContent||'';
+    return;
+   }
    if(el.matches('[data-archive-select]')){
     this.archiveFilters[el.dataset.archiveSelect]=el.value;
     this.updateOrderTable();
@@ -304,17 +376,28 @@ export class ExecutionCenter {
    if(el.matches('[data-center-role-run]')){this.roleRunId=el.value;const row=this.rows().find(r=>r.key===el.value);try{if(row?.kind==='probe'){const run=await this.h.selectProbe(row.id);this.probeCache.set(row.id,run);}else if(row?.kind==='full'&&row.source==='runtime')await this.loadRoles(row);}catch(error){this.error=error.message;}this.h.render();}
   });
   document.addEventListener('submit',event=>{
+   if(event.target.id==='share-archive-form'){event.preventDefault();this.publishCase(event.target);return;}
    if(!event.target.matches('[data-archive-filter-form]'))return;
    event.preventDefault();
    this.h.render();
   });
   document.addEventListener('click',async event=>{
-   const el=event.target.closest('[data-archive-action],[data-order-filter],[data-order-open],[data-order-cancel],[data-order-terminate],[data-center-open],[data-center-status],[data-center-tab],[data-center-back],[data-center-clear],[data-center-more],[data-center-refresh],[data-center-stop],[data-center-export],[data-center-role],[data-role-nav]');
+   const el=event.target.closest('[data-archive-view],[data-archive-action],[data-order-filter],[data-order-open],[data-order-cancel],[data-order-terminate],[data-center-open],[data-center-status],[data-center-tab],[data-center-back],[data-center-clear],[data-center-more],[data-center-refresh],[data-center-stop],[data-center-export],[data-center-role],[data-role-nav]');
    if(!el)return;
    try{
+    if(el.dataset.archiveView){
+     this.archiveView=el.dataset.archiveView;
+     this.filters={...this.filters,source:'all',status:'all',query:''};
+     if(this.archiveView==='public'&&this.h.accountId?.())await this.loadPublicCases();
+     else this.h.render();
+     return;
+    }
+    if(el.dataset.archiveAction==='share'){this.openCaseShare();return;}
+    if(el.dataset.archiveAction==='reload-cases'){await this.loadPublicCases();return;}
+    if(el.dataset.archiveAction==='more-cases'){await this.loadPublicCases(this.publicCases?.next);return;}
     if(el.dataset.archiveAction==='reset'){
      this.orderFilter='all';
-     this.archiveFilters={projectName:'',paperName:'',codeName:'',verdict:'all',execution:'all',material:'all',taskType:'all',dateRange:'all'};
+     this.archiveFilters={projectName:'',paperName:'',codeName:'',verdict:'all',execution:'all',material:'all',dateRange:'all'};
      this.h.render();
      return;
     }

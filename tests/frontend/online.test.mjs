@@ -323,8 +323,8 @@ test('verified relationships collapse to paper edges and expansion never searche
  assert.deepEqual(messages,['这篇论文暂无可展示的子贡献。']);
  assert.deepEqual(graph.displayedEdges(new Set(['a','b','c'])),[{...edge,source:'a',target:'b'}]);
  assert.deepEqual(graph.displayedEdges(new Set(['a','b','a1','b1'])),[edge]);
- graph.filters.direction='CV';
- assert.deepEqual(graph.matchingPapers().map(paper=>paper.paper_id),['a','b']);
+ graph.filters.direction='Computer Vision';
+ assert.deepEqual(graph.matchingPapers().map(paper=>paper.paper_id),['a']);
 });
 
 test('paired contributions use the paper axis and preserve fixed papers and spacing',async()=>{

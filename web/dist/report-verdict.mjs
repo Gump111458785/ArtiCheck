@@ -265,6 +265,6 @@ export function reportNodes(report,project,{stale=false,conflicts=null,conflictE
  }
  nodes.push({id:'report',title:'报告汇总',time:Math.max(activityTime(report,/汇总审查报告/)||0,timeOf(x?.finished_at)||0)||null,state:'pass',badge:'',
   summary:purpose==='self_review'?`修改清单 ${outcome.total} 条`:`${outcome.headline}`+(outcome.innovations.length?` · 创新点 ${outcome.innovations.length} 条`:'')});
- const notApplicable=paper&&!code?['代码审阅','执行计划','环境与运行','指标比对']:code&&!paper?['论文审阅','指标比对',...(purpose==='reproduce_other'?['创新点凝练']:[])]:[];
+ const notApplicable=paper&&!code?['代码审阅','执行计划','环境与运行','指标比对']:code&&!paper?['论文审阅','指标比对',...(purpose==='reproduce_other'?['创新点']:[])]:[];
  return {outcome,nodes,notApplicable};
 }

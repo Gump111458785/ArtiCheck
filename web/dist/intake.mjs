@@ -36,7 +36,7 @@ export class IntakeWorkspace {
  async open(id,step='materials'){const p=this.all().find(p=>p.id===id);if(!p)return;this.activeId=id;this.step=step;if(p.run_id){if(p.sample&&p.run_id?.startsWith('replay-')&&this.h.mode()==='runtime')p.run_id=null;else if(!p.execution_mode||p.execution_mode===this.h.mode())await this.h.selectRun(p.run_id).catch(()=>{this.error='暂时无法读取此运行，记录仍保留，可从执行记录重试。';});}this.navigate(id,step);}
  new(){this.draft=blank();this.activeId=null;this.step='materials';this.error='';this.h.navigate('projects');document.querySelector('#project-title')?.focus();}
  title(){return this.h.page()==='projects'?'ArtiCheck 本地项目':this.current().title||'新的复现评估';}
- subtitle(){return this.h.page()==='projects'?'了解项目源码、本地运行方式与证据输出。':`${this.current().sample?'教学样例 · ':''}${steps.find(s=>s[0]===this.step)?.[1]} · ${this.current().resources.scope||'尚未填写实验范围'}`;}
+ subtitle(){return this.h.page()==='projects'?'':`${this.current().sample?'教学样例 · ':''}${steps.find(s=>s[0]===this.step)?.[1]} · ${this.current().resources.scope||'尚未填写实验范围'}`;}
  actions(){return this.h.page()==='project'?`<button class="btn" data-intake="export">${this.icon('download')}导出项目</button><button class="btn" data-intake="home">返回本地项目</button>`:'';}
  render(){return this.h.page()==='projects'?this.home():this.project();}
  notices(){return `${this.storageError?`<div class="error-box">${this.esc(this.storageError)}</div>`:''}${this.error?`<div class="error-box" role="alert">${this.esc(this.error)}</div>`:''}${this.busy?`<div class="intake-progress" role="status">${this.icon('clock')}${this.esc(this.busy)}</div>`:''}`;}

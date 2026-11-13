@@ -322,10 +322,12 @@ def validate_assessment(value, context):
             page = None
         return {'page': page, 'file': file}
 
+    if not context['paper']:
+        # The material, not the model's classification, determines the code-only path.
+        value = {**value, 'paper_type': 'code_only', 'task': 'code_review',
+                 'classification_reason': '仅提交代码，已按代码审查处理。', 'metrics': []}
     if value.get('paper_type') not in PAPER_TYPES or value.get('task') not in TASKS - {'auto'}:
         raise ReviewError('invalid_model_output', '材料或任务分类无效。', 502)
-    if not context['paper'] and value['paper_type'] != 'code_only':
-        raise ReviewError('invalid_model_output', '只有代码时不能生成论文类型判定。', 502)
     rows = value.get('criteria')
     if not isinstance(rows, list) or len(rows) != 8 or {r.get('dimension') for r in rows if isinstance(r, dict)} != set(DIMENSIONS):
         raise ReviewError('invalid_model_output', '审查维度不完整。', 502)
@@ -595,6 +597,9 @@ def validate_assessment(value, context):
 def assess(reviewer, context, scope, *, request_timeout=60):
     if not reviewer.configured:
         raise ReviewError('provider_not_configured', '模型服务尚未配置。', 503)
+    instructions = SYSTEM
+    if not context['paper']:
+        instructions += '\n本次只提供代码。paper_type 固定为 code_only，task 固定为 code_review，metrics 留空。只审查代码及执行条件。'
     text_content=json.dumps({'scope':scope,'materials':text_materials(context)},ensure_ascii=False)
     user={'role':'user','content':text_content}
     if context.get('paper_images'):
@@ -606,7 +611,7 @@ def assess(reviewer, context, scope, *, request_timeout=60):
     try:
         first_timeout=min(48,request_timeout-22) if context.get('paper_images') and request_timeout>=52 else request_timeout
         result = reviewer.post({'model': reviewer.model, 'temperature': 0, 'max_tokens': 16000, '_http_timeout':first_timeout,
-                               'messages': [{'role': 'system', 'content': SYSTEM}, user]})
+                               'messages': [{'role': 'system', 'content': instructions}, user]})
     except Exception as exc:
         if isinstance(exc, ReviewError) and exc.code in {'budget_not_configured','budget_unavailable','budget_exhausted','provider_not_configured'}:
             raise
@@ -615,7 +620,7 @@ def assess(reviewer, context, scope, *, request_timeout=60):
         # If multimodal vision call timed out or failed upstream, degrade gracefully to full extracted text.
         context['coverage']['vision_error']='页面图像通道响应超时或异常，本次已自动降级为全文提取文字审查。'
         result = reviewer.post({'model': reviewer.model, 'temperature': 0, 'max_tokens': 16000, '_http_timeout':max(15,min(45,request_timeout)),
-                               'messages': [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': text_content}]})
+                               'messages': [{'role': 'system', 'content': instructions}, {'role': 'user', 'content': text_content}]})
     try:
         choice = result['choices'][0]
         if choice.get('finish_reason') == 'length':

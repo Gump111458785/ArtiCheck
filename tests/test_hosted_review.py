@@ -517,6 +517,31 @@ class HostedReviewTests(unittest.TestCase):
                     self.assertEqual(bool(result['plan']['stages']), 'code' in keys)
                     self.assertEqual(bool(result['repository_hint']), False)
 
+    def test_code_only_review_ignores_paper_type_from_the_model_for_both_purposes(self):
+        class MisclassifiedReviewer(Reviewer):
+            def post(self, request):
+                context = json.loads(request['messages'][1]['content'])['materials']
+                answer = output(context)
+                answer.update(paper_type='empirical', task='auto', metrics=[{'id': 'M1', 'page': 1}])
+                return {'choices': [{'message': {'content': json.dumps(answer)}}]}
+
+        app = Flask(__name__)
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, MisclassifiedReviewer(), Budget(),
+                 store=MemoryStore(), executor=Executor())
+        client = app.test_client()
+        for purpose in ('self_review', 'reproduce_other'):
+            with self.subTest(purpose=purpose):
+                response = client.post('/assessments', json={'purpose': purpose, 'code': materials()['code']},
+                                       headers=HEADERS)
+                self.assertEqual(response.status_code, 200)
+                self.assertIsNone(response.json['materials']['paper'])
+                review = response.json['review']
+                self.assertEqual(review['purpose'], purpose)
+                self.assertEqual(review['task'], 'code_review')
+                self.assertEqual(review['paper_type'], 'code_only')
+                self.assertEqual(review['metrics'], [])
+                self.assertTrue(review['plan']['stages'])
+
     def test_actual_pdf_images_are_bounded_and_never_embedded_in_saved_report(self):
         context,_=prepare_visual_assessment(materials())
         self.assertEqual(len(context['paper_images']),2)
