@@ -64,7 +64,7 @@ def provider_tool(kind, body, *, key=None):
         raise ReviewError('external_lookup_failed','公开资料检索暂不可用；本次保留论文与代码内部核对。',502) from exc
 
 
-def lookup(context,budget,store):
+def lookup(context,store):
     identifier=public_identifier(context)
     if not identifier:
         context['source_lookup']={'status':'not_requested','reason':'未识别到论文自身的公开 arXiv / DOI 标识，仅核对已提供材料。'}
@@ -80,7 +80,6 @@ def lookup(context,budget,store):
         context['web_sources']=prepare_sources(context,sources,identifier)
         context['source_lookup']={'status':'completed','identifier':identifier,'cached':True}
         return
-    budget.reserve()  # Search is separately billable and shares the same cap.
     try:
         result=provider_tool('search',{'query':'"'+identifier.removeprefix('arXiv:')+'" official paper implementation github','count':8,'need_content':True})
     except ReviewError as exc:

@@ -63,7 +63,7 @@ class Reviewer:
 
 class MemoryStore:
     def __init__(self):
-        self.records = {}; self.locks = set(); self.reservations = 0
+        self.records = {}; self.locks = set()
     def get(self, owner, job):
         if (owner, job) not in self.records:
             raise ReviewError('not_found', 'Missing', 404)
@@ -81,8 +81,6 @@ class MemoryStore:
         if key in self.locks:
             return False
         self.locks.add(key); return True
-    def reserve_compute(self):
-        self.reservations += 1; return self.reservations
     def repository_ref(self,name,value=None):
         return None
     def unlock_before_launch(self,owner,job,attempt=1):
@@ -103,21 +101,13 @@ class Executor:
         self.stops += 1
 
 
-class Budget:
-    configured = True
-    def __init__(self):
-        self.calls = 0
-    def reserve(self):
-        self.calls += 1; return self.calls
-
-
 class HostedReviewTests(unittest.TestCase):
     def test_graph_uses_owned_report_and_does_not_invent_evidence(self):
         store = MemoryStore()
         store.namespace = 'test'
         app = Flask(__name__)
         app.register_error_handler(ReviewError, lambda error: (jsonify(error=str(error)), error.status))
-        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), Budget(),
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(),
                  store=store, executor=Executor())
         job = 'c' * 32
         store.save(OWNER, {
@@ -185,7 +175,7 @@ class HostedReviewTests(unittest.TestCase):
         app = Flask(__name__)
         app.register_error_handler(ReviewError, lambda error: (jsonify(error=str(error)), error.status))
         with patch('articheck.kg_service.OpenAlex') as provider:
-            register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), Budget(),
+            register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(),
                      store=store, executor=Executor())
         job = 'e' * 32
         evidence = {'title': 'Residual shortcut connections', 'local_id': 'c1', 'page': 3,
@@ -292,7 +282,7 @@ class HostedReviewTests(unittest.TestCase):
                 raise AssertionError(command)
 
         store = RedisFixture()
-        svc = KnowledgeGraphService({}, store, reviewer=Reviewer(), budget=Budget())
+        svc = KnowledgeGraphService({}, store, reviewer=Reviewer())
         evidence = {
             'local_id': 'method', 'title': 'Residual shortcut normalization', 'section': 'Methods',
             'quote': 'Residual shortcut normalization stabilizes model training across layers.',
@@ -304,7 +294,7 @@ class HostedReviewTests(unittest.TestCase):
                 'review': {'paper_title': title, 'method_graph': [evidence]}}})
             ids.append(graph['focus_paper_id'])
         left, right = ids
-        def grounded(_reviewer, _budget, papers, pairs):
+        def grounded(_reviewer, papers, pairs):
             methods = {paper['id']: paper['existing'][0]['local_id'] for paper in papers}
             return {}, [{'left_paper': a, 'right_paper': b, 'left_id': methods[a],
                          'right_id': methods[b], 'description': 'Both methods normalize residual shortcuts.'}
@@ -312,7 +302,7 @@ class HostedReviewTests(unittest.TestCase):
 
         with patch('articheck.kg_service.synthesize', side_effect=grounded) as verify:
             graph = svc.verify_related(OWNER, left)
-            restarted = KnowledgeGraphService({}, store, reviewer=Reviewer(), budget=Budget())
+            restarted = KnowledgeGraphService({}, store, reviewer=Reviewer())
             restarted.verify_related(OWNER, left)
             self.assertEqual(verify.call_count, 1)
             relation = next(edge for edge in graph['edges'] if edge['edge_type'] == 'SIMILAR_CONTRIBUTION')
@@ -367,7 +357,6 @@ class HostedReviewTests(unittest.TestCase):
         self.assertEqual(methods[0]['section'], '4. Architecture')
         self.assertNotIn('benchmark', methods[0]['text'])
         reviewer = Reviewer()
-        budget = Budget()
         good = {'id': 'c1', 'title': 'Patch routing layer', 'chunk_id': 'M1', 'quote': quote}
         rows = [
             {**good, 'paper_id': 'W1'}, {**good, 'paper_id': 'W2', 'title': 'Learned routing windows'},
@@ -377,10 +366,9 @@ class HostedReviewTests(unittest.TestCase):
                     'description': '两项方法均使用窗口组织图块，但关注不同路由粒度。'}
         data = {'contributions': rows, 'relations': [relation, {**relation, 'right_id': 'missing'}]}
         with patch.object(reviewer, 'post', return_value={'choices': [{'message': {'content': json.dumps(data)}}]}) as post:
-            graph, edges = synthesize(reviewer, budget, [
+            graph, edges = synthesize(reviewer, [
                 {'id': 'W1', 'title': 'First', 'chunks': methods, 'existing': []},
                 {'id': 'W2', 'title': 'Second', 'chunks': methods, 'existing': []}], [['W1', 'W2']])
-        self.assertEqual(budget.calls, 1)
         self.assertIn(quote, post.call_args.args[0]['messages'][1]['content'])
         self.assertEqual([row['title'] for row in graph['W1']], ['Patch routing layer'])
         self.assertEqual(len(edges), 1)
@@ -390,7 +378,7 @@ class HostedReviewTests(unittest.TestCase):
         store.namespace = 'test'
         app = Flask(__name__)
         app.register_error_handler(ReviewError, lambda error: (jsonify(error=str(error)), error.status))
-        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), Budget(),
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(),
                  store=store, executor=Executor())
         job = 'c' * 32
         evidence = [{'id': 'S1', 'status': 'failed', 'stdout': 'existing evidence'}]
@@ -404,7 +392,6 @@ class HostedReviewTests(unittest.TestCase):
         self.assertEqual(first['execution']['stages'], evidence)
         self.assertEqual(client.post(base + '/execute', json={}, headers=HEADERS).status_code, 409)
         self.assertEqual(client.post(base + '/feedback', json={'answer': 'can_provide'}, headers=HEADERS).status_code, 409)
-        self.assertEqual(store.reservations, 0)
 
     def test_subcontribution_shortens_architecture_and_excludes_evaluation_details(self):
         from articheck.hosted_review import subcontribution_phrase
@@ -458,7 +445,7 @@ class HostedReviewTests(unittest.TestCase):
         review=validate_assessment(answer,context)
         self.assertFalse(review['resource_preflight']['capacity']['gpu'])
         store=MemoryStore();executor=Executor();app=Flask(__name__)
-        register(app,{'ARTICHECK_REVIEW_TOKEN':TOKEN},Reviewer(),Budget(),store=store,executor=executor)
+        register(app,{'ARTICHECK_REVIEW_TOKEN':TOKEN},Reviewer(),store=store,executor=executor)
         record={'id':'9'*32,'review':review,'execution':None,'scientific_validation':False}
         store.save(OWNER,record)
         response=app.test_client().post('/assessments/'+record['id']+'/feedback',
@@ -468,7 +455,6 @@ class HostedReviewTests(unittest.TestCase):
         self.assertFalse(response.json['availability']['scientific_validation'])
         self.assertIsNone(response.json['execution'])
         self.assertEqual(executor.launches,0)
-        self.assertEqual(store.reservations,0)
 
     def test_long_paper_keeps_late_result_tables_within_context_budget(self):
         pages=[{'number':n,'text':('Introduction text ' * 500)+f'\nTable {n}. Results\nOurs 92.3 %\n',
@@ -526,7 +512,7 @@ class HostedReviewTests(unittest.TestCase):
                 return {'choices': [{'message': {'content': json.dumps(answer)}}]}
 
         app = Flask(__name__)
-        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, MisclassifiedReviewer(), Budget(),
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, MisclassifiedReviewer(),
                  store=MemoryStore(), executor=Executor())
         client = app.test_client()
         for purpose in ('self_review', 'reproduce_other'):
@@ -591,16 +577,17 @@ class HostedReviewTests(unittest.TestCase):
         self.assertEqual(len(report['review']['findings']),1)
         self.assertEqual(len(result['review']['findings']),0)
 
-    def test_lookup_uses_public_identifiers_and_counts_the_paid_search_once(self):
+    def test_lookup_uses_public_identifiers_before_calling_search(self):
         context,_=prepare_assessment({'paper':materials()['paper']})
-        budget=Budget();store=MemoryStore()
-        lookup(context,budget,store)
-        self.assertEqual(budget.calls,0)
+        store=MemoryStore()
+        with patch('articheck.hosted_sources.provider_tool') as provider:
+            lookup(context,store)
+        provider.assert_not_called()
         context['paper']['name']='1512.03385v1.pdf'
         self.assertEqual(public_identifier(context),'arXiv:1512.03385')
         with patch('articheck.hosted_sources.provider_tool',return_value={'results':[{'url':'https://arxiv.org/abs/1512.03385','title':'ResNet','content':'Paper abstract'}]}) as provider:
-            lookup(context,budget,store)
-        self.assertEqual(budget.calls,1)
+            lookup(context,store)
+        provider.assert_called_once()
         self.assertEqual(provider.call_args.args[0],'search')
         self.assertEqual(context['source_lookup']['status'],'completed')
 
@@ -732,22 +719,22 @@ class HostedReviewTests(unittest.TestCase):
             self.assertFalse(value['scientific_validation'])
 
     def test_routes_enforce_identity_fingerprints_idempotent_launch_and_real_blocker_answer(self):
-        app = Flask(__name__); store = MemoryStore(); executor = Executor(); budget = Budget()
+        app = Flask(__name__); store = MemoryStore(); executor = Executor()
         app.config['TESTING'] = True
         @app.errorhandler(ReviewError)
         def handle(error):
             return jsonify(error={'code': error.code, 'message': str(error)}), error.status
-        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), budget, store=store, executor=executor)
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), store=store, executor=executor)
         client = app.test_client()
         self.assertEqual(client.post('/assessments', json=materials()).status_code, 401)
-        self.assertEqual(budget.calls, 0)
         submission = {**materials(), 'request_id': 'd'*32}
         created = client.post('/assessments', json=submission, headers=HEADERS)
         self.assertEqual(created.status_code, 200, created.json)
         value = created.json; path = '/assessments/' + value['id']
-        repeated = client.post('/assessments', json=submission, headers=HEADERS)
+        with patch('articheck.hosted_api.assess') as assess_again:
+            repeated = client.post('/assessments', json=submission, headers=HEADERS)
+        assess_again.assert_not_called()
         self.assertEqual(repeated.json['id'], value['id'])
-        self.assertEqual(budget.calls, 1)
         self.assertEqual(client.post('/assessments', json={**submission, 'task': 'self_review'}, headers=HEADERS).status_code, 409)
         different = {**HEADERS, 'X-ArtiCheck-Session': 'b'*64}
         self.assertEqual(client.get(path, headers=different).status_code, 404)
@@ -758,7 +745,6 @@ class HostedReviewTests(unittest.TestCase):
         for _ in range(2):
             self.assertEqual(client.post(path+'/execute', json=body, headers=HEADERS).status_code, 200)
         self.assertEqual(executor.launches, 1)
-        self.assertEqual(store.reservations, 1)
         self.assertEqual(client.post(path+'/feedback', json={'answer': 'unavailable'}, headers=HEADERS).status_code, 400)
         polled = client.get(path, headers=HEADERS)
         self.assertTrue(polled.json['execution']['needs_user'])
@@ -773,13 +759,12 @@ class HostedReviewTests(unittest.TestCase):
         stale=client.post(path+'/execute',json={**body,'retry_of':retry_id},headers=HEADERS)
         self.assertEqual(stale.status_code,409)
         self.assertEqual(executor.launches,2)
-        self.assertEqual(budget.calls,1)
 
     def test_source_unavailable_requires_a_real_acquisition_attempt_when_a_hint_exists(self):
-        app=Flask(__name__);store=MemoryStore();executor=Executor();budget=Budget()
+        app=Flask(__name__);store=MemoryStore();executor=Executor()
         @app.errorhandler(ReviewError)
         def error(exc):return jsonify(error={'code':exc.code}),exc.status
-        register(app,{'ARTICHECK_REVIEW_TOKEN':TOKEN},Reviewer(),budget,store=store,executor=executor)
+        register(app,{'ARTICHECK_REVIEW_TOKEN':TOKEN},Reviewer(),store=store,executor=executor)
         client=app.test_client()
         value=client.post('/assessments',json={'paper':materials()['paper']},headers=HEADERS).json
         value['review']['repository_hint']='https://github.com/cjlin1/liblinear'
@@ -798,8 +783,8 @@ class HostedReviewTests(unittest.TestCase):
 
     def test_provider_failure_persists_actionable_timeline_detail(self):
         app = Flask(__name__)
-        store, budget = MemoryStore(), Budget()
-        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), budget, store=store, executor=Executor())
+        store = MemoryStore()
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), store=store, executor=Executor())
         app.register_error_handler(ReviewError, lambda error: (jsonify(code=error.code), error.status))
         client = app.test_client()
         job = 'd' * 32
@@ -815,8 +800,8 @@ class HostedReviewTests(unittest.TestCase):
         self.assertNotIn('internal response', json.dumps(saved))
 
     def test_a_late_poll_cannot_replace_a_cancellation(self):
-        app=Flask(__name__);store=MemoryStore();executor=Executor();budget=Budget()
-        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), budget, store=store, executor=executor)
+        app=Flask(__name__);store=MemoryStore();executor=Executor()
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), store=store, executor=executor)
         client=app.test_client()
         value=client.post('/assessments', json=materials(), headers=HEADERS).json
         path='/assessments/'+value['id']
@@ -828,8 +813,8 @@ class HostedReviewTests(unittest.TestCase):
         self.assertEqual(client.get(path,headers=HEADERS).json['execution']['status'],'cancelled')
 
     def test_reviewing_assessment_can_be_cancelled_and_a_late_result_never_overwrites_it(self):
-        app=Flask(__name__);store=MemoryStore();executor=Executor();budget=Budget()
-        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), budget, store=store, executor=executor)
+        app=Flask(__name__);store=MemoryStore();executor=Executor()
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), store=store, executor=executor)
         client=app.test_client();job='e'*32
         real_assess=__import__('articheck.hosted_api',fromlist=['assess']).assess
         def cancel_mid_review(*args,**kwargs):

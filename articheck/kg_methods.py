@@ -164,9 +164,8 @@ def grounded_contributions(rows, chunks, *, existing=()):
     return result
 
 
-def extract_contributions(reviewer, budget, *, title, chunks, existing):
+def extract_contributions(reviewer, *, title, chunks, existing):
     """Run a dedicated extraction turn, with attribution context and no link synthesis."""
-    budget.reserve()
     response = reviewer.post({'model': reviewer.model, 'temperature': 0, 'max_tokens': 3000, '_http_timeout': 35,
         'messages': [{'role': 'system', 'content': EXTRACTION_SYSTEM},
                      {'role': 'user', 'content': json.dumps({'title': title, 'chunks': chunks, 'existing': existing}, ensure_ascii=False)}]})
@@ -179,10 +178,9 @@ def extract_contributions(reviewer, budget, *, title, chunks, existing):
     return grounded_contributions(value['contributions'], chunks, existing=existing)
 
 
-def synthesize(reviewer, budget, papers, pairs):
-    if not reviewer or not reviewer.configured or not budget or not (pairs or any(paper['chunks'] for paper in papers)):
+def synthesize(reviewer, papers, pairs):
+    if not reviewer or not reviewer.configured or not (pairs or any(paper['chunks'] for paper in papers)):
         return {}, []
-    budget.reserve()
     instruction = SYSTEM
     if len(papers) > 8:
         instruction += '本批每篇先保留最具代表性的一项主贡献及至多一项细分贡献，逐字引用不超过120字。'

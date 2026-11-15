@@ -54,10 +54,8 @@ class ContributionExtractionTests(unittest.TestCase):
             self.assertIn('related_work', request['messages'][0]['content'])
             self.assertIn(RELATED_QUOTE, request['messages'][1]['content'])
             return {'choices': [{'message': {'content': json.dumps(result)}}]}
-        budget_calls = []
         graph = KnowledgeGraphService({}, SimpleNamespace(namespace='test'),
-            reviewer=SimpleNamespace(configured=True, model='test', post=model),
-            budget=SimpleNamespace(reserve=lambda: budget_calls.append('reserved')))
+            reviewer=SimpleNamespace(configured=True, model='test', post=model))
         ingested = graph.ingest_project(owner, {'project_id': 'project', 'report': {
             'materials': {'paper': hashlib.sha256(raw).hexdigest()},
             'review': {'paper_title': 'Test paper', 'method_graph': [existing]}}})
@@ -77,7 +75,6 @@ class ContributionExtractionTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 'paper_changed')
         with patch('articheck.kg_service.extract_paper', return_value=(PAGES, {})):
             graph.retry_contributions(owner, paper, material)
-        self.assertEqual(budget_calls, ['reserved'])
         reread = graph.build_graph_response(owner, focus_paper_id=paper)
         self.assertEqual(reread['papers'][0]['method_detail_status'], 'grounded')
         self.assertEqual(reread['papers'][0]['detail_count'], 1)
@@ -277,20 +274,25 @@ class ContributionExtractionTests(unittest.TestCase):
         self.assertEqual(result['focus_paper_id'], 'W1')
         self.assertEqual(result['stats']['paper_count'], 1)
 
-    def test_admin_can_import_above_graph_capacity(self):
+    def test_can_add_papers_relations_and_layout_above_previous_limits(self):
         owner = 'a' * 64
-        for admin in (False, True):
-            with self.subTest(admin=admin), patch('articheck.kg_service.MAX_GRAPH_PAPERS', 1):
-                graph = KnowledgeGraphService({}, SimpleNamespace(namespace='capacity-test'), is_admin=lambda: admin)
-                graph.update_literature(owner, lambda state: state['papers'].update(
-                    {'W1': {'id': 'W1', 'title': 'First paper'}}))
-                with patch.object(graph, 'paper_record', return_value={'id': 'W2', 'title': 'Second paper'}), patch.object(
-                        graph, 'acquire_paper_pdf', return_value=([], 'no_full_text', None)):
-                    if admin:
-                        self.assertEqual(graph.import_public_paper(owner, 'Second paper')['stats']['paper_count'], 2)
-                    else:
-                        with self.assertRaisesRegex(ReviewError, '已达上限'):
-                            graph.import_public_paper(owner, 'Second paper')
+        graph = KnowledgeGraphService({}, SimpleNamespace(namespace='capacity-test'))
+        def fill(state):
+            for i in range(300):
+                state['papers'][f'W{i}'] = {'id': f'W{i}', 'title': f'Paper {i}'}
+            state['relation_overrides'] = {
+                str(i): {'source': 'W0', 'target': 'W1', 'action': 'remove'} for i in range(2000)}
+        graph.update_literature(owner, fill)
+        with patch.object(graph, 'paper_record', return_value={'id': 'W300', 'title': 'Test study'}), patch.object(
+                graph, 'acquire_paper_pdf', return_value=([], 'no_full_text', None)):
+            result = graph.import_public_paper(owner, 'Test study')
+        self.assertEqual(result['stats']['paper_count'], 301)
+        graph.edit_relation(owner, 'W2', 'W300', 'add')
+        self.assertEqual(len(graph.literature_state(owner)[1]['relation_overrides']), 2001)
+        positions = {f'node-{i}': {'x': 0, 'y': 0} for i in range(2001)}
+        graph.save_layout(owner, {'positions': positions})
+        graph.save_layout(owner, {'change': {'id': 'W300', 'x': 10, 'y': 10, 'pinned': True}})
+        self.assertEqual(len(graph.get_layout(owner)['positions']), 2002)
 
     def test_doi_can_resolve_to_arxiv_with_unavailable_bibliographic_indexes(self):
         graph = KnowledgeGraphService({}, SimpleNamespace(namespace='arxiv-doi-test'))
@@ -320,7 +322,6 @@ class ContributionExtractionTests(unittest.TestCase):
     def test_agent_checks_arxiv_identity_before_other_pdf_sources(self):
         title = 'A Routing Study'
         graph = KnowledgeGraphService({}, SimpleNamespace(namespace='arxiv-agent-test'))
-        graph.budget = SimpleNamespace(reserve=lambda: None)
         graph.reviewer = SimpleNamespace(configured=True, model='fixture', post=lambda _: {
             'choices': [{'message': {'content': '{"arxiv_id":"1706.03762"}'}}]})
         sources = OpenPDFSources({})

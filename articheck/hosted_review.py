@@ -613,7 +613,7 @@ def assess(reviewer, context, scope, *, request_timeout=60):
         result = reviewer.post({'model': reviewer.model, 'temperature': 0, 'max_tokens': 16000, '_http_timeout':first_timeout,
                                'messages': [{'role': 'system', 'content': instructions}, user]})
     except Exception as exc:
-        if isinstance(exc, ReviewError) and exc.code in {'budget_not_configured','budget_unavailable','budget_exhausted','provider_not_configured'}:
+        if isinstance(exc, ReviewError) and exc.code == 'provider_not_configured':
             raise
         if not context.get('paper_images'):
             raise

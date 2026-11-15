@@ -3,7 +3,7 @@ from flask import Flask,jsonify
 from articheck.hosted_api import register
 from articheck.hosted_auth import Accounts,COOKIE,password_hash
 from articheck.review_api import ReviewError
-from test_hosted_review import MemoryStore,Reviewer,Budget,Executor,TOKEN,HEADERS,OWNER,materials,prepare_assessment
+from test_hosted_review import MemoryStore,Reviewer,Executor,TOKEN,HEADERS,OWNER,materials,prepare_assessment
 from unittest.mock import patch
 
 class RedisMemory(MemoryStore):
@@ -52,7 +52,7 @@ class HostedAccountsTests(unittest.TestCase):
         @self.app.errorhandler(ReviewError)
         def error(exc):return jsonify(error={'code':exc.code,'message':str(exc)}),exc.status
         self.env={'ARTICHECK_REVIEW_TOKEN':TOKEN,'ARTICHECK_PUBLIC_ORIGIN':'https://articheck.example','ARTICHECK_BUDGET_ID':'test-only-namespace'}
-        register(self.app,self.env,Reviewer(),Budget(),store=self.store,executor=Executor());self.client=self.app.test_client()
+        register(self.app,self.env,Reviewer(),store=self.store,executor=Executor());self.client=self.app.test_client()
         self.accounts=self.app.extensions['articheck_accounts']
         self.headers={'X-ArtiCheck-Client':'review-api','Origin':'https://articheck.example'}
         self.data={'username':'researcher','name':'研究者','password':'correct-password-long'}
@@ -69,34 +69,25 @@ class HostedAccountsTests(unittest.TestCase):
         self.post('logout');self.assertIsNone(self.client.get('/auth/me',headers=self.headers).json['user'])
         self.assertEqual(self.post('login',self.data).status_code,200)
 
-    def test_only_authenticated_admin_bypasses_model_quota(self):
-        @self.app.get('/test-model-budget')
-        def model_budget():
-            self.app.extensions['articheck_authorize']()
-            return jsonify(attempt=self.app.extensions['articheck_reserve_model']())
-
-        self.assertEqual(self.client.get('/test-model-budget', headers=self.headers).status_code, 401)
+    def test_invited_user_can_upload_review_and_launch_without_quotas(self):
+        self.env.update(ARTICHECK_MODEL_ATTEMPTS='1', ARTICHECK_COMPUTE_ATTEMPTS='1')
+        self.assertEqual(self.client.get('/capabilities', headers=self.headers).status_code, 401)
         self.invite()
-        self.assertEqual(self.client.get('/test-model-budget', headers=self.headers).json['attempt'], 1)
-        admin = self.app.test_client()
-        self.invite({**self.data, 'username': 'operator'}, client=admin, role='admin')
-        self.assertIsNone(admin.get('/test-model-budget', headers=self.headers).json['attempt'])
-
-    def test_admin_can_create_upload_and_launch_after_compute_quota_is_exhausted(self):
-        self.invite(role='admin')
-        job = 'd' * 32
-        with patch.object(self.store, 'reserve_compute', side_effect=ReviewError('compute_budget_exhausted', 'full', 429)) as reserve:
-            with patch('articheck.hosted_api.HostedUploads.create', return_value={'id': job}) as create:
-                self.assertEqual(self.client.post('/uploads', json={}, headers=self.headers).status_code, 200)
-                self.assertTrue(create.call_args.kwargs['unlimited'])
+        limits = self.client.get('/capabilities', headers=self.headers).json['limits']
+        self.assertNotIn('compute_attempts', limits)
+        with patch('articheck.hosted_api.HostedUploads.create', return_value={'id': 'upload'}) as create:
+            self.assertEqual(self.client.post('/uploads', json={}, headers=self.headers).status_code, 200)
+            create.assert_called_once()
+        for job in ('d' * 32, 'e' * 32):
             report = self.client.post('/assessments', json={**materials(), 'request_id': job}, headers=self.headers)
             self.assertEqual(report.status_code, 200)
+            self.assertNotIn('budget', report.json)
             plan = report.json['review']['plan_sha256']
             result = self.client.post('/assessments/'+job+'/execute',
                 json={'code': materials()['code'], 'plan_sha256': plan}, headers=self.headers)
             self.assertEqual(result.status_code, 200)
             self.assertEqual(result.json['execution']['status'], 'running')
-            reserve.assert_not_called()
+
     def test_avatar_accepts_presets_and_small_inline_images_only(self):
         self.invite()
         self.assertEqual(self.post('profile',{'name':'甲','avatar':'preset:atom'}).json['user']['avatar'],'preset:atom')
@@ -169,7 +160,7 @@ class ComputeCapacityTests(unittest.TestCase):
                 content=body['messages'][1]['content'];context=json.loads(content[0]['text'] if isinstance(content,list) else content)['materials']
                 self.assertEqual(context['execution_environment']['memory_mb'],4096)
                 return super(CapacityReviewer,inner).post(body)
-        app=Flask('capacity');register(app,{'ARTICHECK_REVIEW_TOKEN':TOKEN,'ARTICHECK_AUTH_MODE':'legacy'},CapacityReviewer(),Budget(),store=MemoryStore(),executor=FourGExecutor())
+        app=Flask('capacity');register(app,{'ARTICHECK_REVIEW_TOKEN':TOKEN,'ARTICHECK_AUTH_MODE':'legacy'},CapacityReviewer(),store=MemoryStore(),executor=FourGExecutor())
         client=app.test_client()
         self.assertEqual(client.get('/capabilities').json['compute']['capacity']['memory_mb'],4096)
         self.assertEqual(client.get('/capabilities').json['compute']['gpu']['status'],'not_configured')
@@ -201,7 +192,7 @@ class ResourceDecisionTests(unittest.TestCase):
         app=Flask('resource-choice');store=MemoryStore();executor=Executor()
         @app.errorhandler(ReviewError)
         def error(exc):return jsonify(error={'code':exc.code,'message':str(exc)}),exc.status
-        register(app,{'ARTICHECK_REVIEW_TOKEN':TOKEN,'ARTICHECK_AUTH_MODE':'legacy'},BlockedReviewer(),Budget(),store=store,executor=executor)
+        register(app,{'ARTICHECK_REVIEW_TOKEN':TOKEN,'ARTICHECK_AUTH_MODE':'legacy'},BlockedReviewer(),store=store,executor=executor)
         client=app.test_client()
         for answer in ['can_provide','unavailable']:
             with patch('articheck.hosted_api.prepare_assessment',side_effect=prepare_assessment):
@@ -210,6 +201,6 @@ class ResourceDecisionTests(unittest.TestCase):
             result=client.post('/assessments/'+r.json['id']+'/feedback',json={'answer':answer},headers=HEADERS)
             self.assertEqual(result.status_code,200);self.assertEqual(result.json['availability']['answer'],answer)
             self.assertFalse(result.json['scientific_validation']);self.assertIsNone(result.json['execution'])
-        self.assertEqual(executor.launches,0);self.assertEqual(store.reservations,0)
+        self.assertEqual(executor.launches,0)
 
 if __name__=='__main__':unittest.main()

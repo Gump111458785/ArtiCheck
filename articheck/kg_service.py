@@ -263,17 +263,11 @@ def compare_contributions_pair(contrib_a, paper_a, contrib_b, paper_b, verified_
     }
 
 
-MAX_GRAPH_PAPERS = 300
-MAX_GRAPH_RELATIONS = 2000
-
-
 class KnowledgeGraphService:
-    def __init__(self, env, store, reviewer=None, budget=None, *, is_admin=lambda: False):
+    def __init__(self, env, store, reviewer=None):
         self.env = env
         self.store = store
         self.reviewer = reviewer
-        self.budget = budget
-        self.is_admin = is_admin
         self._mem_private = {}
         self._mem_layouts = {}
         self._mem_verifications = {}
@@ -354,7 +348,6 @@ class KnowledgeGraphService:
         return dict(data)
 
     def save_layout(self, owner, payload):
-        capacity = 0 if self.is_admin() else MAX_GRAPH_RELATIONS
         oh = self._owner_hash(owner)
         if 'change' in payload:
             change = payload['change']
@@ -372,10 +365,6 @@ class KnowledgeGraphService:
                 script = """
 local state=cjson.decode(redis.call('GET',KEYS[1]) or '{}')
 state.positions=state.positions or {}
-local n=0
-for _ in pairs(state.positions) do n=n+1 end
-local capacity=tonumber(ARGV[5])
-if capacity>0 and n>=capacity and not state.positions[ARGV[1]] then return 0 end
 state.positions[ARGV[1]]=cjson.decode(ARGV[2])
 local pins={}
 for _,id in ipairs(state.pinned or {}) do
@@ -387,14 +376,11 @@ state.updated_at=ARGV[4]
 redis.call('SET',KEYS[1],cjson.encode(state))
 return 1
 """
-                if self.store.command('EVAL', script, '1', key, node_id, json.dumps(position),
-                                      '1' if change['pinned'] else '0', stamp, str(capacity)) != 1:
-                    raise ReviewError('layout_capacity', '图谱布局节点达到上限。', 409)
+                self.store.command('EVAL', script, '1', key, node_id, json.dumps(position),
+                                   '1' if change['pinned'] else '0', stamp)
             else:
                 state = self.get_layout(owner)
                 positions = {**state.get('positions', {}), node_id: position}
-                if capacity and len(positions) > capacity:
-                    raise ReviewError('layout_capacity', '图谱布局节点达到上限。', 409)
                 pinned = [item for item in state.get('pinned', []) if item != node_id]
                 if change['pinned']:
                     pinned.append(node_id)
@@ -402,8 +388,7 @@ return 1
             return {'saved': True}
         positions = payload.get('positions') or {}
         pinned = payload.get('pinned') or []
-        if (not isinstance(positions, dict) or not isinstance(pinned, list)
-                or capacity and (len(positions) > capacity or len(pinned) > capacity)):
+        if not isinstance(positions, dict) or not isinstance(pinned, list):
             raise ReviewError('invalid_layout', '图谱布局格式不正确。')
         for position in positions.values():
             if not isinstance(position, dict) or any(
@@ -584,13 +569,12 @@ return 1
     def locate_arxiv_with_agent(self, paper, deadline):
         sources = self.open_pdf_sources
         if (not isinstance(sources, OpenPDFSources) or not self.reviewer
-                or not self.reviewer.configured or not self.budget or deadline-time.monotonic()<9):
+                or not self.reviewer.configured or deadline-time.monotonic()<9):
             return {}
         context = {key: paper[key] for key in ('title', 'doi', 'author_names', 'year') if paper.get(key)}
         if not context:
             return {}
         try:
-            self.budget.reserve()
             result = self.reviewer.post({'model': self.reviewer.model, 'temperature': 0, 'max_tokens': 140,
                 '_http_timeout': min(7, deadline-time.monotonic()-3), 'messages': [
                     {'role': 'system', 'content': 'Identify the arXiv identifier for the exact paper described. '
@@ -788,8 +772,6 @@ return 1
         paper_id = next((wid for wid in matches if wid in own), matches[0] if matches else canonical)
         record_id = state['matches'].get(paper_id, paper_id) if paper_id in own else paper_id
         prior = state['papers'].get(record_id, {})
-        if not self.is_admin() and not prior and len(state['papers']) >= MAX_GRAPH_PAPERS:
-            raise ReviewError('literature_capacity', '图谱的公开条目已达上限，请先移除部分条目。', 409)
         paper = {**prior, **{key: item for key, item in paper.items() if item}, 'id': record_id,
                  'literature_id': canonical if work_id(canonical) else prior.get('literature_id', '')}
         file = state.get('pdf_files', {}).get(paper_id) or state.get('pdf_files', {}).get(record_id)
@@ -831,8 +813,6 @@ return 1
             if any(current['choices'].get(wid, {}).get('removed') and not state['choices'].get(wid, {}).get('removed')
                    for wid in (paper_id, record_id)):
                 raise ReviewError('paper_removed', '该论文已在另一项操作中删除。', 409)
-            if not self.is_admin() and not existing and len(current['papers']) >= MAX_GRAPH_PAPERS:
-                raise ReviewError('literature_capacity','图谱的公开条目已达上限，请先移除部分条目。',409)
             bibliography = {key: paper[key] for key in ('id', 'title', 'doi', 'arxiv_id', 'requested_arxiv_id', 'literature_id',
                             'year', 'venue', 'direction', 'authors', 'author_names', 'pdf_sources',
                             'source_url', 'fallback_url') if key in paper}
@@ -995,12 +975,10 @@ return 1
         try:
             if pairs:
                 self.graph_progress(operation_key, 'extracting')
-            _, relationships = synthesize(self.reviewer, self.budget, inputs, pairs)
-        except (ReviewError, OSError, ValueError, KeyError, IndexError, TypeError) as error:
+            _, relationships = synthesize(self.reviewer, inputs, pairs)
+        except (ReviewError, OSError, ValueError, KeyError, IndexError, TypeError):
             relationships = []
-            analysis_error = ('本轮模型额度已用完。已保留公开书目。'
-                              if isinstance(error, ReviewError) and error.code == 'budget_exhausted'
-                              else '方法分析暂未完成。已保留公开书目，可重试扩展。')
+            analysis_error = '方法分析暂未完成。已保留公开书目，可重试扩展。'
 
         def save(current):
             if current['choices'].get(paper_id, {}).get('removed'):
@@ -1035,10 +1013,6 @@ return 1
                 if any(current['choices'].get(wid, {}).get('removed') for wid, _ in (a, b)):
                     continue
                 methods[':'.join((*a, *b))] = relation
-            if not self.is_admin() and len(methods) > MAX_GRAPH_RELATIONS:
-                raise ReviewError('literature_capacity', '图谱的贡献关系已达上限，请先移除部分节点。', 409)
-            if not self.is_admin() and (len(current['papers']) > MAX_GRAPH_PAPERS or len(current['links']) > MAX_GRAPH_RELATIONS):
-                raise ReviewError('literature_capacity', '图谱的公开条目或关系已达上限，请先移除部分条目。', 409)
 
         self.update_literature(owner, save, operation_key=operation_key)
         return {**self.build_graph_response(owner, focus_paper_id=paper_id), 'method_notice': analysis_error}
@@ -1163,9 +1137,9 @@ return 1
                     pass
             check()
             extracted = []
-            if chunks and self.reviewer and self.reviewer.configured and self.budget:
+            if chunks and self.reviewer and self.reviewer.configured:
                 try:
-                    extracted = extract_contributions(self.reviewer, self.budget, title=paper['title'],
+                    extracted = extract_contributions(self.reviewer, title=paper['title'],
                                                       chunks=chunks, existing=existing)
                     status = 'no_sub_contributions' if (existing or extracted) else 'insufficient_evidence'
                 except (ReviewError, OSError, ValueError, KeyError, IndexError, TypeError) as error:
@@ -1236,8 +1210,6 @@ return 1
 
         def save(state):
             overrides = state.setdefault('relation_overrides', {})
-            if not self.is_admin() and key not in overrides and len(overrides) >= MAX_GRAPH_RELATIONS:
-                raise ReviewError('relation_capacity', '手动关系记录已达到上限。', 409)
             overrides[key] = {'source': source, 'target': target, 'action': action,
                               'note': note.strip(), 'label': label.strip(), 'updated_at': now()}
 
@@ -1261,7 +1233,7 @@ return 1
                     'section': node['section'], 'page': node['page'],
                 })
         anchor = canonical.get(paper_id)
-        if not anchor or not self.reviewer or not self.reviewer.configured or not self.budget:
+        if not anchor or not self.reviewer or not self.reviewer.configured:
             return graph
         signatures = {}
         existing_pairs = {self.link_key(canonical.get(row['left_paper'], row['left_paper']),
@@ -1291,7 +1263,7 @@ return 1
         papers = [{'id': key, 'title': nodes[node_id]['label'], 'chunks': [], 'existing': methods[key]}
                   for node_id, key in canonical.items() if key == anchor or any(row[1] == key for row in chosen)]
         try:
-            _, relations = synthesize(self.reviewer, self.budget, papers, [[anchor, other] for _, other, _ in chosen])
+            _, relations = synthesize(self.reviewer, papers, [[anchor, other] for _, other, _ in chosen])
         except (ReviewError, OSError, ValueError, KeyError, IndexError, TypeError):
             return {**graph, 'method_notice': '关系核验暂未完成，可稍后重试。'}
 
@@ -1306,8 +1278,6 @@ return 1
                 endpoints = sorted(((relation['left_paper'], relation['left_id']),
                                     (relation['right_paper'], relation['right_id'])))
                 links[':'.join((*endpoints[0], *endpoints[1]))] = self.with_relation_evidence(relation, methods)
-            if not self.is_admin() and len(links) > MAX_GRAPH_RELATIONS:
-                raise ReviewError('literature_capacity', '图谱的贡献关系已达上限。', 409)
 
         self.update_literature(owner, save)
         return self.build_graph_response(owner, focus_paper_id=paper_id)

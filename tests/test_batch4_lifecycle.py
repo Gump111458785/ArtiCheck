@@ -6,17 +6,16 @@ from flask import Flask, jsonify
 
 from articheck.kg_service import KnowledgeGraphService
 from articheck.review_api import ReviewError
-from test_hosted_review import Budget, Executor, HEADERS, MemoryStore, Reviewer, TOKEN, materials, register
+from test_hosted_review import Executor, HEADERS, MemoryStore, Reviewer, TOKEN, materials, register
 
 
 class LifecycleRaces(unittest.TestCase):
     def setUp(self):
         self.store = MemoryStore()
-        self.budget = Budget()
         self.executor = Executor()
         app = Flask(__name__)
         app.register_error_handler(ReviewError, lambda error: (jsonify(error=error.code), error.status))
-        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(), self.budget,
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(),
                  store=self.store, executor=self.executor)
         self.client = app.test_client()
 
@@ -28,7 +27,6 @@ class LifecycleRaces(unittest.TestCase):
             late = self.client.post('/assessments', json={**materials(), 'request_id': job}, headers=HEADERS)
         prepare.assert_not_called()
         self.assertEqual(late.json['status'], 'cancelled')
-        self.assertEqual(self.budget.calls, 0)
 
     def test_cancel_during_material_parse_prevents_model_dispatch(self):
         from articheck.hosted_api import prepare_assessment
@@ -45,7 +43,6 @@ class LifecycleRaces(unittest.TestCase):
         model.assert_not_called()
         self.assertEqual(result.json['status'], 'cancelled')
         self.assertIn('terminated_at', result.json)
-        self.assertEqual(self.budget.calls, 0)
 
     def test_cancel_after_model_dispatch_cannot_publish_late_result(self):
         from articheck.hosted_api import assess
@@ -81,7 +78,7 @@ class LifecycleRaces(unittest.TestCase):
         finished = self.client.post(path + '/execute', json=payload, headers=HEADERS).json
         self.assertEqual(finished['execution']['status'], 'cancelled')
         self.assertIn('terminated_at', finished)
-        self.assertEqual((self.executor.launches, self.executor.stops, self.store.reservations), (1, 1, 1))
+        self.assertEqual((self.executor.launches, self.executor.stops), (1, 1))
         self.assertEqual(self.client.post(path + '/execute', json=payload, headers=HEADERS).status_code, 409)
 
     def test_unavailable_execution_logs_do_not_prevent_stop(self):
@@ -103,14 +100,13 @@ class LifecycleRaces(unittest.TestCase):
                                 json={'code': materials()['code'], 'plan_sha256': report['review']['plan_sha256']})
         self.assertEqual(late.json['execution']['status'], 'cancelled')
         self.assertEqual(self.executor.launches, 0)
-        self.assertEqual(self.store.reservations, 0)
 
 
 class GraphTraversal(unittest.TestCase):
     def setUp(self):
         store = MemoryStore()
         store.namespace = 'batch-four'
-        self.graph = KnowledgeGraphService({}, store, reviewer=None, budget=None)
+        self.graph = KnowledgeGraphService({}, store, reviewer=None)
 
     def test_graph_expands_three_levels_and_keeps_edge_origins(self):
         paper = lambda pid: {'id': pid, 'title': pid}

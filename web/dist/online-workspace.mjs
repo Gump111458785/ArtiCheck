@@ -35,7 +35,6 @@ export function failureText(r){
   invalid_model_output:'模型返回结果未通过结构校验，请稍后重试。',
   provider_failed:'上游模型服务响应异常，请稍后重试。',
   review_response_unavailable:'服务未在时限内返回有效审查结果，请点击重新审查。',
-  budget_exhausted:'当前模型调用额度已达上限，请联系管理员。',
   user_cancelled:'你已手动中止本次审查。'
  };
  return map[r?.error]||'审查过程中断，未生成最终报告。可点击重新审查再试一次。';
@@ -596,7 +595,7 @@ export class OnlineWorkspace{
    const body=await this.payload(p,generation);
    value=checkAssessment(await this.request('/assessments/'+r.id+'/execute',{code:body.code,plan_sha256:r.review.plan_sha256,...(retry?{retry_of:r.execution.attempt_id}:{})}));
   }catch(error){
-   if(generation===(this.pollGeneration||0)&&['no_executable_plan','plan_changed','retry_changed','material_changed','assessment_terminated','compute_budget_exhausted','sandbox_not_configured'].includes(error.code)){
+   if(generation===(this.pollGeneration||0)&&['no_executable_plan','plan_changed','retry_changed','material_changed','assessment_terminated','sandbox_not_configured'].includes(error.code)){
     p.online_execution_pending=null;
     await this.save(p);
    }

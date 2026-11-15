@@ -19,7 +19,7 @@ class HostedUploads:
     def __init__(self,env,store):
         self.key=env.get('E2B_API_KEY','');self.store=store
 
-    def create(self,owner,payload,*,unlimited=False):
+    def create(self,owner,payload):
         files=payload.get('files');job=payload.get('request_id')
         if not isinstance(job,str) or not re.fullmatch(r'[a-f0-9]{32}',job):
             raise ReviewError('invalid_request_id','上传编号无效。')
@@ -47,10 +47,8 @@ class HostedUploads:
         sandbox=None
         starting = {**record}
         try:
-            record['reservation']=None if unlimited else self.store.reserve_compute()
-            if not self.store.replace(owner,starting,record):
-                raise ReviewError('upload_expired','本次传输已关闭。',410)
-            starting = {**record}
+            if self.store.get(owner, job) != starting:
+                raise ReviewError('upload_expired', '本次传输已关闭。', 410)
             sandbox=Sandbox.create(api_key=self.key,secure=True,timeout=LIFETIME,retries=0,
                 api_headers={'Idempotency-Key':'articheck-upload-'+job},
                 metadata={'project':'articheck','purpose':'material-upload'},
@@ -81,7 +79,7 @@ class HostedUploads:
             raise ReviewError('upload_starting','传输通道正在创建，请稍后重新提交；不会重复创建实例。',409)
         sandbox=sandbox or self.connect(record)
         remaining=max(1,int(record['deadline']-time.time()))
-        return {'id':record['id'],'expires_at':record['deadline'],'reserved_attempt':record['reservation'],
+        return {'id':record['id'],'expires_at':record['deadline'],'reserved_attempt':record.get('reservation'),
             'files':{kind:{**item,'upload_url':sandbox.upload_url('/home/user/articheck-stage-'+kind+LIMITS[kind][0],user='root',use_signature_expiration=remaining),
                           'material':{'name':item['name'],'upload_id':record['id'],'kind':kind}}
                      for kind,item in record['files'].items()}}

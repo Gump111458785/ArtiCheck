@@ -7,7 +7,6 @@ import re
 import time
 import uuid
 import copy
-from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError
 
@@ -24,8 +23,8 @@ from .kg_service import KnowledgeGraphService
 from .review_api import ReviewError, decode_material, now
 
 
-def register(app, env, reviewer, budget, *, store=None, executor=None):
-    from flask import Response, g, jsonify, request, send_file
+def register(app, env, reviewer, *, store=None, executor=None):
+    from flask import Response, jsonify, request, send_file
     store = store or HostedStore(env)
     executor = executor or HybridExecutor(env,store)
     uploads = HostedUploads(env,store)
@@ -40,27 +39,11 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             accounts.guard()
             owner=request.headers.get('X-ArtiCheck-Session','')
             if session and not re.fullmatch(r'[a-f0-9]{64}',owner):raise ReviewError('invalid_session','会话无效。',401)
-            account_owner = accounts.owner()
-            if account_owner:
-                g.articheck_admin = accounts.require().get('role') == 'admin'
-            return account_owner or owner
-        user = accounts.require()
-        g.articheck_admin = user.get('role') == 'admin'
+            return accounts.owner() or owner
+        accounts.require()
         return accounts.owner()
 
-    def is_admin():
-        return getattr(g, 'articheck_admin', False)
-
-    def reserve_model():
-        return None if is_admin() else budget.reserve()
-
-    def reserve_compute():
-        return None if is_admin() else store.reserve_compute()
-
-    model_budget = SimpleNamespace(reserve=reserve_model) if budget else None
-    kg = KnowledgeGraphService(env, store, reviewer, model_budget, is_admin=is_admin)
-    app.extensions['articheck_reserve_model'] = reserve_model
-    app.extensions['articheck_model_configured'] = lambda: reviewer.configured and (is_admin() or budget.configured)
+    kg = KnowledgeGraphService(env, store, reviewer)
     app.extensions['articheck_accounts']=accounts
     app.extensions['articheck_authorize']=authorize
 
@@ -182,7 +165,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     @app.post('/uploads')
     def create_upload():
         owner=authorize()
-        return jsonify(uploads.create(owner,body(),unlimited=is_admin()))
+        return jsonify(uploads.create(owner,body()))
 
     @app.post('/uploads/<job>/cancel')
     def cancel_upload(job):
@@ -192,7 +175,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
     def capabilities():
         if env.get('ARTICHECK_AUTH_MODE')!='legacy':authorize()
         return jsonify(version=2, service='articheck-online', model=reviewer.model,
-                       review_configured=app.extensions['articheck_model_configured'](),
+                       review_configured=bool(reviewer.configured),
                        sandbox_configured=executor.configured, auth_required=True,
                        accounts={'registration':False,'invitation_only':True,'session_days':30,'method':'username_password'},
                        compute={'capacity':getattr(executor,'capacity',{'provider':'e2b','cpu_count':2,'memory_mb':512,'gpu':False}),
@@ -200,8 +183,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                        limits={'max_body_bytes': 5_000_000, 'max_zip_bytes':100*1024**2,
                                'max_unpacked_bytes':500*1024**2,'max_pdf_bytes':20*1024**2,
                                'large_upload_transport':'signed_direct_upload','max_seconds': 600,
-                               'default_seconds': 300, 'report_retention_days': 7,
-                               'compute_reservation_cny': 1, 'compute_attempts': getattr(store, 'max_compute_attempts', 100000)})
+                               'default_seconds': 300, 'report_retention_days': 7})
 
     @app.post('/repositories')
     def import_code():
@@ -300,14 +282,13 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             return publish(pending)
         activity('材料解析完成',[role for role,present in [('literature_reader',context.get('paper')),('code_inspector',context.get('code'))] if present],
                  '论文与源码已按输入预算解析；仅处理实际提供的材料。','completed')
-        # Material parsing and the durable idempotency claim precede reservation.
         failure_title = '公开来源核对未完成'
         failure_roles = ['literature_reader' if context.get('paper') else 'code_inspector']
         try:
             if stopped():
                 return jsonify(store.get(owner, job))
             activity('核对公开来源',['literature_reader' if context.get('paper') else 'code_inspector'],'正在识别可核对的公开出处；无有效标识时仅核对导入材料。')
-            lookup(context,model_budget,store)
+            lookup(context,store)
             if stopped():
                 return jsonify(store.get(owner, job))
             while len(json.dumps(text_materials(context),ensure_ascii=False).encode())>175_000 and context.get('web_sources'):
@@ -328,11 +309,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                      '主审模型正在核对图表、实现与实验条件，并生成结构化建议和执行计划。' if has_code else '主审模型正在深度核对论文图表、指标出处与论证一致性。')
             if stopped():
                 return jsonify(store.get(owner, job))
-            failure_title, failure_roles = '模型调用额度检查未完成', review_roles
-            attempt = reserve_model()
-            if stopped():
-                return jsonify(store.get(owner, job))
-            failure_title = '主审请求未完成'
+            failure_title, failure_roles = '主审请求未完成', review_roles
             value = assess(reviewer, context, scope, request_timeout=max(5,min(80,108-(time.monotonic()-started))))
         except Exception as exc:
             if stopped():
@@ -370,7 +347,6 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
                 try:
                     if not activity('交叉核查依据',['cross_auditor'],'独立复核建议与图表数字，撤回依据不足的条目。'):
                         return jsonify(store.get(owner, job))
-                    attempt=reserve_model()
                     if stopped():
                         return jsonify(store.get(owner, job))
                     value=cross_audit(reviewer,context,value,request_timeout=min(25,remaining))
@@ -389,7 +365,6 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
         value.update(id=job, status='completed', input_sha256=identity)
         if identifier := public_identifier(context):
             value['public_paper_identifier'] = identifier
-        value['budget'] = {'model_reserved_attempts': attempt, 'model_max_attempts': None if is_admin() else getattr(budget,'max_attempts',10)}
         if not publish(value):
             return jsonify(store.get(owner, job))
         return jsonify(value)
@@ -454,7 +429,7 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             raise ReviewError('retry_changed','该执行不能按此版本重试，请刷新状态；每份计划最多执行三次。',409)
         attempt_number=len(history)+2 if retry else 1
         if not executor.configured:
-            raise ReviewError('sandbox_not_configured', '云端执行服务尚未配置，未消耗执行额度。', 503)
+            raise ReviewError('sandbox_not_configured', '云端执行服务尚未配置。', 503)
         if not value['review']['plan']['stages']:
             raise ReviewError('no_executable_plan', value['review']['plan']['blocked_reason'] or '当前材料未提供可执行代码。请先补充代码或查看论文自查结果。', 422)
         # Revalidate bytes and fingerprint before acquiring a paid launch latch.
@@ -477,20 +452,18 @@ def register(app, env, reviewer, budget, *, store=None, executor=None):
             raise ReviewError('execution_changed', '任务状态已更新，请刷新。', 409)
         starting = copy.deepcopy(value)
         try:
-            if store.get(owner, job) != starting:
-                return jsonify(finish_unlaunched_cancel(owner, job, attempt_id))
-            attempt = reserve_compute()
+            current = store.get(owner, job)
         except ReviewError:
             store.replace(owner, starting, previous)
             store.unlock_before_launch(owner, job, attempt_number)
             raise
-        if store.get(owner, job) != starting:
+        if current != starting:
             return jsonify(finish_unlaunched_cancel(owner, job, attempt_id))
         try:
-            launched = {**executor.launch(value, payload), 'reserved_attempt': attempt, 'attempt_id': attempt_id}
+            launched = {**executor.launch(value, payload), 'attempt_id': attempt_id}
         except Exception as exc:
-            value['execution'] = {**starting['execution'], 'reserved_attempt': attempt, 'status': 'failed',
-                                  'notice': '云端实例启动失败，本次预留保留；请联系管理员，避免反复提交。'}
+            value['execution'] = {**starting['execution'], 'status': 'failed',
+                                  'notice': '云端实例启动失败，请检查执行服务状态后重试。'}
             if not store.replace(owner, starting, value):
                 return jsonify(finish_unlaunched_cancel(owner, job, attempt_id))
             if isinstance(exc, ReviewError):

@@ -51,26 +51,23 @@ class LargeMaterialTests(unittest.TestCase):
         store=MemoryStore();uploads=HostedUploads({'E2B_API_KEY':'test'},store)
         for kind,name,size in [('code','source.zip',MAX_CODE_BYTES+1),('paper','paper.pdf',20*1024**2+1),('code','bad.exe',100)]:
             with self.assertRaises(ReviewError):uploads.create(OWNER,{'request_id':'1'*32,'files':[{'kind':kind,'name':name,'bytes':size,'sha256':'a'*64}]})
-        self.assertEqual(store.reservations,0)
         item={'kind':'code','name':'source.zip','bytes':100,'sha256':'a'*64}
         store.save(OWNER,{'id':'1'*32,'type':'material_upload','status':'starting','deadline':9999999999,
                           'files':{'code':{k:item[k] for k in ('name','bytes','sha256')}}})
         with self.assertRaises(ReviewError) as caught:uploads.create(OWNER,{'request_id':'1'*32,'files':[item]})
         self.assertEqual(caught.exception.code,'upload_starting')
-        self.assertEqual(store.reservations,0)
         with self.assertRaises(ReviewError):uploads.resolve(OWNER,{'upload_id':[]},'code')
         with self.assertRaises(ReviewError):resolve_repository({'repository':'example/project','commit':[],'sha256':'f'*64})
 
-    def test_admin_upload_skips_compute_reservation(self):
+    def test_upload_skips_compute_reservation(self):
         store=MemoryStore();uploads=HostedUploads({'E2B_API_KEY':'test'},store)
         files=[{'kind':'paper','name':'paper.pdf','bytes':100,'sha256':'a'*64}]
         sandbox=MagicMock()
         sandbox.sandbox_id='fixture'
         sandbox.upload_url.return_value='https://fixture.e2b.app/upload'
         with patch('e2b.Sandbox.create', return_value=sandbox):
-            result=uploads.create(OWNER,{'request_id':'a'*32,'files':files},unlimited=True)
+            result=uploads.create(OWNER,{'request_id':'a'*32,'files':files})
         self.assertIsNone(result['reserved_attempt'])
-        self.assertEqual(store.reservations,0)
 
     def test_upload_bytes_are_owner_scoped_and_fingerprint_checked(self):
         raw=b'test-source';store=MemoryStore();uploads=HostedUploads({'E2B_API_KEY':'test'},store)

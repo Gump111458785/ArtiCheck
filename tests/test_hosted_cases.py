@@ -8,7 +8,7 @@ from flask import Flask, jsonify
 from articheck.hosted_api import register as register_accounts
 from articheck.review_api import DIMENSIONS, ReviewError
 from test_hosted_auth import RedisMemory
-from test_hosted_review import Budget, Executor, HEADERS, OWNER, Reviewer, register
+from test_hosted_review import Executor, HEADERS, OWNER, Reviewer, register
 
 
 class CaseStore(RedisMemory):
@@ -73,7 +73,7 @@ class SharedCaseTests(unittest.TestCase):
         app.register_error_handler(ReviewError, lambda e: (jsonify(error={'code': e.code}), e.status))
         self.store = CaseStore()
         register(app, {'ARTICHECK_REVIEW_TOKEN': HEADERS['Authorization'].split()[1]},
-                 Reviewer(), Budget(), store=self.store, executor=Executor())
+                 Reviewer(), store=self.store, executor=Executor())
         self.client = app.test_client()
         self.other = {**HEADERS, 'X-ArtiCheck-Session': 'b' * 64}
         self.report = {'id': 'c' * 32, 'status': 'completed', 'materials': {'paper': 'private-sha', 'code': 'private-code'},
@@ -137,7 +137,7 @@ class SharedCaseTests(unittest.TestCase):
     def test_separate_invited_accounts_see_only_the_public_snapshot(self):
         app = Flask('case-accounts')
         app.register_error_handler(ReviewError, lambda e: (jsonify(error={'code': e.code}), e.status))
-        register_accounts(app, {}, Reviewer(), Budget(), store=self.store, executor=Executor())
+        register_accounts(app, {}, Reviewer(), store=self.store, executor=Executor())
         accounts = app.extensions['articheck_accounts']
         clients = []
         raw = {'paper': b'%PDF-1.7 test bytes', 'code': b'PK test zip bytes' * 160_000}
