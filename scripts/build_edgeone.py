@@ -38,10 +38,18 @@ def build(output, *, esbuild=None):
     for path in modules:
         path.rename(path.with_suffix('.js'))
     if esbuild:
+        # The parser lives in the entry bundle. A versioned worker avoids stale
+        # cache entries and keeps the browser worker relative to the vendored assets.
+        worker = output / 'vendor/pdfjs/pdf.worker.min.js'
+        version = hashlib.sha256(worker.read_bytes()).hexdigest()[:12]
+        versioned_worker = worker.with_name(f'pdf.worker.{version}.js')
+        worker.rename(versioned_worker)
+        intake = output / 'intake.js'
+        intake.write_text(intake.read_text().replace(worker.name, versioned_worker.name))
         entrypoint = output / 'app.js'
         bundled = output / 'workbench.bundle.js'
         subprocess.run([esbuild, str(entrypoint), '--bundle', '--platform=browser', '--format=esm',
-                        '--external:./vendor/pdfjs/*', f'--outfile={bundled}'], check=True)
+                        f'--outfile={bundled}'], check=True)
         bundled.replace(entrypoint)
     digest = hashlib.sha256()
     for path in sorted(output.rglob('*.js')):

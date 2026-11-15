@@ -18,7 +18,14 @@ function openStore(){return new Promise((resolve,reject)=>{const r=indexedDB.ope
 function transaction(db,mode,fn){return new Promise((resolve,reject)=>{const t=db.transaction('projects',mode),request=fn(t.objectStore('projects'));let value;request.onsuccess=()=>{value=request.result};t.oncomplete=()=>resolve(value);t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||Error('项目保存失败'));});}
 async function hash(blob){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('');}
 let pdfLibrary;
-async function pdfjs(){if(!pdfLibrary){pdfLibrary=await import('./vendor/pdfjs/pdf.min.mjs');pdfLibrary.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdfjs/pdf.worker.min.mjs',import.meta.url).href;}return pdfLibrary;}
+async function pdfjs(){
+ if(!pdfLibrary){
+  try{pdfLibrary=await import('./vendor/pdfjs/pdf.min.mjs');}
+  catch(error){throw new Error('PDF 解析组件加载失败，请刷新工作台后重新上传。',{cause:error});}
+  pdfLibrary.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdfjs/pdf.worker.min.mjs',import.meta.url).href;
+ }
+ return pdfLibrary;
+}
 export class IntakeWorkspace {
  constructor(hooks){this.h=hooks;this.presentation=new PresentationReview(this);this.autoDemo=hooks.mode?.()==='demo';this.assessor=new PaperAssessment(this);this.resourceInspector=new ResourceWorkspace(this);this.reproduction=new ReproductionWorkspace(this);this.projects=[];this.draft=blank();this.activeId=null;this.step='materials';this.page=1;this.busy='';this.error='';this.pdf=null;this.pdfKey=null;this.renderJob=null;this.activeClaimId=null;this.mobilePaper=false;this.pendingSave=null;this.storageError='';this.importNonce=0;}
  async init(){try{this.db=await openStore();this.projects=await transaction(this.db,'readonly',s=>s.getAll());this.activeId=localStorage.getItem('articheck:active-project');this.step=localStorage.getItem('articheck:step:'+this.activeId)||'materials';if(!steps.some(s=>s[0]===this.step))this.step='materials';}catch(e){this.storageError='浏览器存储不可用，当前项目只保留在本次会话中。';}this.addSample();this.presentation.restore();}
@@ -90,7 +97,10 @@ export class IntakeWorkspace {
     const bytes=await file.arrayBuffer();if(new TextDecoder().decode(bytes.slice(0,5))!=='%PDF-')throw Error('文件内容不是 PDF');
     const lib=await pdfjs();const job=lib.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,useSystemFonts:true,cMapUrl:new URL('./vendor/pdfjs/cmaps/',import.meta.url).href,cMapPacked:true,wasmUrl:new URL('./vendor/pdfjs/wasm/',import.meta.url).href,standardFontDataUrl:new URL('./vendor/pdfjs/standard_fonts/',import.meta.url).href});
     job.onPassword=()=>{job.destroy();};let doc;
-    try{doc=await job.promise;}catch(e){throw Error(e.name==='PasswordException'?'论文带有密码，请先导出无密码版本。':'PDF 无法解析，请检查文件是否损坏或加密。');}
+    try{doc=await job.promise;}catch(e){
+     if(/setting up fake worker failed/i.test(e.message||''))throw new Error('PDF 解析组件加载失败，请刷新工作台后重新上传。',{cause:e});
+     throw Error(e.name==='PasswordException'?'论文带有密码，请先导出无密码版本。':'PDF 无法解析，请检查文件是否损坏或加密。');
+    }
     try{
      if(doc.numPages>MAX_PAGES)throw Error('论文超过 150 页，请导出需要评估的部分');
      const pages=[];
