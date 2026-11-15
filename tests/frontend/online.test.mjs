@@ -104,7 +104,7 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  const execHtml=ws.execution(multiStageReport,false);
  assert.doesNotMatch(execHtml,/云端隔离执行|意外中断最多重试 3 次|terminal-abort-btn/);
  assert.doesNotMatch(execHtml,/展开完整日志|实时动态输出|来源 s1/);
- assert.match(execHtml,/中断运行/);
+ assert.doesNotMatch(execHtml,/data-online="(?:pause|terminate-review)"/);
  assert.doesNotMatch(execHtml,/NVIDIA GeForce RTX 4090/);
  assert.match(execHtml,/terminal-live-tail/);
  assert.match(execHtml,/Epoch 3\/10 acc=91\.4%/);
@@ -176,16 +176,17 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  assert.match(activityHtml,/class="live-heading"/);
  assert.match(activityHtml,/class="live-dots"/);
 
- // 2. Report tab hidden before review completes, terminal button present in toolbar, endedCard shown on cancelled/failed
+ // 2. Report tab hidden before review completes, paused projects have a single continue and terminate control
  const wsRender=new OnlineWorkspace({projects:[{id:'p1',title:'Test Proj',paper:{name:'a.pdf',pages:[1]},online_report:{id:'j1',format:'articheck.online_assessment.v2',source:'model_api_review',scientific_validation:false,status:'cancelled',error:'user_cancelled',review:null,activity:[{title:'审查已手动中止',roles:['reporter'],status:'failed',time:1700000003}]}}],save:async()=>{},h:{render(){},icon:()=>'',account:()=>null},esc:v=>String(v??'')});
  wsRender.selected='p1';
  wsRender.tab='process';
  const cancelledView=wsRender.render();
  assert.doesNotMatch(cancelledView,/data-online="terminal"/);
  assert.doesNotMatch(cancelledView,/data-online-tab="report"/);
- assert.match(cancelledView,/review-ended/);
- assert.match(cancelledView,/审查已中断/);
- assert.match(cancelledView,/data-online="resume-review"/);
+ assert.match(cancelledView,/已暂停/);
+ assert.equal([...cancelledView.matchAll(/data-online="continue-review"/g)].length,1);
+ assert.equal([...cancelledView.matchAll(/data-online="terminate-review"/g)].length,1);
+ assert.doesNotMatch(cancelledView,/正在提交审查|正在协作审查|data-online="pause"/);
  assert.doesNotMatch(cancelledView,/当前材料与该报告的版本不同/);
 
  const project=wsRender.i.projects[0];
@@ -362,4 +363,55 @@ test('paired contributions use the paper axis and preserve fixed papers and spac
  graph.placeDetailNodes(nodes,edges);
  assert.deepEqual(nodes.map(({x,y})=>[x,y]),placed);
  assert.deepEqual([a,b,c].map(({x,y})=>[x,y]),papers);
+});
+
+test('an unconfirmed stop stays actionable; archive-targeted termination stops the intended submission', async()=>{
+ const {OnlineWorkspace}=await import('../../web/dist/online-workspace.mjs');
+ const ws=Object.create(OnlineWorkspace.prototype);
+ const selected={id:'other'};
+ const id='a'.repeat(32);
+ const target={id:'archive-row',online_pending_request:{id,key:'paper'}};
+ const notices=[];
+ const snapshot={id,format:'articheck-online-assessment-v2',source:'model_api_review',scientific_validation:false,status:'cancelled',review:null};
+ Object.assign(ws,{i:{h:{page:()=> 'personal-archive',toast:(message)=>notices.push(message)}},selected:selected.id,
+  save:async()=>{},renderNow:()=>{}});
+ ws.request=async(path,body)=>{
+  assert.equal(path,'/assessments/'+id+'/cancel');
+  assert.deepEqual(body,{terminate:true});
+  if(!target.online_cancel_error&&notices.length===0)throw Error('temporarily unavailable');
+  return {...snapshot,terminated_at:'now'};
+ };
+ await ws.action('terminate-review',target);
+ assert.equal(ws.controlState(target).retry,true);
+ assert.equal(target.online_report,undefined);
+ assert.equal(target.online_pending_request.id,id);
+ await ws.action('retry-control',target);
+ assert.equal(ws.controlState(target).terminated,true);
+ assert.equal(ws.selected,selected.id);
+ assert.equal(target.online_pending_request,null);
+});
+
+test('pause then continue uses the existing experiment plan and leaves confirmed termination final', async()=>{
+ const {OnlineWorkspace}=await import('../../web/dist/online-workspace.mjs');
+ const ws=Object.create(OnlineWorkspace.prototype);
+ const id='b'.repeat(32),attempt='previous-attempt';
+ const review={criteria:Array(8).fill({}),metrics:[],findings:[],plan:{stages:[{id:'S1'}]}};
+ const project={id:'project',online_report:{id,format:'articheck-online-assessment-v2',source:'model_api_review',
+  scientific_validation:false,status:'completed',review,execution:{status:'running',attempt_id:attempt}}};
+ project.online_input_key=inputKey(project);
+ Object.assign(ws,{i:{h:{page:()=> 'api-review'}},selected:project.id,save:async()=>{},renderNow:()=>{},
+  request:async(path,body)=>{
+   assert.equal(path,'/assessments/'+id+'/cancel');
+   assert.deepEqual(body,{});
+   return {...project.online_report,execution:{status:'cancelled',attempt_id:attempt}};
+  }});
+ await ws.action('pause',project);
+ assert.equal(ws.controlState(project).paused,true);
+ let continued=0;
+ ws.execute=async(p,{retry})=>{assert.equal(p,project);assert.equal(retry,true);continued++;};
+ await ws.action('continue-review',project);
+ assert.equal(continued,1);
+ project.online_report.terminated_at='now';
+ await ws.action('continue-review',project);
+ assert.equal(continued,1);
 });

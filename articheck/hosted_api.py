@@ -534,6 +534,7 @@ def register(app, env, reviewer, *, store=None, executor=None):
     def cancel(job):
         owner = authorize()
         payload = body() if request.is_json else {}
+        terminate_requested = payload.get('terminate') is True
         for _ in range(6):
             try:
                 value = store.get(owner, job)
@@ -544,12 +545,14 @@ def register(app, env, reviewer, *, store=None, executor=None):
                              'format': 'articheck-online-assessment-v2', 'source': 'model_api_review',
                              'execution_performed': False, 'scientific_validation': False,
                              'notice': '审查已按请求中止。', 'activity': []}
-                if payload.get('terminate') is True:
+                if terminate_requested:
                     tombstone['termination_requested'] = True
                     complete_termination(tombstone)
                 if store.claim(owner, tombstone):
                     return jsonify(tombstone)
                 continue
+            if value.get('terminated_at'):
+                return jsonify(value)
             previous = copy.deepcopy(value)
             if value.get('status') == 'reviewing':
                 for event in value.get('activity') or []:
@@ -570,9 +573,9 @@ def register(app, env, reviewer, *, store=None, executor=None):
                 value['execution'] = {'status': 'cancelled', 'attempt_id': uuid.uuid4().hex,
                                       'execution_performed': False, 'scientific_validation': False,
                                       'notice': '已取消启动实验。'}
-            else:
+            elif not terminate_requested:
                 return jsonify(value)
-            if payload.get('terminate') is True:
+            if terminate_requested:
                 value['termination_requested'] = True
             complete_termination(value)
             if not store.replace(owner, previous, value):

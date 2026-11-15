@@ -1,10 +1,11 @@
+import {reviewControlState, reviewControlButtons} from './review-controls.mjs';
 import {ROLES,kindLabels,sourceLabels,statusLabels,executionRecords,filterRecords,recordCounts,progressText,roleEvents,rolePayload,roleState,fullRoleRun} from './execution-core.mjs';
 import {validateReproductionReport} from './reproduction-core.mjs';
 import {reportVerdict} from './report-verdict.mjs';
 import {hasCode,criterionNames,encoded} from './online-core.mjs';
 
 const date=value=>value?value.slice(0,16).replace('T',' '):'未记录时间';
-const archiveStates={draft:'待启动',reviewing:'正在审阅',queued:'执行中',reproducing:'正在复现',cancelling:'正在中断',waiting:'等待资源',interrupted:'已中断',completed:'已完成',terminated:'已终止'};
+const archiveStates={draft:'待启动',reviewing:'正在审阅',queued:'执行中',reproducing:'正在复现',cancelling:'正在中断',waiting:'等待资源',paused:'已暂停',interrupted:'已中断',completed:'已完成',terminated:'已终止'};
 const archiveInProgress=new Set(['reviewing','queued','reproducing','cancelling']);
 const archiveExecutionFilters={in_progress:'执行中',...Object.fromEntries(Object.entries(archiveStates).filter(([key])=>!archiveInProgress.has(key)))};
 const matchesStatus=(item,key)=>key==='in_progress'?archiveInProgress.has(item.statusKey):item.statusKey===key;
@@ -57,12 +58,12 @@ export class ExecutionCenter {
    const execStages=ex?.stages||[];
    const codeBound=Boolean(hasCode(p)||r?.materials?.code);
    const paperOnly=Boolean(!codeBound&&(p.paper||r?.materials?.paper));
-   const terminated=Boolean(r?.terminated_at);
-   const isCancelling=!terminated&&Boolean(this.h.isProjectCancelling?.(p.id)||ex?.status==='cancelling');
-   const reviewingNow=!terminated&&!isCancelling&&Boolean(r?.status==='reviewing'||p.online_pending_request);
+   const control=this.h.reviewControlState?.(p)||reviewControlState(p);
+   const {terminated,paused}=control,isCancelling=control.stopping;
+   const reviewingNow=control.running&&!p.online_execution_pending&&!['queued','starting','running'].includes(ex?.status);
    const waiting=!terminated&&Boolean(ex?.needs_user||(!ex&&(r?.review?.resource_preflight?.needs_user||(r?.review?.task==='reproduction'&&!codeBound))));
    const interrupted=Boolean(['failed','cancelled'].includes(r?.status)||['failed','cancelled','expired'].includes(ex?.status)||execStages.some(stage=>stage.status==='failed'));
-   const statusKey=terminated?'terminated':isCancelling?'cancelling':reviewingNow?'reviewing':
+   const statusKey=terminated?'terminated':paused?'paused':isCancelling||control.retry?'cancelling':reviewingNow?'reviewing':
     ex?.status==='running'?'reproducing':(p.online_execution_pending||['queued','starting'].includes(ex?.status))?'queued':
     waiting?'waiting':interrupted?'interrupted':r?.review?'completed':'draft';
    const completedCount=execStages.filter(stage=>stage.status==='completed').length;
@@ -80,9 +81,9 @@ export class ExecutionCenter {
     statusKey==='completed'&&r?.review?.findings?.length?'issues':
     verdict?.state==='passed'&&completedEvidence?'passed':'unassessed';
    const active=['reviewing','queued','reproducing'].includes(statusKey);
-   const statusTone=['waiting','interrupted','cancelling'].includes(statusKey)?'amber':
+   const statusTone=['waiting','interrupted','cancelling','paused'].includes(statusKey)?'amber':
     active||statusKey==='completed'&&verdictKey==='passed'?'green':'neutral';
-   const statusLabel=archiveInProgress.has(statusKey)?archiveExecutionFilters.in_progress:archiveStates[statusKey];
+   const statusLabel=control.retry?(control.intent==='pause'?'暂停未确认':'中断未确认'):isCancelling?(control.intent==='pause'?'正在暂停':'正在中断'):archiveInProgress.has(statusKey)?archiveExecutionFilters.in_progress:archiveStates[statusKey];
    const materialKey=paperOnly?'paper_only':codeBound?(p.paper||r?.materials?.paper?'both':'code_only'):'none';
    const rawTime=p.updated_at||r?.updated_at||p.created_at||new Date().toISOString();
    const ts=Date.parse(rawTime)||0;
@@ -98,10 +99,10 @@ export class ExecutionCenter {
     paperOnly,
     codeBound,
     reportId:r?.id,
-    shareable:r?.status==='completed'&&!terminated&&!isCancelling&&!reviewingNow&&!p.online_execution_pending&&!ex?.needs_user&&
+    shareable:r?.status==='completed'&&!terminated&&!paused&&!control.retry&&!isCancelling&&!reviewingNow&&!p.online_execution_pending&&!ex?.needs_user&&
      !r.termination_requested&&!['queued','starting','running','cancelled'].includes(ex?.status),
     statusKey,
-    retryCancel:Boolean(p.online_cancel_error),
+    control:{...control,canTerminate:control.canTerminate||['waiting','interrupted'].includes(statusKey)},
     statusLabel,
     verdictKey,
     statusTone, active, materialKey,
@@ -227,12 +228,12 @@ export class ExecutionCenter {
        </td>
        <td class="archive-col-actions">
         <div class="order-actions-col">
-         ${item.statusKey==='cancelling'?(item.retryCancel?`<button type="button" class="btn small danger" data-order-cancel="${e(item.id)}">重试中断</button>`:'<button type="button" class="btn small" disabled>正在中断</button>'):
-          ['reviewing','queued','reproducing'].includes(item.statusKey)?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看进度</button><button type="button" class="btn small danger" data-order-cancel="${e(item.id)}">中断运行</button>`:
-          ['waiting','interrupted'].includes(item.statusKey)?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看诊断</button><button type="button" class="btn danger small" data-order-terminate="${e(item.id)}">终止审查</button>`:
+         ${['reviewing','queued','reproducing','cancelling'].includes(item.statusKey)?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="process">查看进度</button>`:
+          ['waiting','interrupted','paused'].includes(item.statusKey)?`<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="process">${item.statusKey==='paused'?'查看记录':'查看诊断'}</button>`:
           item.statusKey==='terminated'?`<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="process">查看记录</button>`:
           item.hasReport?`<button type="button" class="btn primary small" data-order-open="${e(item.id)}" data-order-tab="report">查看报告</button>`:
           `<button type="button" class="btn small" data-order-open="${e(item.id)}" data-order-tab="materials">准备材料</button>`}
+         ${reviewControlButtons(item.control,action=>action==='terminate-review'?`data-order-terminate="${e(item.id)}"`:`data-order-control="${action}" data-order-project="${e(item.id)}"`)}
         </div>
        </td>
       </tr>`).join('')}
@@ -517,7 +518,7 @@ export class ExecutionCenter {
    this.h.render();
   });
   document.addEventListener('click',async event=>{
-   const el=event.target.closest('[data-archive-action],[data-order-filter],[data-order-open],[data-order-cancel],[data-order-terminate],[data-center-open],[data-center-status],[data-center-tab],[data-center-back],[data-center-clear],[data-center-more],[data-center-refresh],[data-center-stop],[data-center-export],[data-center-role],[data-role-nav]');
+   const el=event.target.closest('[data-archive-action],[data-order-filter],[data-order-open],[data-order-control],[data-order-terminate],[data-center-open],[data-center-status],[data-center-tab],[data-center-back],[data-center-clear],[data-center-more],[data-center-refresh],[data-center-stop],[data-center-export],[data-center-role],[data-role-nav]');
    if(!el)return;
    try{
     if(el.dataset.archiveAction==='share'){await this.openCaseShare();return;}
@@ -555,8 +556,8 @@ export class ExecutionCenter {
     }
     if(el.dataset.orderFilter){this.orderFilter=el.dataset.orderFilter;this.h.render();return;}
     if(el.dataset.orderOpen){this.h.openOnlineOrder?.(el.dataset.orderOpen,el.dataset.orderTab||'process');return;}
-    if(el.dataset.orderTerminate){await this.h.terminateOnlineOrder?.(el.dataset.orderTerminate);return;}
-    if(el.dataset.orderCancel){await this.h.cancelOnlineOrder?.(el.dataset.orderCancel);return;}
+    if(el.dataset.orderTerminate){await this.h.controlOnlineOrder?.(el.dataset.orderTerminate,'terminate-review');return;}
+    if(el.dataset.orderControl){await this.h.controlOnlineOrder?.(el.dataset.orderProject,el.dataset.orderControl);return;}
     if(el.dataset.centerOpen){await this.open(el.dataset.centerOpen,this.h.state().page==='evidence'?'evidence':'overview');return;}
     if(el.dataset.centerStatus){this.filters.status=el.dataset.centerStatus;this.limit=25;}
     if(el.dataset.centerTab)this.tab=el.dataset.centerTab;

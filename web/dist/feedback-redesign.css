@@ -2702,3 +2702,14 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .rpt-meta a.shared-case-download[aria-busy="true"]{opacity:.6;cursor:wait}
 .kg-operation-list[hidden]{display:none}
 .kg-task-status button.danger{color:#a81f2b;background:#fff0f1;border-color:#e2a1aa}
+
+.online-progress { flex-wrap: wrap; }
+.online-progress [role="status"] { margin-right: auto; }
+.btn.review-control { min-inline-size: 4.5em; justify-content: center; }
+.btn.review-control-pause { color: #813c09; background: #fffae8; border-color: #eac875; }
+.btn.review-control-continue { color: #126343; background: #e9f9ef; border-color: #90d3ab; }
+.btn.review-control-stop { color: #a71332; background: #fff0f2; border-color: #f0aab7; }
+.btn.review-control-pause:hover { background: #fff0bd; }
+.btn.review-control-continue:hover { background: #d6f5e2; }
+.btn.review-control-stop:hover { background: #ffe0e6; }
+.btn.review-control:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }

@@ -373,6 +373,28 @@ class HostedReviewTests(unittest.TestCase):
         self.assertEqual([row['title'] for row in graph['W1']], ['Patch routing layer'])
         self.assertEqual(len(edges), 1)
 
+    def test_permanent_stop_of_paused_execution_preserves_evidence(self):
+        store = MemoryStore()
+        store.namespace = 'test'
+        app = Flask(__name__)
+        app.register_error_handler(ReviewError, lambda error: (jsonify(error=str(error)), error.status))
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, Reviewer(),
+                 store=store, executor=Executor())
+        job = 'e' * 32
+        execution = {'status': 'cancelled', 'attempt_id': 'previous',
+                     'stages': [{'id': 'S1', 'status': 'completed', 'stdout': 'evidence'}]}
+        store.save(OWNER, {'id': job, 'status': 'completed',
+                           'execution': execution, 'review': {'plan_sha256': 'sha'}})
+        client = app.test_client()
+        path = '/assessments/' + job
+        self.assertNotIn('terminated_at', client.post(path + '/cancel', json={}, headers=HEADERS).json)
+        stopped = client.post(path + '/cancel', json={'terminate': True}, headers=HEADERS).json
+        repeated = client.post(path + '/cancel', json={'terminate': True}, headers=HEADERS).json
+        self.assertTrue(stopped['terminated_at'])
+        self.assertEqual(repeated['terminated_at'], stopped['terminated_at'])
+        self.assertEqual(stopped['execution'], execution)
+        self.assertEqual(client.post(path + '/execute', json={}, headers=HEADERS).status_code, 409)
+
     def test_terminated_assessment_cannot_reopen_or_resume_execution(self):
         store = MemoryStore()
         store.namespace = 'test'
