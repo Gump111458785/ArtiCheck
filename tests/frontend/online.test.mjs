@@ -455,3 +455,12 @@ test('a native material picker still imports into its original review after a re
   assert.equal(imports.length,1);
  }finally{globalThis.document=previousDocument;}
 });
+
+test('ready material badge sits at the bottom-right corner clear of the top-right remove button',async()=>{
+ const fs=await import('node:fs');
+ const redesignCss=fs.readFileSync(new URL('../../web/dist/feedback-redesign.css',import.meta.url),'utf8');
+ const onlineCss=fs.readFileSync(new URL('../../web/dist/online.css',import.meta.url),'utf8');
+ assert.match(redesignCss,/\.online-upload\.has-file::after\{[^}]*content:"✓ 已就绪";[^}]*bottom:14px;right:14px;/);
+ assert.doesNotMatch(redesignCss,/\.online-upload\.has-file::after\{[^}]*top:/);
+ assert.match(onlineCss,/\.online-remove-material\{[^}]*top:8px;right:8px;/);
+});

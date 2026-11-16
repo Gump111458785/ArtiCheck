@@ -32,5 +32,6 @@ button.online-service{background:none;padding:8px 0;cursor:pointer}button.online
 
 .online-material-card{position:relative;display:grid;min-width:0}
 .online-material-card .online-upload.has-remove{padding-right:52px}
+.online-upload.has-file,.online-material-card .online-upload.has-file{padding-right:92px}
 .online-remove-material{position:absolute;top:8px;right:8px;min-width:32px;min-height:32px;display:grid;place-items:center;border:1px solid transparent;background:transparent;color:#64748b;font-size:22px;line-height:1;cursor:pointer}
 .online-remove-material:hover,.online-remove-material:focus-visible{color:#b91c1c;background:#fff1f2;border-color:#fecdd3}
