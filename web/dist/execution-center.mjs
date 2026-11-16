@@ -63,7 +63,7 @@ export class ExecutionCenter {
    const reviewingNow=control.running&&!p.online_execution_pending&&!['queued','starting','running'].includes(ex?.status);
    const waiting=!terminated&&Boolean(ex?.needs_user||(!ex&&(r?.review?.resource_preflight?.needs_user||(r?.review?.task==='reproduction'&&!codeBound))));
    const interrupted=Boolean(['failed','cancelled'].includes(r?.status)||['failed','cancelled','expired'].includes(ex?.status)||execStages.some(stage=>stage.status==='failed'));
-   const statusKey=terminated?'terminated':paused?'paused':isCancelling||control.retry?'cancelling':reviewingNow?'reviewing':
+   const statusKey=terminated?'terminated':paused?'paused':isCancelling?'cancelling':reviewingNow?'reviewing':
     ex?.status==='running'?'reproducing':(p.online_execution_pending||['queued','starting'].includes(ex?.status))?'queued':
     waiting?'waiting':interrupted?'interrupted':r?.review?'completed':'draft';
    const completedCount=execStages.filter(stage=>stage.status==='completed').length;
@@ -83,7 +83,7 @@ export class ExecutionCenter {
    const active=['reviewing','queued','reproducing'].includes(statusKey);
    const statusTone=['waiting','interrupted','cancelling','paused'].includes(statusKey)?'amber':
     active||statusKey==='completed'&&verdictKey==='passed'?'green':'neutral';
-   const statusLabel=control.retry?(control.intent==='pause'?'暂停未确认':'中断未确认'):isCancelling?(control.intent==='pause'?'正在暂停':'正在中断'):archiveInProgress.has(statusKey)?archiveExecutionFilters.in_progress:archiveStates[statusKey];
+   const statusLabel=isCancelling?(control.intent==='pause'?'正在暂停':'正在中断'):archiveInProgress.has(statusKey)?archiveExecutionFilters.in_progress:archiveStates[statusKey];
    const materialKey=paperOnly?'paper_only':codeBound?(p.paper||r?.materials?.paper?'both':'code_only'):'none';
    const rawTime=p.updated_at||r?.updated_at||p.created_at||new Date().toISOString();
    const ts=Date.parse(rawTime)||0;
@@ -102,7 +102,7 @@ export class ExecutionCenter {
     shareable:r?.status==='completed'&&!terminated&&!paused&&!control.retry&&!isCancelling&&!reviewingNow&&!p.online_execution_pending&&!ex?.needs_user&&
      !r.termination_requested&&!['queued','starting','running','cancelled'].includes(ex?.status),
     statusKey,
-    control:{...control,canTerminate:control.canTerminate||['waiting','interrupted'].includes(statusKey)},
+    control,
     statusLabel,
     verdictKey,
     statusTone, active, materialKey,

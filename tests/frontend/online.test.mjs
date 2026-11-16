@@ -415,3 +415,19 @@ test('pause then continue uses the existing experiment plan and leaves confirmed
  await ws.action('continue-review',project);
  assert.equal(continued,1);
 });
+
+test('review controls disappear during material transfer and after review completes despite a stale pause request', async()=>{
+ const {reviewControlState,reviewControlButtons}=await import('../../web/dist/review-controls.mjs');
+ const render=(project,options)=>reviewControlButtons(reviewControlState(project,options),()=>'');
+ const pending={online_pending_request:{id:'review'},online_cancel_error:true,online_control_request:'pause'};
+ assert.equal(render(pending,{preparing:true}),'');
+ assert.equal(render({...pending,online_upload_pending:{id:'upload'}}),'');
+ assert.match(render(pending),/>暂停<\/button>/);
+ const completed={...pending,online_report:{id:'review',status:'completed',review:{}}};
+ assert.equal(render(completed),'');
+ assert.equal(render({...completed,online_execution_pending:{id:'review',retry_of:null},
+  online_report:{...completed.online_report,execution:{attempt_id:'attempt',status:'completed'}}}),'');
+ const paused={online_paused:true,online_report:{id:'review',status:'cancelled'}};
+ assert.match(render(paused),/>继续<\/button>/);
+ assert.equal(render(paused,{preparing:true}),'');
+});

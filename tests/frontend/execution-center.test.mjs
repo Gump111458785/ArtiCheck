@@ -77,7 +77,7 @@ test('archive treats each execution state and review verdict as an independent f
  assert.deepEqual(Object.values(byId).filter(item=>center.matchesArchiveFilter(item)).map(item=>item.id).sort(),['interrupted','red','waiting']);
  center.archiveFilters.verdict='all';
  const html=center.renderOrderCenter();
- assert.match(html,/data-order-terminate="interrupted"/);
+ assert.doesNotMatch(html,/data-order-terminate="interrupted"/);
  assert.match(html,/<th[^>]*>执行状态<\/th>\s*<th[^>]*>审查结论<\/th>/);
  assert.doesNotMatch(html,/任务类型|执行状态与审查结论/);
  assert.doesNotMatch(html,/data-order-terminate="closed"/);
