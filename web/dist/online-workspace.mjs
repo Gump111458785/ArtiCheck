@@ -155,7 +155,51 @@ export class OnlineWorkspace{
   return false;
  }
  async new(){this.i.h.modal('新建审查',`<form id="new-review-form"><div class="online-field"><label for="review-project-name">项目名称</label><input id="review-project-name" name="title" maxlength="160" placeholder="例如：ResNet 图表与代码核查" required></div><button class="btn primary" type="submit">创建审查项目</button></form>`);document.querySelector('#review-project-name')?.focus();}
- async createProject(title){const p={id:uid(),online_account:this.i.h.account?.()?.id||null,title:title.trim(),created_at:new Date().toISOString(),paper:null,repository:null,claims:[],resources:{},online_task:'auto',online_scope:'',online_max_seconds:'',online_auto_execute:true};if(!p.title)return;this.i.projects.unshift(p);this.selected=p.id;this.i.activeId=p.id;this.tab='materials';this.phase='materials';this.activeRoleNode=null;this.error='';this.execNotice='';this.errors={};await this.i.save(p);this.i.h.closeModal();this.i.h.navigate('api-review');}
+ async createProject(title,initial={}){
+  const p={id:uid(),online_account:this.i.h.account?.()?.id||null,title:title.trim(),created_at:new Date().toISOString(),
+   paper:null,repository:null,claims:[],resources:{},online_task:'auto',online_scope:'',online_max_seconds:'',
+   online_auto_execute:true,...initial};
+  if(!p.title)return;
+  this.i.projects.unshift(p);this.selected=p.id;this.i.activeId=p.id;this.tab='materials';this.phase='materials';
+  this.activeRoleNode=null;this.error='';this.execNotice='';this.errors={};this.repoState='';
+  clearTimeout(this.repoTimer);
+  await this.i.save(p);
+  this.i.h.closeModal();
+  this.i.h.navigate('api-review');
+  return p;
+ }
+ async reproduceGraphPaper(title,{paper,pdf,repository,repositoryUrl,paperId,pdfError}){
+  if(this.busy||this.controlProject||this.repoPending||this.creatingGraphReview)
+   throw Error('正在处理另一项审查操作，请稍后再试。');
+  this.creatingGraphReview=true;
+  try{
+   const p=await this.createProject(title,{paper,repository,online_purpose:'reproduce_other',online_graph_paper_id:paperId});
+   if(!p||!this.isViewing(p))return;
+   if(!p.paper&&pdf)await this.upload('paper',pdf);
+   if(!this.isViewing(p))return;
+   if(!p.paper)p.online_graph_pdf_notice=this.error||pdfError||'未找到可用的开放 PDF。你可以上传原文。';
+   const url=normalizeGitHubUrl(repositoryUrl);
+   if(url){
+    p.repo_url=url;
+    await this.save(p);
+    if(this.isViewing(p)&&!hasCode(p))await this.github(false,false,p);
+   }
+   if(!hasCode(p)&&url&&this.error){
+    p.online_graph_code_notice='代码获取失败，可重新读取仓库或上传 ZIP。';
+   }
+   if(!p.paper&&!hasCode(p)&&!url){
+    p.online_graph_code_notice='尚无可确认的代码来源。你可以填写 GitHub 地址或上传 ZIP。';
+   }
+   await this.save(p);
+   if(!this.isViewing(p))return;
+   if(p.paper||hasCode(p)){
+    this.consent=true;
+    void this.action('submit',p);
+   }else this.renderNow();
+  }finally{
+   this.creatingGraphReview=false;
+  }
+ }
  viewReport(p){
   if(this.operationProject===p?.id&&this.liveReport)return this.liveReport;
   const report=p?.online_report;
@@ -505,6 +549,7 @@ export class OnlineWorkspace{
  }
  materials(p){const e=v=>this.esc(v),report=p.online_report,hasReport=Boolean(report?.review),repoDisplayName=p.repository?.repo_name||p.repository?.name?.replace(/\.zip$/i,'')||p.title||'',repoText=this.repoState||(p.repository?.commit?`源码已读取 · ${repoDisplayName} (${p.repository.commit.slice(0,8)})`:hasCode(p)&&repoDisplayName?`源码已读取 · ${repoDisplayName}`:''),repoStatusClass=this.repoStartedAt?'loading':this.repoState==='读取失败'?'failed':repoText.startsWith('支持粘贴')?'hint':repoText?'ready':'';
  return `<div class="online-intake-grid"><section class="online-form"><div class="online-section-heading"><h2>论文与代码</h2><span>至少提供一项</span></div>
+ ${[!p.paper&&p.online_graph_pdf_notice,!hasCode(p)&&p.online_graph_code_notice].filter(Boolean).map(message=>`<p class="online-notice" role="status">${e(message)}</p>`).join('')}
  <div class="online-upload-pair"><label class="online-upload ${p.paper?'has-file':''}" for="online-pdf"><div class="upload-card-top"><span class="upload-icon">${UI_SVG.pdf}</span><span>论文 PDF</span></div><strong>${e(p.paper?.name||'上传论文')}</strong><small>${p.paper?`${p.paper.pages?.length||0} 页 · 点击替换`:'用于图表指标、数据与论证自查'}</small><input id="online-pdf" type="file" accept=".pdf,application/pdf" data-online-upload="paper" ${this.busy?'disabled':''}></label>
  <label class="online-upload ${hasCode(p)?'has-file':''}" for="online-zip"><div class="upload-card-top"><span class="upload-icon">${UI_SVG.zip}</span><span>代码 ZIP</span></div><strong>${e(p.repository?.name||'上传代码')}</strong><small>${p.repository?`${p.repository.files?.length||0} 个文件 · 点击替换`:'最大 100 MB，也可填写 GitHub 地址'}</small><input id="online-zip" type="file" accept=".zip,application/zip" data-online-upload="code" ${this.busy?'disabled':''}></label></div>${this.warn('material')}
  <div class="online-field"><label for="online-repo"><span class="field-icon-inline">${UI_SVG.github}</span>公开 GitHub 仓库 <small>可选，填入后自动读取源码</small></label><div class="online-input-action"><input id="online-repo" type="url" data-online-field="repo_url" value="${e(p.repo_url||'')}" placeholder="https://github.com/作者/仓库 或 作者/仓库" ${this.busy&&!this.parsingPaper?'disabled':''}><button class="btn" data-online="github" ${this.busy?'disabled':''}>${this.repoState==='读取失败'?'重新读取':'读取'}</button></div><div class="online-repo-state ${repoStatusClass}" role="status" ${repoStatusClass?'':'hidden'}>${this.repoStartedAt?'<span class="online-spinner" aria-hidden="true"></span>':''}<strong class="repo-state-label" title="${e(repoText)}">${e(repoText)}</strong>${this.repoStartedAt?'<span data-repo-elapsed>已等待 0 秒</span>':''}</div></div>
@@ -790,8 +835,10 @@ export class OnlineWorkspace{
     this.busy='正在准备审查材料…';this.renderNow();
     let value=await this.reviewOnce(p,startGen);
     if(value.status==='cancelled'||startGen!==(this.pollGeneration||0))return;
-    if(!p.online_purpose&&value.review?.task==='reproduction'&&value.review.repository_hint&&!hasCode(p)){
-     p.repo_url=value.review.repository_hint;
+    const repoHint=normalizeGitHubUrl(value.review?.repository_hint);
+    const graphLookup=p.online_graph_paper_id&&p.online_purpose==='reproduce_other'&&repoHint!==normalizeGitHubUrl(p.repo_url);
+    if(repoHint&&!hasCode(p)&&(graphLookup||!p.online_purpose&&value.review?.task==='reproduction')){
+     p.repo_url=repoHint;
      this.busy='已找到代码来源线索，正在自动获取源码…';this.renderNow();
      await this.github(false,true,p);
      if(hasCode(p)&&startGen===(this.pollGeneration||0)){

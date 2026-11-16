@@ -738,6 +738,12 @@ def register(app, env, reviewer, *, store=None, executor=None):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         return response
 
+    @app.post('/kg/papers/<paper_id>/reproduction-pdf')
+    def prepare_kg_reproduction_pdf(paper_id):
+        owner = authorize()
+        with kg.public_work_slot(owner):
+            return jsonify(kg.prepare_reproduction_pdf(owner, paper_id))
+
     @app.get('/kg/papers/index.md')
     def export_kg_paper_index():
         return Response(kg.paper_index(authorize()), content_type='text/markdown; charset=utf-8',

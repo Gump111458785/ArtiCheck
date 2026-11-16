@@ -20,7 +20,7 @@ export class KnowledgeGraphWorkspace{
  esc(v){return this.h.esc(v??'');}
  headers(json){let s='';try{s=sessionCapability();}catch{}return {'X-ArtiCheck-Client':'review-api',...(s?{'X-ArtiCheck-Session':s}:{}),...(json?{'Content-Type':'application/json'}:{})};}
  async api(path,payload){const res=await fetch('/v1/kg'+path,{method:payload===undefined?'GET':'POST',headers:this.headers(payload!==undefined),body:payload===undefined?undefined:JSON.stringify(payload),keepalive:path==='/layout',credentials:'same-origin',signal:AbortSignal.timeout(path==='/layout'||path.endsWith('/progress')?8000:110000)});let v;try{v=await res.json();}catch{throw Error('知识图谱服务暂未返回有效响应。');}if(!res.ok)throw Error(v?.error?.message||'知识图谱请求失败。');return v;}
- clear(){this.generation++;this.operations.clear();this.taskFeedback.clear();this.dismissedFulltext.clear();this.data=null;this.selected=null;this.linkSource=null;this.linkDraft=null;this.contextNode=null;this.mutating=false;this.expansionPaper=null;this.loading=false;this.error='';this.attachedPDF=null;this.expanded.clear();this.pinned.clear();this.focusMode=false;this.inspectorTab='detail';this.zoom=1;this.pan={x:0,y:0};this.filters={paper_id:'',year:'',direction:'',venue:''};}
+ clear(){this.generation++;this.reproductionPaper=null;this.operations.clear();this.taskFeedback.clear();this.dismissedFulltext.clear();this.data=null;this.selected=null;this.linkSource=null;this.linkDraft=null;this.contextNode=null;this.mutating=false;this.expansionPaper=null;this.loading=false;this.error='';this.attachedPDF=null;this.expanded.clear();this.pinned.clear();this.focusMode=false;this.inspectorTab='detail';this.zoom=1;this.pan={x:0,y:0};this.filters={paper_id:'',year:'',direction:'',venue:''};}
  async open(projectId){
   await this.layoutQueue;
   this.clear();
@@ -418,6 +418,10 @@ export class KnowledgeGraphWorkspace{
    body=`<h3>${e(n.full_title)}</h3><p class="kg-meta">${e(n.paper_title)}</p>${n.quote?`<blockquote>${e(n.quote)}</blockquote><p>${e(n.section||'方法正文')}${n.page?' · PDF 第 '+e(n.page)+' 页':''}</p>`:''}${n.source_url?`<a href="${e(n.source_url)}" target="_blank" rel="noopener noreferrer">方法正文来源</a>`:''}${this.data.nodes.some(child=>child.parent_id===n.id)?`<div class="kg-insp-actions"><button class="btn small" data-kg-expand="${e(n.id)}">${this.expanded.has(n.id)?'收起细分贡献':'展开细分贡献'}</button></div>`:''}`;
   }
   const paper=this.node(this.paperId(n?.id));
+  if(n?.node_type==='Paper'&&this.h.startReproduction){
+   const pending=this.reproductionPaper?.id===n.id;
+   body+=`<div class="kg-insp-actions"><button type="button" class="btn small primary" data-kg-reproduce="${e(n.id)}" ${this.reproductionPaper?'disabled':''}>${pending?'正在准备复现…':'一键复现'}</button></div>`;
+  }
   const local=this.localPaper(paper);
   const preferred=paper?.fallback_url;
   const lookup=preferred?.startsWith('https://arxiv.org/')?preferred:
@@ -427,6 +431,38 @@ export class KnowledgeGraphWorkspace{
  localPaper(paper){
   const project=(this.h.projects?.()||[]).find(p=>p.id===paper?.project_id);
   return project?.paper?.sha256&&project.paper.sha256===project.online_report?.materials?.paper?project.paper.blob:null;
+ }
+ async reproducePaper(paper){
+  if(paper?.node_type!=='Paper'||this.reproductionPaper)return;
+  const preparation={id:paper.id}, generation=this.generation;
+  this.reproductionPaper=preparation;
+  this.h.render();
+  try{
+   const source=(this.h.projects?.()||[]).find(project=>project.id===paper.project_id&&
+    (paper.assessment_id?project.online_report?.id===paper.assessment_id:
+     paper.paper_sha256&&project.online_report?.materials?.paper===paper.paper_sha256));
+   const original=source&&this.localPaper(paper)?source.paper:null;
+   const repository=source?.repository?.sha256&&source.repository.sha256===source.online_report?.materials?.code?
+    source.repository:null;
+   let pdf=this.attachedPDF?.id===paper.id?this.attachedPDF.file:null;
+   let pdfError='';
+   if(!original&&!pdf){
+    try{
+     const record=await this.api('/papers/'+encodeURIComponent(paper.id)+'/reproduction-pdf',{});
+     if(record.pdf_available)pdf=new File([await this.savedPDF(paper.id)],record.filename||'paper.pdf',{type:'application/pdf'});
+    }catch(error){pdfError=error.message;}
+   }
+   if(generation!==this.generation||this.h.isOpen?.()===false)return;
+   await this.h.startReproduction(paper.full_title||paper.title,{
+    paper:original,pdf,repository,repositoryUrl:repository?.url||paper.repository_url||source?.online_report?.review?.repository_hint,
+    paperId:paper.id,pdfError
+   });
+  }catch(error){
+   if(generation===this.generation)this.h.toast?.(error.message||'无法建立复现审查。');
+  }finally{
+   if(this.reproductionPaper===preparation)this.reproductionPaper=null;
+   if(this.h.isOpen?.()!==false)this.h.render();
+  }
  }
  async savedPDF(paperId){
   const path='/v1/kg/papers/'+encodeURIComponent(paperId)+'/pdf?chunk=';
@@ -842,6 +878,8 @@ export class KnowledgeGraphWorkspace{
    const dismiss=ev.target.closest('[data-kg-dismiss-fulltext]');
    if(dismiss){this.dismissedFulltext.add(dismiss.dataset.kgDismissFulltext);return this.h.render();}
    const view=ev.target.closest('[data-kg-view-pdf]');
+   const reproduce=ev.target.closest('[data-kg-reproduce]');
+   if(reproduce)return this.reproducePaper(this.node(reproduce.dataset.kgReproduce));
    if(view)return this.viewPaper(this.node(view.dataset.kgViewPdf));
    const reading=ev.target.closest('[data-kg-reading]');
    if(reading)return this.changeLiterature('/literature/paper',{paper_id:reading.dataset.kgReading,action:reading.dataset.kgReadingAction});

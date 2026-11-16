@@ -98,6 +98,24 @@ class ContributionExtractionTests(unittest.TestCase):
         self.assertEqual(pdf_text_status([{'text': 'A Different Paper\n' + body}], 'Routing'), 'identity_mismatch')
         self.assertEqual(pdf_text_status([{'text': 'Routing\n' + body}], 'Routing'), 'verified')
 
+    def test_reproduction_pdf_is_reused_and_removed_nodes_cannot_download(self):
+        owner = 'a' * 64
+        graph = KnowledgeGraphService({}, SimpleNamespace(namespace='test'))
+        paper = {'id': 'W2', 'title': 'Public paper'}
+        graph.update_literature(owner, lambda state: state['papers'].update({'W2': paper}))
+        raw = (Path(__file__).resolve().parents[1] / 'web/dist/samples/articheck-method-note.pdf').read_bytes()
+        record = graph.pdfs.save(graph._owner_hash(owner), raw, paper, 'https://arxiv.org/pdf/1706.03762')
+        with patch.object(graph, 'acquire_paper_pdf', return_value=([], 'verified', record)) as acquire:
+            result = graph.prepare_reproduction_pdf(owner, 'W2')
+            self.assertEqual(graph.prepare_reproduction_pdf(owner, 'W2'), result)
+            with self.assertRaisesRegex(ReviewError, '当前图谱没有这篇论文'):
+                graph.prepare_reproduction_pdf('b' * 64, 'W2')
+            graph.delete_node(owner, 'W2')
+            with self.assertRaisesRegex(ReviewError, '当前图谱没有这篇论文'):
+                graph.prepare_reproduction_pdf(owner, 'W2')
+            acquire.assert_called_once()
+        self.assertEqual(result, {'pdf_available': True, 'filename': record['filename']})
+
     def test_multilevel_expansion_follows_metadata_without_downloading_pdfs(self):
         owner = 'a' * 64
         graph = KnowledgeGraphService({}, SimpleNamespace(namespace='test'))

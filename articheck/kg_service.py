@@ -144,6 +144,8 @@ def extract_paper_graph_entry(project_payload, owner_id='anonymous'):
         'arxiv_id': payload.get('arxiv_id') or '',
         'abstract': review.get('paper_abstract') or payload.get('paper_abstract') or '',
         'paper_sha256': (report.get('materials') or {}).get('paper'),
+        'assessment_id': report.get('id', ''),
+        'repository_url': review.get('repository_hint') or (report.get('source_discovery') or {}).get('url') or '',
         'visibility': 'PRIVATE', 'source_type': payload.get('source_type') or 'USER_UPLOAD',
         'review_status': review_status, 'repro_status': reproduction, 'created_at': now(),
         'contributions': contributions, 'method_graph': review.get('method_graph') or [],
@@ -627,6 +629,37 @@ return 1
     def paper_file(self, owner, paper_id, *, offset=0, size=None):
         record = self.paper_file_record(owner,paper_id)
         return self.pdfs.read(self._owner_hash(owner),record,offset=offset,size=size), record
+
+    def prepare_reproduction_pdf(self, owner, paper_id):
+        def saved():
+            try:
+                return self.paper_file_record(owner, paper_id)
+            except ReviewError as error:
+                if error.code != 'paper_file_missing':
+                    raise
+                return None
+
+        if record := saved():
+            return {'pdf_available': True, 'filename': record['filename']}
+        with self.extraction_slot(owner, paper_id):
+            if record := saved():
+                return {'pdf_available': True, 'filename': record['filename']}
+            _, state = self.literature_state(owner)
+            own = next((paper for paper in self.owned_papers(owner) if paper['id'] == paper_id), None)
+            public = state['papers'].get(state['matches'].get(paper_id, paper_id))
+            if state['choices'].get(paper_id, {}).get('removed') or not (own or public):
+                raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
+            _, status, record = self.acquire_paper_pdf(owner, public or own, time.monotonic()+28)
+
+            def remember(state):
+                if state['choices'].get(paper_id, {}).get('removed'):
+                    raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
+                state.setdefault('pdf_attempts', {})[paper_id] = status
+                if record:
+                    state.setdefault('pdf_files', {})[paper_id] = record
+
+            self.update_literature(owner, remember)
+            return {'pdf_available': bool(record), 'filename': record['filename'] if record else ''}
 
     def paper_index(self, owner):
         _, state = self.literature_state(owner)
@@ -1449,6 +1482,8 @@ return 1
                              ('pending' if contributions or paper.get('paper_sha256') else public.get('method_status', 'unavailable')))
             papers.append({
                 'id': paper['id'], 'title': paper['title'], 'project_id': paper['project_id'],
+                'repository_url': paper.get('repository_url', ''), 'assessment_id': paper.get('assessment_id', ''),
+                'paper_sha256': paper.get('paper_sha256'),
                 'source_type': 'USER_UPLOAD', 'source_url': public.get('source_url', ''),
                 'fallback_url': public.get('fallback_url') or ('https://doi.org/'+quote(paper['doi'],safe='/') if paper.get('doi') else
                                  'https://openalex.org/works?page=1&search='+quote(paper['title'])), 'canonical': matched or paper['id'],
@@ -1510,7 +1545,9 @@ return 1
                     'fulltext_status': paper.get('fulltext_status') or library.get('pdf_attempts',{}).get(paper_id) or 'not_checked',
                     'fulltext_label': FULLTEXT_LABELS.get(paper.get('fulltext_status') or library.get('pdf_attempts',{}).get(paper_id),
                                                          FULLTEXT_LABELS['not_checked']),
-                    'can_supply_original_pdf': paper['source_type'] == 'PUBLIC_LITERATURE' or paper.get('can_supply_original_pdf', False), 'project_id': paper.get('project_id', '')}
+                    'can_supply_original_pdf': paper['source_type'] == 'PUBLIC_LITERATURE' or paper.get('can_supply_original_pdf', False),
+                    'project_id': paper.get('project_id', ''), 'repository_url': paper.get('repository_url', ''),
+                    'assessment_id': paper.get('assessment_id', ''), 'paper_sha256': paper.get('paper_sha256')}
             timeline.append(item)
             px, py = append_node({**item, 'id': paper_id, 'node_type': 'Paper', 'layer': 1,
                                   'label': paper['title'], 'full_title': paper['title'],
