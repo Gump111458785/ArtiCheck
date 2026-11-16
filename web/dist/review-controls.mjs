@@ -17,8 +17,10 @@ export function reviewControlState(project,{inFlight=false,running=false}={}){
 export function reviewControlButtons(state,attribute){
  if(state.terminated)return '';
  const button=(action,label,tone)=>`<button type="button" class="btn small review-control review-control-${tone}" ${attribute(action)}>${label}</button>`;
- if(state.retry)return button('retry-control',state.intent==='pause'?'重试暂停':'重试中断',state.intent==='pause'?'pause':'stop')+
-  (state.intent==='pause'?button('terminate-review','中断','stop'):'');
+ if(state.retry){
+  if(state.intent==='pause')return button('pause','暂停','pause')+button('terminate-review','中断','stop');
+  return button('retry-control','重试中断','stop');
+ }
  if(state.stopping)return '';
  return (state.running?button('pause','暂停','pause'):state.paused?button('continue-review','继续','continue'):'')+
   (state.running||state.canTerminate?button('terminate-review','中断','stop'):'');

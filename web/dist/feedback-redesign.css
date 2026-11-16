@@ -2224,7 +2224,7 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .archive-data-table td{padding-block:16px}
 .archive-task-sub{background:#edf3fa;color:#435975;border-radius:4px;padding:2px 6px}
 .archive-col-metrics .archive-metrics-inline{display:grid;gap:4px}
-.archive-col-actions .btn{width:100%;justify-content:flex-start}
+.archive-col-actions .btn{width:100%;justify-content:center;text-align:center}
 .archive-table-row.status-failed .order-status-pill{background:#fff0eb;color:#9a392a}
 .archive-table-row.status-running .order-status-pill{background:#ebf2ff;color:#1949a0}
 .archive-table-row.status-completed .order-status-pill.pass{background:#e8f5ee;color:#176245}
