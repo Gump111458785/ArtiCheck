@@ -431,3 +431,27 @@ test('review controls disappear during material transfer and after review comple
  assert.match(render(paused),/>继续<\/button>/);
  assert.equal(render(paused,{preparing:true}),'');
 });
+
+test('a native material picker still imports into its original review after a refresh',async()=>{
+ const {OnlineWorkspace}=await import('../../web/dist/online-workspace.mjs');
+ const workspace=Object.create(OnlineWorkspace.prototype);
+ const project={id:'original'};
+ const file={name:'paper.pdf'};
+ const oldInput={dataset:{onlineUpload:'paper'},files:[file]};
+ const newInput={dataset:{onlineUpload:'paper'},files:[]};
+ let inputs=[oldInput],selected=project,imports=[];
+ const previousDocument=globalThis.document;
+ globalThis.document={querySelectorAll:()=>inputs};
+ Object.assign(workspace,{current:()=>selected,isViewing:p=>p===selected,
+  upload:(kind,material)=>imports.push([kind,material])});
+ try{
+  workspace.bindMaterialInputs();
+  inputs=[newInput];
+  workspace.bindMaterialInputs();
+  oldInput.onchange();
+  assert.deepEqual(imports,[['paper',file]]);
+  selected={id:'other'};
+  oldInput.onchange();
+  assert.equal(imports.length,1);
+ }finally{globalThis.document=previousDocument;}
+});
