@@ -147,8 +147,9 @@ export class KnowledgeGraphWorkspace{
   const paper=this.node(this.selected);
   const expanded=this.paperDetailsExpanded(paper);
   const chosen=paper;
+  const pendingRepro=paper?.node_type==='Paper'&&this.reproductionPaper?.id===paper.id;
   return `<div class="kg-canvas-tools"><div class="kg-canvas-actions">
-   ${paper?.node_type==='Paper'?`<button class="btn small" type="button" data-kg-expand-paper aria-expanded="${expanded}">${expanded?'收起子贡献':'展开子贡献'}</button><button class="btn small" type="button" data-kg-action="expand-literature" aria-expanded="${this.expansionPaper===paper.id}" ${this.mutating?'disabled':''}>扩展此论文</button>`:''}
+   ${paper?.node_type==='Paper'?`${this.h.startReproduction?`<button class="btn small primary" type="button" data-kg-reproduce="${this.esc(paper.id)}" ${this.reproductionPaper?'disabled':''}>${pendingRepro?'正在准备复现…':'一键复现'}</button>`:''}<button class="btn small" type="button" data-kg-expand-paper aria-expanded="${expanded}">${expanded?'收起子贡献':'展开子贡献'}</button><button class="btn small" type="button" data-kg-action="expand-literature" aria-expanded="${this.expansionPaper===paper.id}" ${this.mutating?'disabled':''}>扩展此论文</button>`:''}
    <button class="btn small" type="button" data-kg-action="link-start" ${!chosen||this.mutating?'disabled':''}>${this.linkSource?'取消连线':'建立联系'}</button>
    <button class="btn small danger" type="button" data-kg-action="delete-node" ${!chosen||this.mutating?'disabled':''}>删除节点</button>
    </div>
@@ -418,10 +419,6 @@ export class KnowledgeGraphWorkspace{
    body=`<h3>${e(n.full_title)}</h3><p class="kg-meta">${e(n.paper_title)}</p>${n.quote?`<blockquote>${e(n.quote)}</blockquote><p>${e(n.section||'方法正文')}${n.page?' · PDF 第 '+e(n.page)+' 页':''}</p>`:''}${n.source_url?`<a href="${e(n.source_url)}" target="_blank" rel="noopener noreferrer">方法正文来源</a>`:''}${this.data.nodes.some(child=>child.parent_id===n.id)?`<div class="kg-insp-actions"><button class="btn small" data-kg-expand="${e(n.id)}">${this.expanded.has(n.id)?'收起细分贡献':'展开细分贡献'}</button></div>`:''}`;
   }
   const paper=this.node(this.paperId(n?.id));
-  if(n?.node_type==='Paper'&&this.h.startReproduction){
-   const pending=this.reproductionPaper?.id===n.id;
-   body+=`<div class="kg-insp-actions"><button type="button" class="btn small primary" data-kg-reproduce="${e(n.id)}" ${this.reproductionPaper?'disabled':''}>${pending?'正在准备复现…':'一键复现'}</button></div>`;
-  }
   const local=this.localPaper(paper);
   const preferred=paper?.fallback_url;
   const lookup=preferred?.startsWith('https://arxiv.org/')?preferred:

@@ -196,7 +196,8 @@ test('verdict, default-open activity hierarchy, and GPU execution labels render 
  assert.match(completedView,/data-online-tab="report"/);
  assert.doesNotMatch(completedView,/当前材料与该报告的版本不同/);
  project.online_scope='修改后的审查范围';
- assert.match(wsRender.render(),/当前材料与该报告的版本不同/);
+ assert.equal(wsRender.reportStale(project.online_report,project),true);
+ assert.doesNotMatch(wsRender.render(),/当前材料与该报告的版本不同/);
  delete project.online_scope;
 
  // Sixth-batch UI requirements:
@@ -463,4 +464,21 @@ test('ready material badge sits at the bottom-right corner clear of the top-righ
  assert.match(redesignCss,/\.online-upload\.has-file::after\{[^}]*content:"✓ 已就绪";[^}]*bottom:14px;right:14px;/);
  assert.doesNotMatch(redesignCss,/\.online-upload\.has-file::after\{[^}]*top:/);
  assert.match(onlineCss,/\.online-remove-material\{[^}]*top:8px;right:8px;/);
+});
+
+test('knowledge graph one-click reproduction button floats in top-right canvas controls only when a Paper node is selected',async()=>{
+ const {KnowledgeGraphWorkspace}=await import('../../web/dist/knowledge-graph.mjs');
+ const kg=new KnowledgeGraphWorkspace({esc:v=>String(v??''),icon:()=>'',startReproduction:async()=>{},projects:()=>[]});
+ kg.data={nodes:[
+  {id:'P1',node_type:'Paper',layer:1,label:'Paper 1',full_title:'Paper 1'},
+  {id:'C1',node_type:'Contribution',layer:2,paper_id:'P1',label:'Contribution 1',full_title:'Contribution 1'}
+ ],edges:[],timeline:[]};
+ kg.selected=null;
+ assert.doesNotMatch(kg.canvasControls(),/data-kg-reproduce/);
+ kg.selected='C1';
+ assert.doesNotMatch(kg.canvasControls(),/data-kg-reproduce/);
+ assert.doesNotMatch(kg.inspector(),/data-kg-reproduce/);
+ kg.selected='P1';
+ assert.match(kg.canvasControls(),/data-kg-reproduce="P1"[^>]*>一键复现<\/button>/);
+ assert.doesNotMatch(kg.inspector(),/data-kg-reproduce/);
 });
