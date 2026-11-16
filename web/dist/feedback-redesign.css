@@ -2273,6 +2273,7 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .interruption-step-badge,.review-ended.failed .review-ended-icon{background:#fff3ce;color:#75500c}
 
 /* Graph controls live above the SVG so panning never moves them. */
+.kg-canvas-tools-left{position:absolute;z-index:2;top:12px;left:12px;display:flex;gap:6px;width:max-content;max-width:calc(100% - 24px)}
 .kg-canvas-tools{position:absolute;z-index:2;top:12px;right:12px;width:max-content;max-width:calc(100% - 24px)}
 .kg-canvas-actions{display:flex;justify-content:flex-end;gap:6px}
 .kg-home-view{position:absolute;z-index:2;right:12px;bottom:12px}

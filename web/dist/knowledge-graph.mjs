@@ -148,10 +148,12 @@ export class KnowledgeGraphWorkspace{
   const expanded=this.paperDetailsExpanded(paper);
   const chosen=paper;
   const pendingRepro=paper?.node_type==='Paper'&&this.reproductionPaper?.id===paper.id;
-  return `<div class="kg-canvas-tools"><div class="kg-canvas-actions">
-   ${paper?.node_type==='Paper'?`${this.h.startReproduction?`<button class="btn small primary" type="button" data-kg-reproduce="${this.esc(paper.id)}" ${this.reproductionPaper?'disabled':''}>${pendingRepro?'正在准备复现…':'一键复现'}</button>`:''}<button class="btn small" type="button" data-kg-expand-paper aria-expanded="${expanded}">${expanded?'收起子贡献':'展开子贡献'}</button><button class="btn small" type="button" data-kg-action="expand-literature" aria-expanded="${this.expansionPaper===paper.id}" ${this.mutating?'disabled':''}>扩展此论文</button>`:''}
-   <button class="btn small" type="button" data-kg-action="link-start" ${!chosen||this.mutating?'disabled':''}>${this.linkSource?'取消连线':'建立联系'}</button>
+  return `<div class="kg-canvas-tools-left">
+   ${paper?.node_type==='Paper'&&this.h.startReproduction?`<button class="btn small primary" type="button" data-kg-reproduce="${this.esc(paper.id)}" ${this.reproductionPaper?'disabled':''}>${pendingRepro?'正在准备复现…':'一键复现'}</button>`:''}
    <button class="btn small danger" type="button" data-kg-action="delete-node" ${!chosen||this.mutating?'disabled':''}>删除节点</button>
+  </div><div class="kg-canvas-tools"><div class="kg-canvas-actions">
+   ${paper?.node_type==='Paper'?`<button class="btn small" type="button" data-kg-expand-paper aria-expanded="${expanded}">${expanded?'收起子贡献':'展开子贡献'}</button><button class="btn small" type="button" data-kg-action="expand-literature" aria-expanded="${this.expansionPaper===paper.id}" ${this.mutating?'disabled':''}>扩展此论文</button>`:''}
+   <button class="btn small" type="button" data-kg-action="link-start" ${!chosen||this.mutating?'disabled':''}>${this.linkSource?'取消连线':'建立联系'}</button>
    </div>
    ${this.linkSource?'<small class="kg-link-instruction" role="status">请选择另一篇论文或另一个贡献节点</small>':''}
    ${this.contextNode&&chosen?`<div class="kg-node-menu"><button class="btn small" data-kg-action="link-start">建立联系</button><button class="btn small" data-kg-tab="relations">查看或删除联系</button><button class="btn small" data-kg-action="pin">${this.pinned.has(chosen.id)?'取消固定':'固定位置'}</button></div>`:''}

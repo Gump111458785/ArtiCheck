@@ -466,7 +466,7 @@ test('ready material badge sits at the bottom-right corner clear of the top-righ
  assert.match(onlineCss,/\.online-remove-material\{[^}]*top:8px;right:8px;/);
 });
 
-test('knowledge graph one-click reproduction button floats in top-right canvas controls only when a Paper node is selected',async()=>{
+test('knowledge graph one-click reproduction and delete-node buttons float in top-left canvas controls',async()=>{
  const {KnowledgeGraphWorkspace}=await import('../../web/dist/knowledge-graph.mjs');
  const kg=new KnowledgeGraphWorkspace({esc:v=>String(v??''),icon:()=>'',startReproduction:async()=>{},projects:()=>[]});
  kg.data={nodes:[
@@ -475,10 +475,11 @@ test('knowledge graph one-click reproduction button floats in top-right canvas c
  ],edges:[],timeline:[]};
  kg.selected=null;
  assert.doesNotMatch(kg.canvasControls(),/data-kg-reproduce/);
+ assert.match(kg.canvasControls(),/<div class="kg-canvas-tools-left">\s*<button[^>]*data-kg-action="delete-node"[^>]*disabled>删除节点<\/button>\s*<\/div>/);
  kg.selected='C1';
  assert.doesNotMatch(kg.canvasControls(),/data-kg-reproduce/);
  assert.doesNotMatch(kg.inspector(),/data-kg-reproduce/);
  kg.selected='P1';
- assert.match(kg.canvasControls(),/data-kg-reproduce="P1"[^>]*>一键复现<\/button>/);
+ assert.match(kg.canvasControls(),/<div class="kg-canvas-tools-left">[\s\S]*data-kg-reproduce="P1"[^>]*>一键复现<\/button>[\s\S]*data-kg-action="delete-node"[^>]*>删除节点<\/button>\s*<\/div>/);
  assert.doesNotMatch(kg.inspector(),/data-kg-reproduce/);
 });
