@@ -27,9 +27,9 @@ export function reviewControlButtons(state,attribute){
  if(state.terminated||state.preparing||state.stopping)return '';
  const button=(action,label,tone)=>`<button type="button" class="btn small review-control review-control-${tone}" ${attribute(action)}>${label}</button>`;
  if(state.retry){
-  if(state.intent==='pause')return button('pause','暂停','pause')+button('terminate-review','中断','stop');
-  return button('retry-control','重试中断','stop');
+  if(state.intent==='pause')return button('pause','暂停','pause')+button('terminate-review','终止','stop');
+  return button('retry-control','重试终止','stop');
  }
  return (state.running?button('pause','暂停','pause'):state.paused?button('continue-review','继续','continue'):'')+
-  (state.running||state.paused?button('terminate-review','中断','stop'):'');
+  (state.running||state.paused?button('terminate-review','终止','stop'):'');
 }

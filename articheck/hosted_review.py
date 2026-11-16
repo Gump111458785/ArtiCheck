@@ -326,6 +326,15 @@ def validate_assessment(value, context):
         # The material, not the model's classification, determines the code-only path.
         value = {**value, 'paper_type': 'code_only', 'task': 'code_review',
                  'classification_reason': '仅提交代码，已按代码审查处理。', 'metrics': []}
+    paper_only = bool(context['paper'] and not context['code'] and context.get('purpose'))
+    if paper_only:
+        # A user purpose is separate from the material-based task.
+        paper_type = value.get('paper_type')
+        value = {**value, 'task': 'self_review'}
+        if not isinstance(paper_type, str) or paper_type not in PAPER_TYPES - {'code_only'}:
+            value.update(paper_type='unknown', classification_reason='材料已按论文审查，论文类型尚未确认。')
+        value['plan'] = {'purpose': '核查论文内部证据', 'stages': [], 'needs': [], 'metric_patterns': [],
+                         'blocked_reason': '仅提供论文，未运行代码或独立复现实验。'}
     if value.get('paper_type') not in PAPER_TYPES or value.get('task') not in TASKS - {'auto'}:
         raise ReviewError('invalid_model_output', '材料或任务分类无效。', 502)
     rows = value.get('criteria')
@@ -478,6 +487,8 @@ def validate_assessment(value, context):
     task='code_review' if not context['paper'] else context['task'] if context['task']!='auto' else 'reproduction' if value['paper_type']=='empirical' else value['task']
     if value['paper_type'] in {'nonpaper', 'unknown'} and task!='code_review' or not context['code']:
         stages = []
+    if paper_only and context['purpose']=='reproduce_other':
+        rejected.append('仅提供论文，本次核对论文内容，未运行代码或独立复现实验。')
     if len(metrics)==200:rejected.append('指标清单达到本次 200 项上限，额外指标保留未覆盖，不据此宣称全篇已核验。')
     if context['coverage'].get('paper_text_truncated'):
         rejected.append('论文上下文按页节选并优先保留图表；未进入上下文的正文和图表不视为已审查。')
@@ -600,6 +611,10 @@ def assess(reviewer, context, scope, *, request_timeout=60):
     instructions = SYSTEM
     if not context['paper']:
         instructions += '\n本次只提供代码。paper_type 固定为 code_only，task 固定为 code_review，metrics 留空。只审查代码及执行条件。'
+    elif not context['code'] and context.get('purpose'):
+        instructions += ('\n本次只提供论文。无论用户目的为何，task 固定为 self_review，仅核查论文内部证据。'
+                         'paper_type 只能填 empirical、diagnostic、survey、nonpaper 或 unknown。'
+                         'purpose 为 reproduce_other 时保留发现和证据，不写修改建议，plan.stages 留空。')
     text_content=json.dumps({'scope':scope,'materials':text_materials(context)},ensure_ascii=False)
     user={'role':'user','content':text_content}
     if context.get('paper_images'):

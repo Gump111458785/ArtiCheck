@@ -528,7 +528,7 @@ def register(app, env, reviewer, *, store=None, executor=None):
             live = current.get('execution') or {}
             if live.get('attempt_id') != execution.get('attempt_id') or live.get('status') != 'cancelling':
                 return current
-        raise ReviewError('cancel_pending', '任务状态正在更新，请重试中断。', 409)
+        raise ReviewError('cancel_pending', '任务状态正在更新，请稍后重试。', 409)
 
     @app.post('/assessments/<job>/cancel')
     def cancel(job):
@@ -584,7 +584,7 @@ def register(app, env, reviewer, *, store=None, executor=None):
             if current_execution.get('status') == 'cancelling' and not current_execution.get('awaiting_launch'):
                 value = stop_execution(owner, job, value)
             return jsonify(value)
-        raise ReviewError('cancel_pending', '任务状态正在更新，请重试中断。', 409)
+        raise ReviewError('cancel_pending', '任务状态正在更新，请稍后重试。', 409)
 
     @app.post('/assessments/<job>/terminate')
     def terminate(job):
@@ -596,7 +596,7 @@ def register(app, env, reviewer, *, store=None, executor=None):
         review = value.get('review') or {}
         status = execution.get('status')
         if value.get('status') == 'reviewing' or status in {'queued', 'starting', 'running', 'cancelling'}:
-            raise ReviewError('assessment_active', '请先中断运行，再终止本次审查。', 409)
+            raise ReviewError('assessment_active', '请先停止运行，再终止本次审查。', 409)
         blocked = (status in {'failed', 'expired', 'cancelled'} or value.get('status') in {'failed', 'cancelled'}
                    or any(stage.get('status') == 'failed' for stage in execution.get('stages', []))
                    or (not execution and ((review.get('resource_preflight') or {}).get('needs_user')

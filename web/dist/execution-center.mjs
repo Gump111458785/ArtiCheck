@@ -5,7 +5,7 @@ import {reportVerdict} from './report-verdict.mjs';
 import {hasCode,criterionNames,encoded} from './online-core.mjs';
 
 const date=value=>value?value.slice(0,16).replace('T',' '):'未记录时间';
-const archiveStates={draft:'待启动',reviewing:'正在审阅',queued:'执行中',reproducing:'正在复现',cancelling:'正在中断',waiting:'等待资源',paused:'已暂停',interrupted:'已中断',completed:'已完成',terminated:'已终止'};
+const archiveStates={draft:'待启动',reviewing:'正在审阅',queued:'执行中',reproducing:'正在复现',cancelling:'正在终止',waiting:'等待资源',paused:'已暂停',interrupted:'失败',completed:'已完成',terminated:'已终止'};
 const archiveInProgress=new Set(['reviewing','queued','reproducing','cancelling']);
 const archiveExecutionFilters={in_progress:'执行中',...Object.fromEntries(Object.entries(archiveStates).filter(([key])=>!archiveInProgress.has(key)))};
 const matchesStatus=(item,key)=>key==='in_progress'?archiveInProgress.has(item.statusKey):item.statusKey===key;
@@ -83,7 +83,7 @@ export class ExecutionCenter {
    const active=['reviewing','queued','reproducing'].includes(statusKey);
    const statusTone=['waiting','interrupted','cancelling','paused'].includes(statusKey)?'amber':
     active||statusKey==='completed'&&verdictKey==='passed'?'green':'neutral';
-   const statusLabel=isCancelling?(control.intent==='pause'?'正在暂停':'正在中断'):archiveInProgress.has(statusKey)?archiveExecutionFilters.in_progress:archiveStates[statusKey];
+   const statusLabel=isCancelling?(control.intent==='pause'?'正在暂停':'正在终止'):archiveInProgress.has(statusKey)?archiveExecutionFilters.in_progress:archiveStates[statusKey];
    const materialKey=paperOnly?'paper_only':codeBound?(p.paper||r?.materials?.paper?'both':'code_only'):'none';
    const rawTime=p.updated_at||r?.updated_at||p.created_at||new Date().toISOString();
    const ts=Date.parse(rawTime)||0;

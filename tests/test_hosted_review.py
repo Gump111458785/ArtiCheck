@@ -525,6 +525,35 @@ class HostedReviewTests(unittest.TestCase):
                     self.assertEqual(bool(result['plan']['stages']), 'code' in keys)
                     self.assertEqual(bool(result['repository_hint']), False)
 
+    def test_paper_only_reproduction_purpose_survives_model_classification_mismatch(self):
+        class MisclassifiedReviewer(Reviewer):
+            def post(self, request):
+                content = request['messages'][1]['content']
+                context = json.loads(content[0]['text'] if isinstance(content, list) else content)['materials']
+                answer = output(context)
+                answer.update(task='reproduce_other', paper_type=self.paper_type, plan=None)
+                return {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(answer)}}]}
+
+        reviewer = MisclassifiedReviewer()
+        app = Flask(__name__)
+        register(app, {'ARTICHECK_REVIEW_TOKEN': TOKEN}, reviewer,
+                 store=MemoryStore(), executor=Executor())
+        with app.test_client() as client:
+            for paper_type, expected in [('empirical', 'empirical'), ('code_only', 'unknown'),
+                                         ('research_article', 'unknown'), (None, 'unknown')]:
+                with self.subTest(paper_type=paper_type):
+                    reviewer.paper_type = paper_type
+                    response = client.post('/assessments', json={'purpose': 'reproduce_other', 'paper': materials()['paper']},
+                                           headers=HEADERS)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertFalse(response.json['execution_performed'])
+                    review = response.json['review']
+                    self.assertEqual(review['purpose'], 'reproduce_other')
+                    self.assertEqual(review['task'], 'self_review')
+                    self.assertEqual(review['paper_type'], expected)
+                    self.assertEqual(review['plan']['stages'], [])
+                    self.assertTrue(any('未运行代码' in gap for gap in review['coverage']['gaps']))
+
     def test_code_only_review_ignores_paper_type_from_the_model_for_both_purposes(self):
         class MisclassifiedReviewer(Reviewer):
             def post(self, request):
