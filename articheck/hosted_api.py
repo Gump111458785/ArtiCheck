@@ -182,8 +182,8 @@ def register(app, env, reviewer, *, store=None, executor=None):
                                 'gpu':{'status':'ready' if getattr(executor,'capacity',{}).get('gpu') else 'not_configured','provider':'owned_server'}},
                        limits={'max_body_bytes': 5_000_000, 'max_zip_bytes':100*1024**2,
                                'max_unpacked_bytes':500*1024**2,'max_pdf_bytes':20*1024**2,
-                               'large_upload_transport':'signed_direct_upload','max_seconds': 600,
-                               'default_seconds': 300, 'report_retention_days': 7})
+                               'large_upload_transport':'signed_direct_upload','max_seconds': None,
+                               'default_seconds': None, 'report_retention_days': 7})
 
     @app.post('/repositories')
     def import_code():
@@ -446,7 +446,7 @@ def register(app, env, reviewer, *, store=None, executor=None):
         attempt_id = uuid.uuid4().hex
         value['execution'] = {'status': 'starting', 'execution_performed': False, 'attempt_id': attempt_id,
                               'scientific_validation': False,
-                              'deadline': time.time() + value['review']['plan']['max_seconds'] + 60}
+                              'deadline': time.time() + 125}
         if not store.replace(owner, previous, value):
             store.unlock_before_launch(owner, job, attempt_number)
             raise ReviewError('execution_changed', '任务状态已更新，请刷新。', 409)

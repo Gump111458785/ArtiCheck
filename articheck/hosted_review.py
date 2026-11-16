@@ -102,9 +102,9 @@ def prepare_assessment(body, *, images=True):
     if task not in TASKS:
         raise ReviewError('invalid_task', '请选择自动识别、论文自查、复现评估或代码审查。')
     seconds = body.get('max_seconds')
-    if seconds in (None, ''):
-        seconds = 300
-    if type(seconds) is not int or not 30 <= seconds <= MAX_SECONDS:
+    if seconds == '':
+        seconds = None
+    if seconds is not None and (type(seconds) is not int or not 30 <= seconds <= MAX_SECONDS):
         raise ReviewError('invalid_budget', '最长执行时间请填写 30–600 秒，也可留空。')
     context, scope = prepare_context(body, partial=True)
     context['task'] = ('code_review' if not context['paper'] else 'self_review' if not context['code']

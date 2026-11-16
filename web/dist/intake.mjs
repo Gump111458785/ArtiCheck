@@ -90,6 +90,7 @@ export class IntakeWorkspace {
   if(input.dataset.claimField){const c=p.claims.find(c=>c.id===input.dataset.id);if(!c)return;c[input.dataset.claimField]=value;if(input.dataset.claimField!=='binding')c.confirmed=false;p.run_id=null;p.task_id=null;}
   this.scheduleSave();if(['kind','selected','binding'].includes(input.dataset.claimField)||input.type==='checkbox')this.h.render();else if(input.dataset.claimField){const row=input.closest('.claim-editor');row?.classList.remove('confirmed');const label=row?.querySelector('.claim-editor-foot>span');if(label){label.className='muted';label.textContent='待核对';}}if(input.dataset.resource){const button=document.querySelector('.run-project');if(button)button.disabled=!this.canStart(p);}
  }
+ cancelUpload(){this.importNonce++;this.busy='';this.error='';}
  async upload(kind,file){const p=this.h.page()==='projects'?this.draft:this.current();if(p.sample){this.error='教学样例使用固定材料，请先建立自己的复现项目。';this.h.render();return;}const nonce=++this.importNonce;this.error='';this.busy=kind==='paper'?'读取 PDF 正文…':'检查代码 ZIP 目录…';this.h.render();
   try{
    if(kind==='paper'){
@@ -110,16 +111,18 @@ export class IntakeWorkspace {
       if(line.trim())lines.push(line.trim());const text=lines.join('\n').slice(0,60000);const annotations=await page.getAnnotations();const links=annotations.map(a=>a.url).filter(u=>typeof u==='string'&&/^https?:\/\//.test(u)).slice(0,100);pages.push({number,text,lines,links});
       if(nonce!==this.importNonce)return;
      }
-     p.paper={name:file.name,size:file.size,sha256:await hash(file),blob:file,pages,warning:pages.every(p=>!p.text.trim())?'此 PDF 没有可提取文本，可能是扫描件。请对照页面手工录入主张。':''};
+     const sha256=await hash(file);if(nonce!==this.importNonce)return;
+     p.paper={name:file.name,size:file.size,sha256,blob:file,pages,warning:pages.every(p=>!p.text.trim())?'此 PDF 没有可提取文本，可能是扫描件。请对照页面手工录入主张。':''};
      p.claims=this.h.page()==='api-review'?[]:candidatesFromPages(pages);this.invalidate(p);if(!p.title)p.title=file.name.replace(/\.pdf$/i,'');this.page=1;
     }finally{await job.destroy();}
    }else{
     if(!/\.zip$/i.test(file.name)||file.size>MAX_ZIP_BYTES)throw Error('代码 ZIP 最大为 100 MB');
     const result=inspectZip(await file.arrayBuffer());if(!result.files.length)throw Error('代码 ZIP 中没有文件');
-    p.repository={kind:'zip',name:file.name,size:file.size,sha256:await hash(file),blob:file,...result};this.invalidate(p,true);
+    const sha256=await hash(file);if(nonce!==this.importNonce)return;
+    p.repository={kind:'zip',name:file.name,size:file.size,sha256,blob:file,...result};this.invalidate(p,true);
    }
-   await this.save(p);this.h.toast(kind==='paper'?(this.h.page()==='api-review'?`已读取 ${p.paper.pages.length} 页，可直接提交自动审查`:`已读取 ${p.paper.pages.length} 页，${p.claims.length} 条文本候选待确认`):`已读取 ${p.repository.files.length} 个文件目录`);
-  }catch(e){this.error=e.message||'文件读取失败';}finally{if(nonce===this.importNonce){this.busy='';this.h.render();}}
+   await this.save(p);if(nonce!==this.importNonce)return;this.h.toast(kind==='paper'?(this.h.page()==='api-review'?`已读取 ${p.paper.pages.length} 页，可直接提交自动审查`:`已读取 ${p.paper.pages.length} 页，${p.claims.length} 条文本候选待确认`):`已读取 ${p.repository.files.length} 个文件目录`);
+  }catch(e){if(nonce===this.importNonce)this.error=e.message||'文件读取失败';}finally{if(nonce===this.importNonce){this.busy='';this.h.render();}}
  }
  async github(){const p=this.h.page()==='projects'?this.draft:this.current();if(p.sample)throw Error('教学样例使用固定代码，请先建立自己的复现项目。');const repo=githubRepository(p.repo_url||'');this.busy='读取 GitHub 公共仓库目录…';this.error='';this.h.render();
   const get=async path=>{const r=await fetch('https://api.github.com/repos/'+repo.owner+'/'+repo.name+path,{headers:{Accept:'application/vnd.github+json'}});if(!r.ok)throw Error(r.status===403||r.status===429?'GitHub 请求受限，请稍后重试或导入代码 ZIP。':r.status===404?'仓库不存在或需要私有仓库授权，请导入代码 ZIP。':'GitHub 目录读取失败');return r.json();};

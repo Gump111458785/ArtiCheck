@@ -253,7 +253,9 @@ def _run_plan(plan, root, results, run_as, venv, cleanup):
         except Exception:
             pass
     inferred_deps = infer_project_dependencies(root)
-    started = time.time(); deadline = time.monotonic() + plan['max_seconds']
+    started = time.time()
+    limit = plan.get('max_seconds')
+    deadline = time.monotonic() + limit if limit is not None else float('inf')
     report = {'status': 'running', 'started_at': started, 'stages': [], 'metrics': [],
               'execution_performed': False, 'scientific_validation': False,
               'hardware': {'cpu_count': os.cpu_count(), 'gpu': False}, 'events': []}

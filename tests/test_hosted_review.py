@@ -647,7 +647,7 @@ class HostedReviewTests(unittest.TestCase):
             with self.assertRaises(ReviewError):
                 prepare_assessment({**materials(), 'max_seconds': n})
         context, _ = prepare_assessment({**materials(), 'max_seconds': ''})
-        self.assertEqual(context['max_seconds'], 300)
+        self.assertIsNone(context['max_seconds'])
 
     def test_metrics_require_real_cited_table_quote_not_body_fragment(self):
         context, _ = prepare_assessment(materials())

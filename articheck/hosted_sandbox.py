@@ -31,9 +31,9 @@ class E2BExecutor:
         if identity['sha256'] != assessment['materials']['code']:
             raise ReviewError('material_changed', '代码已变化，请先重新审查并生成本次执行计划。', 409)
         plan = {**assessment['review']['plan'], 'metrics': assessment['review']['metrics']}
-        # VM lifetime bounds billing even if the browser is closed or the control
-        # function dies. Polling does NOT extend the deadline.
-        lifetime = plan['max_seconds'] + 60
+        # The sandbox provider requires an instance lifetime even without a plan budget.
+        limit = plan.get('max_seconds')
+        lifetime = limit + 60 if limit is not None else 3600
         started = time.time()
         sb = Sandbox.create(template=self.template, api_key=self.key, timeout=lifetime, secure=True,
             metadata={'project': 'articheck', 'assessment_id': assessment['id']},
@@ -100,7 +100,7 @@ for parent,dirs,files in os.walk('/home/articheck'):
     def poll(self, execution):
         from e2b import Sandbox
         if time.time() > execution['deadline']:
-            return {**execution, 'status': 'expired', 'notice': '执行实例已达到最长存活时间；尚未取回的结果不视为通过。'}
+            return {**execution, 'status': 'expired', 'notice': '执行实例已达到云端服务的实例存活时间上限，未取回实验结果。'}
         remaining = max(1, int(execution['deadline'] - time.time()))
         sb = Sandbox.connect(execution['sandbox_id'], api_key=self.key, timeout=remaining)
         try:
