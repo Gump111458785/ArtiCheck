@@ -2714,3 +2714,46 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .btn.review-control-continue:hover { background: #d6f5e2; }
 .btn.review-control-stop:hover { background: #ffe0e6; }
 .btn.review-control:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* API-platform style usage bar chart in Personal Center */
+.account-usage-card{background:#ffffff;border:1px solid var(--line);padding:24px;display:flex;flex-direction:column;gap:20px;box-shadow:0 2px 8px rgba(15,23,42,.03)}
+.account-usage-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.account-usage-head h2{font-size:17px;font-weight:600;color:var(--ink);margin:0}
+.account-usage-head p{margin:4px 0 0;font-size:13px;color:var(--muted)}
+.account-usage-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.account-usage-legend{display:flex;align-items:center;gap:14px;font-size:12.5px;color:#475569}
+.usage-legend-item{display:inline-flex;align-items:center;gap:6px}
+.usage-dot{width:10px;height:10px;display:inline-block;border-radius:2px}
+.usage-dot.review,.usage-bar-seg.review{background:#2563eb}
+.usage-dot.exec,.usage-bar-seg.exec{background:#10b981}
+.account-usage-ranges{display:inline-flex;border:1px solid var(--line);background:#f8fafc;padding:2px}
+.usage-range-btn{border:0;background:transparent;padding:4px 10px;font-size:12px;font-weight:500;color:#475569;cursor:pointer}
+.usage-range-btn.active{background:#ffffff;color:#1d4ed8;font-weight:600;box-shadow:0 1px 2px rgba(15,23,42,.06)}
+.account-usage-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;padding:14px 18px;background:#f8fafc;border:1px solid #e2e8f0}
+.account-usage-kpis>div{display:flex;flex-direction:column;gap:4px;border-right:1px solid #e2e8f0;padding-right:12px}
+.account-usage-kpis>div:last-child{border-right:0;padding-right:0}
+.account-usage-kpis span{font-size:12px;color:var(--muted)}
+.account-usage-kpis strong{font-size:22px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.2}
+.account-usage-kpis strong.tone-review{color:#1d4ed8}
+.account-usage-kpis strong.tone-exec{color:#059669}
+.account-usage-kpis small{font-size:11.5px;color:var(--muted)}
+.account-usage-chart{display:grid;grid-template-columns:32px minmax(0,1fr);gap:10px;padding-top:8px}
+.usage-y-axis{display:flex;flex-direction:column;justify-content:space-between;height:180px;padding-bottom:24px;font-size:11px;color:#64748b;text-align:right;font-variant-numeric:tabular-nums}
+.usage-plot{position:relative;height:180px;display:flex;flex-direction:column}
+.usage-gridlines{position:absolute;inset:0 0 24px 0;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
+.usage-gridlines i{display:block;width:100%;border-bottom:1px dashed #e2e8f0}
+.usage-gridlines i:last-child{border-bottom:1px solid #cbd5e1}
+.usage-bars{position:relative;z-index:1;flex:1;display:grid;grid-template-columns:repeat(var(--usage-cols,14),minmax(0,1fr));gap:6px;align-items:stretch;height:100%}
+.usage-bar-col{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;outline:none}
+.usage-bar-track{width:100%;max-width:28px;height:calc(100% - 24px);display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative}
+.usage-bar-stack{width:100%;display:flex;flex-direction:column;overflow:hidden;border-radius:3px 3px 0 0;transition:height .2s ease,filter .15s ease;min-height:2px;background:#e2e8f0}
+.usage-bar-col.has-usage .usage-bar-stack{background:transparent;box-shadow:0 1px 3px rgba(37,99,235,.15)}
+.usage-bar-col:hover .usage-bar-stack,.usage-bar-col:focus-visible .usage-bar-stack{filter:brightness(1.08)}
+.usage-bar-seg{width:100%;display:block;min-height:3px}
+.usage-bar-val{font-size:10.5px;font-weight:600;color:#1e293b;margin-bottom:3px;font-variant-numeric:tabular-nums;line-height:1}
+.usage-bar-date{height:24px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#64748b;font-variant-numeric:tabular-nums;white-space:nowrap}
+.usage-bar-col.is-today .usage-bar-date{color:#1d4ed8;font-weight:600}
+.usage-bar-tooltip{position:absolute;bottom:calc(100% - 14px);left:50%;transform:translateX(-50%) translateY(4px);background:#0f172a;color:#ffffff;padding:8px 10px;font-size:11.5px;line-height:1.45;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .14s ease,transform .14s ease;z-index:10;box-shadow:0 6px 16px rgba(15,23,42,.22);display:flex;flex-direction:column;gap:2px}
+.usage-bar-tooltip strong{font-size:12px;color:#93c5fd}
+.usage-bar-col:hover .usage-bar-tooltip,.usage-bar-col:focus-visible .usage-bar-tooltip{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:780px){.account-usage-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.account-usage-kpis>div:nth-child(2){border-right:0}}

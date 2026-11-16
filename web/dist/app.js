@@ -103,7 +103,7 @@ function render(){
   pageX:window.scrollX,pageY:window.scrollY
  };
  const projectPage=['projects','project'].includes(state.page),centerPage=['workbench','roles','evidence','trace','personal-archive','public-cases'].includes(state.page);
- const pageName=state.page==='account'?'个人中心':state.page==='home'?'ArtiCheck · 开始':projectPage?intake.title():centerPage?execution?.heading(state.page)||'执行中心':navItems.find(n=>n[0]===state.page)?.[2]||'执行中心';
+ const pageName=state.page==='account'?'个人中心':state.page==='home'?'ArtiCheck 开始':projectPage?intake.title():centerPage?execution?.heading(state.page)||'执行中心':navItems.find(n=>n[0]===state.page)?.[2]||'执行中心';
  const subtitle=projectPage?intake.subtitle():centerPage?execution.subtitle(state.page):pageSubtitle();
  const source=state.mode==='runtime'?'本地执行已连接':'在线工作台';
  const roleContext=execution?.roleRun(),activeRuns=execution?.rows().filter(r=>r.source==='runtime'&&['running','queued'].includes(r.status)).length||0;

@@ -48,7 +48,7 @@ function compressAvatarImage(file){
 }
 
 export class AccountWorkspace{
- constructor(h){this.h=h;this.user=null;this.menu=false;this.available=false;this.busy=false;this.editingName=false;this.users=[];}
+ constructor(h){this.h=h;this.user=null;this.menu=false;this.available=false;this.busy=false;this.editingName=false;this.usageDays=14;this.users=[];}
  async request(path,body){const r=await fetch('/v1/auth/'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',redirect:'error',headers:{'X-ArtiCheck-Client':'review-api',...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});let v;try{v=await r.json();}catch{throw Error('账户服务暂不可用，请稍后重试。');}if(!r.ok)throw Error(v.error?.message||'账户操作未完成。');return v;}
  async init(identity=null){try{this.user=identity||(await this.request('me')).user;this.available=true;}catch{}this.bind();}
  afterRender(){if(this.user?.role==='admin'&&document.querySelector('.account-management')&&!this.usersLoaded&&!this.usersPending){this.usersPending=true;this.loadUsers().then(()=>this.h.render()).catch(e=>this.h.toast(e.message)).finally(()=>{this.usersPending=false;});}}
@@ -88,8 +88,61 @@ export class AccountWorkspace{
  topbar(){const e=this.h.esc;if(!this.user)return '<a class="btn account-login" href="./login.html">登录</a>';return `<div class="account-control"><button class="account-trigger" data-account="menu" aria-haspopup="menu" aria-expanded="${this.menu}" aria-label="${e(this.user.name)}的账户菜单">${this.avatarNode(this.user)}<span>${e(this.user.name)}</span>${this.h.icon('down')}</button>${this.menu?`<div class="account-menu" role="menu"><div><strong>${e(this.user.name)}</strong><small>@${e(this.user.username)}${this.user.role==='admin'?' · 管理员':''}</small></div><button role="menuitem" data-account="center">${this.h.icon('settings')}个人中心</button>${this.user.role==='admin'?'<button role="menuitem" data-account="admin">账户管理</button>':''}<button role="menuitem" data-account="new">${this.h.icon('plus')}新建审查</button><button role="menuitem" data-account="logout">${this.h.icon('logout')}退出登录</button></div>`:''}</div>`;}
  open(){location.assign('./login.html');}
  projects(){return this.h.projects().filter(p=>(p.online_account||null)===(this.user?.id||null));}
+ usageModel(projects=this.projects(),days=this.usageDays||14,nowMs=Date.now()){
+  const n=Math.max(7,Math.min(30,Number(days)||14));
+  const fmtKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const fmtLabel=d=>`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+  const toKey=raw=>{
+   if(!raw)return null;
+   const ms=typeof raw==='number'?(raw<1e12?raw*1000:raw):Date.parse(raw);
+   if(!Number.isFinite(ms)||ms<=0)return null;
+   return fmtKey(new Date(ms));
+  };
+  const end=new Date(nowMs);
+  end.setHours(0,0,0,0);
+  const buckets=[];
+  const map=new Map();
+  for(let i=n-1;i>=0;i--){
+   const d=new Date(end.getTime()-i*86400000);
+   const date=fmtKey(d);
+   const row={date,label:fmtLabel(d),reviews:0,executions:0,total:0};
+   buckets.push(row);
+   map.set(date,row);
+  }
+  for(const p of projects||[]){
+   const r=p?.online_report;
+   const revKey=toKey(r?.created_at||r?.started_at||r?.activity?.[0]?.time||p?.updated_at||p?.created_at);
+   if(revKey&&map.has(revKey)){
+    map.get(revKey).reviews++;
+   }
+   const runs=[...(r?.execution_history||[]),...(r?.execution?[r.execution]:[])];
+   for(const ex of runs){
+    const exKey=toKey(ex?.started_at||ex?.ended_at||r?.created_at||p?.updated_at||p?.created_at);
+    if(exKey&&map.has(exKey))map.get(exKey).executions++;
+   }
+  }
+  let totalReviews=0,totalExecutions=0,peakCount=0,peakDate='';
+  for(const b of buckets){
+   b.total=b.reviews+b.executions;
+   totalReviews+=b.reviews;
+   totalExecutions+=b.executions;
+   if(b.total>=peakCount&&b.total>0){peakCount=b.total;peakDate=b.label;}
+  }
+  const rawMax=Math.max(4,...buckets.map(b=>b.total));
+  const maxScale=Math.ceil(rawMax/4)*4;
+  const ticks=[maxScale,Math.round(maxScale*0.75),Math.round(maxScale*0.5),Math.round(maxScale*0.25),0];
+  return {days:n,buckets,totalCalls:totalReviews+totalExecutions,totalReviews,totalExecutions,peakCount,peakDate,maxScale,ticks};
+ }
+ usageSection(projects=this.projects()){
+  const e=this.h.esc,m=this.usageModel(projects,this.usageDays||14);
+  return `<section class="account-usage-card" aria-label="近期使用量"><div class="account-usage-head"><div><h2>近期使用量</h2><p>按日记录审查调用与云端实验执行次数</p></div><div class="account-usage-controls"><div class="account-usage-legend" aria-label="图例"><span class="usage-legend-item"><i class="usage-dot review"></i>审查调用</span><span class="usage-legend-item"><i class="usage-dot exec"></i>实验执行</span></div><div class="account-usage-ranges" role="group" aria-label="统计周期">${[7,14,30].map(d=>`<button type="button" class="usage-range-btn ${m.days===d?'active':''}" data-account="usage-range" data-days="${d}" aria-pressed="${m.days===d}">近 ${d} 天</button>`).join('')}</div></div></div><div class="account-usage-kpis"><div><span>近 ${m.days} 天总次数</span><strong>${m.totalCalls}</strong><small>次调用</small></div><div><span>论文 / 代码审查</span><strong class="tone-review">${m.totalReviews}</strong><small>次审查</small></div><div><span>云端实验执行</span><strong class="tone-exec">${m.totalExecutions}</strong><small>次执行</small></div><div><span>单日峰值</span><strong>${m.peakCount}</strong><small>${m.peakDate?`出现于 ${e(m.peakDate)}`:'暂无峰值记录'}</small></div></div><div class="account-usage-chart" style="--usage-cols:${m.buckets.length}"><div class="usage-y-axis" aria-hidden="true">${m.ticks.map(t=>`<span>${t}</span>`).join('')}</div><div class="usage-plot"><div class="usage-gridlines" aria-hidden="true">${m.ticks.map(()=>'<i></i>').join('')}</div><div class="usage-bars" role="list" aria-label="每日使用次数柱状图">${m.buckets.map((b,idx)=>{
+   const pct=m.maxScale?Math.min(100,Math.round((b.total/m.maxScale)*100)):0;
+   const showLabel=m.days<=14||idx%2===0||idx===m.buckets.length-1;
+   return `<div class="usage-bar-col ${b.total?'has-usage':'is-zero'} ${idx===m.buckets.length-1?'is-today':''}" role="listitem" tabindex="0" aria-label="${e(b.date)}：共 ${b.total} 次，审查 ${b.reviews} 次，执行 ${b.executions} 次"><div class="usage-bar-tooltip" role="tooltip"><strong>${e(b.date)}</strong><span>总计 ${b.total} 次</span><span>审查调用：${b.reviews} 次</span><span>实验执行：${b.executions} 次</span></div><div class="usage-bar-track">${b.total?`<span class="usage-bar-val">${b.total}</span>`:''}<div class="usage-bar-stack" style="height:${b.total?Math.max(8,pct):0}%">${b.executions?`<span class="usage-bar-seg exec" style="flex:${b.executions}"></span>`:''}${b.reviews?`<span class="usage-bar-seg review" style="flex:${b.reviews}"></span>`:''}</div></div><span class="usage-bar-date">${showLabel?e(b.label):''}</span></div>`;
+  }).join('')}</div></div></div></section>`;
+ }
  center(){const e=this.h.esc,u=this.user;if(!u)return '<section class="online-empty"><h2>请先登录工作空间</h2><a class="btn primary" href="./login.html">登录</a></section>';const projects=this.projects(),reports=projects.filter(p=>p.online_report?.review),executed=reports.filter(p=>p.online_report?.execution?.execution_performed);
- return `<div class="account-center"><section class="account-overview"><div class="account-avatar-box"><button type="button" class="account-avatar-trigger" data-account="avatar" title="点击更换头像" aria-label="更换头像">${this.avatarNode(u,'large')}<span class="account-avatar-edit">更换头像</span></button></div><div class="account-overview-main">${this.editingName?`<form data-account-form="profile" class="account-inline-name-form"><input id="inline-profile-name" name="name" value="${e(u.name)}" maxlength="40" placeholder="输入自定义名称" aria-label="自定义名称" required><button class="btn primary small" type="submit">保存</button><button class="btn small" type="button" data-account="cancel-edit-name">取消</button><p role="status" class="account-result"></p></form>`:`<div class="account-name-row"><h2>${e(u.name)}</h2><button type="button" class="btn small account-edit-name-btn" data-account="edit-name">修改名字</button></div>`}<p>@${e(u.username)} · ${u.role==='admin'?'管理员':'受邀用户'}</p></div><button class="btn" data-account="new">${this.h.icon('plus')}新建审查</button></section><div class="account-counts"><div><span>当前浏览器项目</span><strong>${projects.length}</strong></div><div><span>已有审查报告</span><strong>${reports.length}</strong></div><div><span>包含实际执行</span><strong>${executed.length}</strong></div></div><div class="account-settings"><div class="account-card"><div class="account-card-head"><h2>个人资料</h2><p>显示名称用于头像与研究工作空间。</p></div><form data-account-form="profile"><label for="profile-name">显示名称</label><input id="profile-name" name="name" value="${e(u.name)}" maxlength="40" required><label>用户名</label><p class="account-readonly">@${e(u.username)}</p><p role="status" class="account-result"></p><button class="btn" type="submit">保存资料</button></form></div><div class="account-card"><div class="account-card-head"><h2>账户访问</h2><p>邀请制账户由管理员创建与维护。</p></div><div class="account-access-note"><strong>仅受邀用户可登录</strong><p>如需重置密码或更改访问权限，请联系管理员。所有审查支持持续运行至完成并可随时手动中断。</p></div></div></div>${u.role==='admin'?this.management():''}<section class="account-projects"><div class="online-section-heading"><h2>最近审查</h2><span>当前浏览器 · ${projects.length} 项</span></div>${projects.slice(0,6).map(p=>`<button data-account-project="${e(p.id)}"><span><strong>${e(p.title||'未命名审查')}</strong><small>${p.online_report?.review?'已有报告':p.online_pending_request?'审查处理中':'材料准备中'}</small></span>${this.h.icon('chevron')}</button>`).join('')||'<p class="online-notice">还没有项目，从新建审查开始。</p>'}<p class="online-footnote">材料和项目列表保存在当前浏览器，不自动跨设备同步；服务器报告保留 7 天。</p></section></div>`;
+ return `<div class="account-center"><section class="account-overview"><div class="account-avatar-box"><button type="button" class="account-avatar-trigger" data-account="avatar" title="点击更换头像" aria-label="更换头像">${this.avatarNode(u,'large')}<span class="account-avatar-edit">更换头像</span></button></div><div class="account-overview-main">${this.editingName?`<form data-account-form="profile" class="account-inline-name-form"><input id="inline-profile-name" name="name" value="${e(u.name)}" maxlength="40" placeholder="输入自定义名称" aria-label="自定义名称" required><button class="btn primary small" type="submit">保存</button><button class="btn small" type="button" data-account="cancel-edit-name">取消</button><p role="status" class="account-result"></p></form>`:`<div class="account-name-row"><h2>${e(u.name)}</h2><button type="button" class="btn small account-edit-name-btn" data-account="edit-name">修改名字</button></div>`}<p>@${e(u.username)} · ${u.role==='admin'?'管理员':'受邀用户'}</p></div><button class="btn" data-account="new">${this.h.icon('plus')}新建审查</button></section><div class="account-counts"><div><span>当前浏览器项目</span><strong>${projects.length}</strong></div><div><span>已有审查报告</span><strong>${reports.length}</strong></div><div><span>包含实际执行</span><strong>${executed.length}</strong></div></div>${this.usageSection(projects)}<div class="account-settings"><div class="account-card"><div class="account-card-head"><h2>个人资料</h2><p>显示名称用于头像与研究工作空间。</p></div><form data-account-form="profile"><label for="profile-name">显示名称</label><input id="profile-name" name="name" value="${e(u.name)}" maxlength="40" required><label>用户名</label><p class="account-readonly">@${e(u.username)}</p><p role="status" class="account-result"></p><button class="btn" type="submit">保存资料</button></form></div><div class="account-card"><div class="account-card-head"><h2>账户访问</h2><p>邀请制账户由管理员创建与维护。</p></div><div class="account-access-note"><strong>仅受邀用户可登录</strong><p>如需重置密码或更改访问权限，请联系管理员。所有审查支持持续运行至完成并可随时手动中断。</p></div></div></div>${u.role==='admin'?this.management():''}<section class="account-projects"><div class="online-section-heading"><h2>最近审查</h2><span>当前浏览器 · ${projects.length} 项</span></div>${projects.slice(0,6).map(p=>`<button data-account-project="${e(p.id)}"><span><strong>${e(p.title||'未命名审查')}</strong><small>${p.online_report?.review?'已有报告':p.online_pending_request?'审查处理中':'材料准备中'}</small></span>${this.h.icon('chevron')}</button>`).join('')||'<p class="online-notice">还没有项目，从新建审查开始。</p>'}<p class="online-footnote">材料和项目列表保存在当前浏览器，不自动跨设备同步；服务器报告保留 7 天。</p></section></div>`;
  }
  management(){const e=this.h.esc;return `<section id="account-management" class="account-management"><div class="online-section-heading"><h2>邀请与账户管理</h2><button class="btn" data-account="refresh-users">刷新账户</button></div><p>由管理员设置用户名和密码，再自行分发给指定用户。网站不开放注册。</p><form data-account-form="invite" class="invite-form"><div><label for="invite-username">用户名</label><input id="invite-username" name="username" pattern="[a-zA-Z0-9_]{3,32}" minlength="3" maxlength="32" required></div><div><label for="invite-name">显示名称</label><input id="invite-name" name="name" maxlength="40" required></div><div><label for="invite-password">初始密码</label><div class="account-password"><input id="invite-password" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>${passwordButton('invite-password')}</div><small>12–128 个字符</small></div><p role="alert" class="account-result"></p><button class="btn primary" type="submit">创建受邀账户</button></form><div class="online-table-wrap"><table class="online-table"><thead><tr><th>用户</th><th>权限</th><th>状态</th><th>管理</th></tr></thead><tbody>${this.users.map(u=>`<tr><td><strong>${e(u.name)}</strong><span>@${e(u.username)}</span></td><td>${u.role==='admin'?'管理员':'受邀用户'}</td><td><span class="online-status ${u.disabled?'missing':'documented'}">${u.disabled?'已停用':'可登录'}</span></td><td class="account-row-actions"><button class="btn" data-account="reset-user" data-user="${e(u.id)}">重置密码</button>${u.id===this.user.id?'':`<button class="btn" data-account="toggle-user" data-user="${e(u.id)}">${u.disabled?'启用':'停用'}</button>`}</td></tr>`).join('')}</tbody></table></div></section>`;}
  async changed(user){this.user=user;this.menu=false;await this.h.changed?.();this.h.render();}
@@ -98,6 +151,7 @@ export class AccountWorkspace{
  if(this.h.canSwitch?.()===false&&['logout','new'].includes(a)){this.h.toast('请等待当前操作结束。');return;}
  try{
  if(a==='avatar'){this.openAvatarModal();return;}
+ if(a==='usage-range'){this.usageDays=Number(t.dataset.days)||14;this.h.render();return;}
  if(a==='edit-name'){this.editingName=true;this.h.render();document.querySelector('#inline-profile-name')?.focus();document.querySelector('#inline-profile-name')?.select?.();return;}
  if(a==='cancel-edit-name'){this.editingName=false;this.h.render();return;}
  if(a==='menu'){this.menu=!this.menu;this.h.render();if(this.menu)document.querySelector('.account-menu button')?.focus();}

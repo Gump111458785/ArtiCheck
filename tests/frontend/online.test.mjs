@@ -483,3 +483,18 @@ test('knowledge graph one-click reproduction and delete-node buttons float in to
  assert.match(kg.canvasControls(),/<div class="kg-canvas-tools-left">[\s\S]*data-kg-reproduce="P1"[^>]*>一键复现<\/button>[\s\S]*data-kg-action="delete-node"[^>]*>删除节点<\/button>\s*<\/div>/);
  assert.doesNotMatch(kg.inspector(),/data-kg-reproduce/);
 });
+
+test('personal center renders API-platform style usage bar chart with daily review and execution counts',async()=>{
+ const {AccountWorkspace}=await import('../../web/dist/account.mjs');
+ const nowIso=new Date().toISOString();
+ const acct=new AccountWorkspace({esc:v=>String(v??''),icon:()=>'',projects:()=>[
+  {id:'p1',online_account:'u1',created_at:nowIso,online_report:{created_at:nowIso,review:{},execution:{started_at:Math.floor(Date.now()/1000)}}}
+ ]});
+ acct.user={id:'u1',username:'tester',name:'测试研究员',role:'member'};
+ const html=acct.center();
+ assert.match(html,/class="account-usage-card"/);
+ assert.match(html,/class="account-usage-chart"/);
+ assert.match(html,/usage-bar-col has-usage is-today/);
+ assert.match(html,/usage-bar-seg exec/);
+ assert.match(html,/usage-bar-seg review/);
+});
