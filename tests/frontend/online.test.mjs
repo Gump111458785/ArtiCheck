@@ -545,3 +545,11 @@ test('reproduceGraphPaper prompts user when code is missing and auto-submits whe
  assert.ok(!c2.some(x=>x[0]==='prompt'),'should not prompt when code was loaded');
  assert.deepEqual(c2.find(x=>x[0]==='action'),['action','submit','reproduce_other']);
 });
+
+test('share archive modal constrains select width inside narrowed modal bounds',async()=>{
+ const fs=await import('node:fs');
+ const css=fs.readFileSync(new URL('../../web/dist/feedback-redesign.css',import.meta.url),'utf8');
+ assert.match(css,/\.modal:has\(#share-archive-form\)[^}]*width:min\(460px,100%\)/);
+ assert.match(css,/#share-archive-form label\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
+ assert.match(css,/#share-archive-form select,#share-archive-form input\{[^}]*width:100%;max-width:100%;min-width:0/);
+});
