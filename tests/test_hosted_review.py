@@ -1097,6 +1097,32 @@ class HostedReviewTests(unittest.TestCase):
                 self.assertGreaterEqual(len(snippets), 1)
                 self.assertEqual(snippets[0]['file'], 'trainer.py')
 
+                # Non-pip compiled framework (caffe) is blocked in planner validation and never retried with pip in worker
+                caffe_raw = copy.deepcopy(raw_out)
+                caffe_raw['plan']['blocked_reason'] = ''
+                caffe_raw['plan']['stages'][0]['command'] = "python -c \"import caffe; print('ok')\""
+                caffe_validated = validate_assessment(caffe_raw, ctx)
+                self.assertEqual(caffe_validated['plan']['stages'], [])
+                self.assertIn('caffe', caffe_validated['plan']['blocked_reason'])
+
+                caffe_job = hybrid.launch(assessment, {'code': materials()['code']})
+                ckey = worker.job_key(caffe_job['gpu_job_id'])
+                crec = json.loads(store.kv[ckey])
+                crec['plan']['stages'][0]['command'] = "python -c \"import caffe\""
+                worker.save_record(crec)
+                caffe_calls = []
+
+                def caffe_fail(work_dir, log_path, command, deadline, job_id):
+                    caffe_calls.append(command)
+                    log_path.write_text("ModuleNotFoundError: No module named 'caffe'\n")
+                    return 1, False, False
+
+                with patch.object(worker, 'run_stage_command', side_effect=caffe_fail):
+                    caffe_res = worker.poll_once()
+                self.assertEqual(len(caffe_calls), 1)
+                self.assertEqual(caffe_res['status'], 'failed')
+                self.assertIn('Caffe (pycaffe)', caffe_res['result']['stages'][0]['reason'])
+
 
 if __name__ == '__main__':
     unittest.main()

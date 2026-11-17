@@ -161,6 +161,7 @@ findings 的标题写出单一问题；detail 用一到两句保留关键对比�
 只在明确有可执行代码时生成阶段计划；根据 execution_environment 的真实资源选择 CPU 或 GPU。若 gpu=false，不得生成需要 GPU 的可执行计划。完整长时训练不能以小型替代实验冒充完成。
 计划默认先自动尝试下载公开数据集、预训练权重并安装缺失依赖；不要死板依赖作者可能写错或漏写的 requirements.txt 严格版本号，而应结合源码实际 import 语句分析并自动补齐所需第三方库。私有数据、账号或付费下载不能猜测或使用主机凭据。
 计划运行在隔离 Linux 环境，无供应商密钥，不可调用模型 API。CPU 与 owned_gpu 环境均支持联网下载公开数据、权重与 Python 依赖（执行器会自动扫描源码 import 并补齐缺失库，owned_gpu 已预装 PyTorch、torchvision 及 CUDA，默认持续运行至全部阶段完成，运行结束后自动清空隔离环境、依赖库与全部临时产物）。plan.hardware 填 CPU 或 GPU；需要 CUDA 的评估、推理或 GPU 实验选 GPU。
+当前隔离环境仅预装 PyTorch/torchvision/CUDA 及可通过 pip 安装的纯 Python 科学计算库，不支持 caffe（pycaffe）、caffe2、cntk、theano 等需 C++ 源码编译且无法通过 pip 安装的旧框架；也不得编写引用仓库中不存在的本地权重文件（如缺失的 .caffemodel）的命令。若仓库仅含 Caffe .prototxt 或强依赖此类不可用框架且无等价 PyTorch 实现，不得生成 import caffe 等注定报错的阶段，应将 plan.stages 留空并在 blocked_reason 写明缺乏对应框架或权重文件。
 GitHub ZIP 的统一外层目录会被剥除。命令在剥除外层后的仓库根目录运行，引用文件可用仓库相对路径。
 命令可写小型检查脚本，但不得把论文报告值硬编码为观测结果，不得生成虚假的训练/评估输出。
 不要为运行不了的论文制造 toy 替代结果。如有论文，务必准确提取论文题目（paper_title）、摘要（paper_abstract）及 2–5 条核心创新点或主要贡献（paper_contributions）；无法从原文确认时返回空数组，不要用总体判断或分类理由代替。
@@ -433,7 +434,8 @@ def validate_assessment(value, context):
     plan = value.get('plan')
     if not isinstance(plan, dict) or not isinstance(plan.get('stages'), list) or len(plan['stages']) > 8:
         raise ReviewError('invalid_model_output', '执行计划格式无效。', 502)
-    stages = []; renamed = {}
+    stages = []; renamed = {}; blocked_frameworks = []
+    unsupported_framework_cmd = re.compile(r'\b(?:import|from)\s+(caffe2?|cntk|theano)\b')
     # Paper-only input has no executable source: ignore any proposed stages instead of
     # failing the whole review on a speculative file name.
     for position, row in enumerate(plan['stages'] if context['code'] else [], 1):
@@ -443,6 +445,13 @@ def validate_assessment(value, context):
         source_file=file_path(row['file'])
         if source_file is None:
             continue
+        command_text = text(row, 'command', 12000)
+        if fw_match := unsupported_framework_cmd.search(command_text):
+            fw_name = fw_match.group(1)
+            if fw_name not in blocked_frameworks:
+                blocked_frameworks.append(fw_name)
+            citation_gaps.append(f'已跳过依赖 {fw_name}（需 C++ 编译、当前 PyTorch/CUDA 环境不支持且无法通过 pip 安装）的执行阶段。')
+            continue
         i=len(stages)+1
         dependencies=row.get('depends_on',[f'S{position-1}'] if position>1 else [])
         if not isinstance(dependencies,list):
@@ -451,7 +460,7 @@ def validate_assessment(value, context):
         dependencies=[renamed[d] for d in dependencies if isinstance(d,str) and d in renamed]
         renamed[f'S{position}']=f'S{i}'
         stages.append({'id': f'S{i}', 'title': text(row, 'title', 200),
-                       'command': text(row, 'command', 12000), 'file': source_file,
+                       'command': command_text, 'file': source_file,
                        'depends_on':list(dict.fromkeys(dependencies)),'experiment':optional_text(row,'experiment',200)})
     patterns = []
     for row in plan.get('metric_patterns', [])[:200]:
@@ -576,6 +585,9 @@ def validate_assessment(value, context):
             contribution_metrics[contribution_id] = list(dict.fromkeys(contribution_metrics.get(contribution_id, []) + linked))[:20]
 
     core_code_snippets = extract_core_code_snippets(value, context, stages, criteria, clean_findings)
+    blocked_reason = optional_text(plan, 'blocked_reason')
+    if not stages and blocked_frameworks and not blocked_reason:
+        blocked_reason = f"代码依赖 {', '.join(blocked_frameworks)} 等需 C++/源码编译的旧框架，当前隔离执行环境仅预装 PyTorch/CUDA 且无法通过 pip 自动安装；建议换用 PyTorch 复现仓库。"
     result = {'summary': text(value, 'summary', 4000), 'paper_title': paper_title,
               'paper_abstract': paper_abstract, 'paper_contributions': paper_contributions,
               'contribution_details': contribution_details,
@@ -588,7 +600,7 @@ def validate_assessment(value, context):
               'core_code_snippets': core_code_snippets,
               'visual_observations':visual_observations,'web_checks':web_checks,
               'coverage': {**context['coverage'], 'total_paper_pages': context['paper_pages'], 'gaps': list(dict.fromkeys(gaps + rejected + citation_gaps)), 'note': text(coverage, 'note')},
-              'plan': {'purpose': text(plan, 'purpose'), 'blocked_reason': optional_text(plan, 'blocked_reason'),
+              'plan': {'purpose': text(plan, 'purpose'), 'blocked_reason': blocked_reason,
                        'stages': stages, 'needs': needs, 'metric_patterns': patterns,
                        'max_seconds': context['max_seconds'], 'policy': 'frozen_api_plan', 'fail_fast': True,
                        'hardware': 'GPU' if str(plan.get('hardware','CPU')).upper()=='GPU' and context['execution_environment'].get('gpu') else 'CPU'}}

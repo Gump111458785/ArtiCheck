@@ -121,6 +121,13 @@ PREINSTALLED_RUNTIME_MODULES = {
     'jinja2', 'markupsafe', 'networkx', 'sympy', 'mpmath', 'fsspec',
 }
 
+NON_PIP_FRAMEWORKS = {
+    'caffe': 'Caffe (pycaffe)',
+    'caffe2': 'Caffe2',
+    'cntk': 'CNTK',
+    'theano': 'Theano',
+}
+
 SKIP_DIRS = {'.git', '.hg', '.svn', '__pycache__', '.pydeps', '.conda_env', '.cache', 'venv', '.venv', 'env', 'node_modules', 'build', 'dist'}
 SAFE_PKG_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$')
 
@@ -578,7 +585,7 @@ class GPUWorker:
 
             disk = shutil.disk_usage(work_dir)
             inferred_deps = infer_project_dependencies(work_dir)
-            auto_candidates = sorted({pkg for mod, pkg in inferred_deps.items() if mod not in PREINSTALLED_RUNTIME_MODULES})
+            auto_candidates = sorted({pkg for mod, pkg in inferred_deps.items() if mod not in PREINSTALLED_RUNTIME_MODULES and mod not in NON_PIP_FRAMEWORKS})
             provisioned_pkgs = []
             stages = plan['stages']
             installs_dependencies = bool(stages and PIP_INSTALL_COMMAND.search(stages[0]['command']))
@@ -589,7 +596,7 @@ class GPUWorker:
             self.save_record(record)
             if auto_candidates and not installs_dependencies and not self.is_cancelled(job_id):
                 prep_log = results_dir / '_auto_deps.log'
-                probe_json = json.dumps({m: p for m, p in inferred_deps.items() if m not in PREINSTALLED_RUNTIME_MODULES})
+                probe_json = json.dumps({m: p for m, p in inferred_deps.items() if m not in PREINSTALLED_RUNTIME_MODULES and m not in NON_PIP_FRAMEWORKS})
                 prep_cmd = (
                     f"python -c 'import importlib.util, json, subprocess, sys; "
                     f"mapping = json.loads({ json.dumps(probe_json) }); "
@@ -697,11 +704,12 @@ class GPUWorker:
                 if (code != 0 and not timed_out and not stage_cancelled and not row.get('retry_count')
                         and not self.is_cancelled(job_id) and time.monotonic() < deadline):
                     missing_mods = parse_missing_modules_from_log(log_text)
+                    non_pip = sorted(m for m in missing_mods if m in NON_PIP_FRAMEWORKS)
                     req_conflict = bool(re.search(r'pip install.*-r\s+\S*requirements', stage['command'])) and bool(
                         re.search(r'(ResolutionImpossible|No matching distribution| Conflict|Cannot install|subprocess-exited-with-error)', log_text, re.I))
-                    heal_pkgs = sorted(set(missing_mods.values()))
+                    heal_pkgs = sorted({pkg for mod, pkg in missing_mods.items() if mod not in NON_PIP_FRAMEWORKS})
                     if not heal_pkgs and req_conflict and inferred_deps:
-                        heal_pkgs = sorted(set(inferred_deps.values()))
+                        heal_pkgs = sorted({pkg for mod, pkg in inferred_deps.items() if mod not in NON_PIP_FRAMEWORKS})
                     if heal_pkgs:
                         heal_log = results_dir / (stage['id'] + '_autoheal.log')
                         pkg_args = ' '.join(heal_pkgs)
@@ -715,6 +723,11 @@ class GPUWorker:
                         truncated = truncated or heal_trunc
                         provisioned_pkgs = sorted(set(provisioned_pkgs) | set(heal_pkgs))
                         report['runtime']['auto_provisioned_packages'] = provisioned_pkgs
+                        if code != 0:
+                            non_pip = sorted(m for m in parse_missing_modules_from_log(log_text) if m in NON_PIP_FRAMEWORKS)
+                    if code != 0 and non_pip:
+                        fw_desc = ' / '.join(NON_PIP_FRAMEWORKS[m] for m in non_pip)
+                        row['reason'] = f"命令依赖 {fw_desc}（需 C++/源码编译的旧框架），当前隔离环境预装 PyTorch/CUDA，无法通过 pip 自动安装；若仓库同时缺少权重文件，请改用 PyTorch 复现仓库或补充兼容运行入口。"
                 all_logs.append(log_text)
                 stage_logs[stage['id']] = log_text
                 live_tail = extract_live_tail(log_text)
