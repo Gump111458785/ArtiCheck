@@ -29,6 +29,9 @@ html,body{background:#ffffff;color:var(--ink)}
 .topbar{background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
 .page{background:#ffffff;border:1px solid var(--line);box-shadow:0 1px 4px rgba(15,23,42,.03)}
 .redesigned-sidebar .nav-item.active,.nav-role.selected{background:#eff6ff;color:#1e40af;font-weight:600}
+.redesigned-sidebar .brand{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:-.025em;color:#0f172a;text-decoration:none}
+.redesigned-sidebar .brand img{width:30px;height:30px;border-radius:8px;box-shadow:0 4px 12px rgba(29,78,216,.2),0 1px 2px rgba(15,23,42,.08);transition:transform .18s ease}
+.redesigned-sidebar .brand:hover img{transform:translateY(-1px)}
 .nav-role-tree{border-left-color:#cbd5e1}
 .redesigned-sidebar .sidebar-bottom,.sidebar-version{border-top-color:var(--line)}
 .account-avatar{background:#dbeafe;color:#1e40af}

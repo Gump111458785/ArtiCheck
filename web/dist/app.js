@@ -110,7 +110,7 @@ function render(){
  app.innerHTML=`<div class="shell redesigned-shell ${state.navOpen?'nav-open':''}">
  <button class="nav-scrim" data-action="toggle-nav" aria-label="关闭导航"></button>
  <aside class="sidebar redesigned-sidebar">
-  <a class="brand" href="#home" data-action="nav" data-page="home"><img src="./mark.svg" alt="">ArtiCheck</a>
+  <a class="brand" href="#home" data-action="nav" data-page="home"><img src="./mark.svg?v=2" alt="">ArtiCheck</a>
   <button class="icon-btn sidebar-close" data-action="toggle-nav" aria-label="关闭导航">${icon('close')}</button>
   <nav aria-label="主要导航">${renderNavigation({page:state.page,icon,esc,run:roleContext?.run,selectedRole:execution?.role,expandedRoles:state.page==='roles',activeRuns,hosted:state.mode!=='runtime',archivePage:execution?.archiveView==='public'?'public-cases':'personal-archive'})}</nav>
   <div id="sidebar-review">${apiReview?.sidebar()||''}</div><div class="sidebar-bottom"><div class="sidebar-version">ArtiCheck <span>v0.1</span></div></div>
