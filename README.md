@@ -1,11 +1,13 @@
 <div align="center">
 
+<img src="web/dist/mark.svg" width="64" height="64" alt="ArtiCheck Logo">
+
 # ArtiCheck
 
-**让论文里的每一条实验主张都有执行证据。**
+**一篇论文，一条证据链。**
 
-面向 Artifact Evaluation 与投稿前自查的论文复现预审系统。<br>
-围绕论文、作者代码和数据，构建了环境重建、实验执行、独立指标核对与逐主张报告流程。
+面向 **Artifact Evaluation、投稿前自查与论文复现研究** 的一体化核查工作台。<br>
+围绕论文 PDF、Author Code / GitHub 固定提交与运行环境，打通材料绑定、云端/本地隔离执行、独立指标比对、逐主张审查报告与科学贡献知识图谱。
 
 [![CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml/badge.svg)](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
@@ -13,13 +15,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CPU case](https://img.shields.io/badge/LIBLINEAR-15_runs-227755)](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)
 
-[打开在线工作台](https://articheck-workbench.edgeone.dev) · [快速开始](#quickstart) · [查看复现案例](#case)
+[打开在线工作台](https://articheck-workbench.edgeone.dev) · [快速开始](#quickstart) · [查看界面展示](#showcase) · [旗舰复现案例](#case)
 
 </div>
 
-![工作台界面导览：开始页、执行中心、角色协作与案例详情](docs/assets/workbench-tour.gif)
+![ArtiCheck 工作台导览：开始页、材料管理、最终报告、知识图谱、个人归档与用户共享平台](docs/assets/workbench-tour.gif)
 
-*轮播展示四个工作台页面，并非一次任务的连续执行录像。在线工作台已部署至 EdgeOne；采用受邀账户独立登录，不再要求额外的网站访问码。*
+*轮播展示新版 ArtiCheck 在线工作台核心界面：开始导览、材料与 GitHub 仓库绑定、结构化审查报告、科学贡献知识图谱、个人归档筛选与用户共享平台。*
 
 [解决的问题](#problem) · [使用方式](#usage) · [核心能力](#capabilities) · [界面展示](#showcase) · [系统架构](#architecture) · [实测结果](#results) · [Planner 后训练](#training) · [路线图](#roadmap) · [文档](#docs)
 
@@ -92,13 +94,15 @@ python -m articheck run --task examples/task.json --output runs/provider-api \
 
 ### 2.3 网站：浏览器中提交评测
 
-打开 [ArtiCheck 在线工作台](https://articheck-workbench.edgeone.dev/#api-review)，通过受邀账户完成独立登录（不再使用额外网站访问码，管理员可在个人中心创建、停用或重置受邀账户）。新建项目并命名后，上传论文 PDF、代码 ZIP，或粘贴公开 GitHub 地址。代码 ZIP 与 GitHub 源码包支持最大 100 MB，大文件通过短期直传通道或固定提交引用处理。材料初步识别后，弹窗选择自动识别、论文自查、复现评估或代码审查；允许仅上传论文或代码，默认检查适用范围，也可指定表格、实验与最长执行时间。审查记录按受邀账户隔离。常规脚本采用 2 vCPU、4 GB 内存 E2B 隔离实例执行，需要 CUDA 的阶段由自有 RTX 4090（24 GB 显存）隔离执行器（`bwrap` 无特权命名空间与禁网环境）接单运行。
+打开 [ArtiCheck 在线工作台](https://articheck-workbench.edgeone.dev/#home)，通过受邀账户登录后即可使用五大核心工作区：
 
-网站使用 DeepSeek API 阅读论文文字与原页图像，核对八项条件、图表数字及论证依据。有公开代码线索时自动获取固定提交的源码；有可执行计划时，按计划硬件需求在隔离 CPU 或自有 GPU 环境中运行命令并保存日志、退出码和观测值。审查完成后优先呈现包含“通过 / 未通过 / 待核查”结论横幅、问题建议、对齐的指标比较表与出处的一页式最终报告；执行计划、阶段日志与默认展开的分层协作活动记录统一收纳在“过程详情”页。实际受阻后再请求用户补充材料，确认不可得的实验保留无法复现原因。
+- **开始页与使用引导**：提供「准备材料 → 选择审查目的 → 执行并审查证据」导览与内置四步教程，并在右侧展示 LIBLINEAR 等内置复现档案的四层验收指标。
+- **在线审查（材料管理 → 双模式报告）**：支持上传论文 PDF、代码 ZIP（最大 100 MB），或粘贴公开 GitHub 仓库地址直接锁定固定 commit（如 `owner/repo (commit)`）。选择**自我审查**时生成「需要修改 / 可优化 / 待你确认」分级整改清单；选择**复现他人**时则聚焦复现程度、阶段实测、指标吻合度、创新点逐字依据与分歧差异，并将七步审查时间轴（材料接收、联合审阅、交叉复核、执行计划、环境与运行、指标比对、报告汇总）与附录整合在同一报告页中。
+- **隔离 CPU / 自有 GPU 执行**：普通脚本在 E2B 隔离沙箱（自动补齐缺失依赖）运行，导入 `torch` / 需要 CUDA 的实验自动派发至自有 RTX 4090 GPU 隔离节点（`bwrap` 无特权命名空间与禁网执行）；断网或关闭页面重开后自动同步运行进度与日志，支持随时暂停或强制终止。
+- **科学贡献知识图谱**：支持通过标题、arXiv 或 DOI 接入 OpenAlex 文献脉络，自动构建论文节点、主贡献与细分贡献网络，记录「已读 / 未读」状态并可展开子贡献、扩展引文与建立联系；选中任意论文节点点击**一键复现**时，自动从论文元数据/PDF 与公开检索寻找配套 GitHub 仓库，未找到时弹窗由你选择补充代码（论文+代码复现）或仅按论文核查。
+- **个人归档与用户共享平台**：**个人归档**支持按项目名、论文名、代码/仓库名、审查结论、执行状态、材料类型与时间组合筛选；**公共案例（用户共享平台）**支持受邀账户公开发布已完成归档与原始材料、查看公开报告或随时撤回分享，并与系统内置基线档案同页查阅。
 
-正式网站已完成 LIBLINEAR 作者代码的浏览器上传、模型审查、CPU 编译、训练与预测检查。进程成功、数值符合与论文主要结论成立分开记录；该次 `heart_scale` 运行检查代码流程，不替代下文 news20 案例或论文完整验收。[使用与接口](docs/ONLINE_WORKBENCH.md) · [真实网站验收](docs/ONLINE_ACCEPTANCE.md) · [部署与密钥配置](docs/EDGEONE_DEPLOYMENT.md)。
-
-在线流程使用主流模型 API；ArtiCheck 后训练权重的发布与效果评测 [待完成]。
+[使用与接口](docs/ONLINE_WORKBENCH.md) · [真实网站验收](docs/ONLINE_ACCEPTANCE.md) · [部署与密钥配置](docs/EDGEONE_DEPLOYMENT.md) · [OpenAPI 契约](web/dist/review-api.openapi.json)。
 
 <a id="case"></a>
 
@@ -150,63 +154,84 @@ flowchart LR
 
 | 能力 | 工作方式 | 代码与证据 |
 |---|---|---|
-| 主张级核查 | [六角色](#roles)协作，核对指标、样本重叠和训练预算；每条判定引用执行证据，证据不足保留 `inconclusive` | [报告](docs/smoke/metric-defect-report.md) · [流水线](articheck/pipeline.py) |
-| 受控执行 | Docker 禁网、只读挂载、非 root、移除 capabilities，限制 CPU、内存、进程及输出；工具 / token / 时间 / 费用预算与执行缓存 | [沙箱](articheck/sandbox.py) · [Docker CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
-| 可审计执行器 | 不可变材料工作区、PDF / ZIP / 计划指纹、阶段与种子矩阵、产物与资源记录 | [执行引擎](docs/REPRODUCTION_ENGINE.md) · [实现](articheck/reproduction/) |
-| 分层验收 | 结合多次运行、统计与覆盖证据，分别判断运行、环境、训练协议及主要结论 | [完成验收清单](docs/REPRODUCTION_COMPLETION_CHECKLIST.md) |
-| 可视化工作台 | PDF / 代码材料导入、主张确认、服务器资源核对、执行中心、角色协作与证据复核；26 条 API 路径、30 个操作 | [界面与模块对应](docs/REVIEW_WORKSPACE.md) · [OpenAPI](web/dist/openapi.json) |
+| 主张级核查 | [六角色](#roles)协作，核对指标、样本重叠和训练预算；每条判定引用 PDF 页码与源码出处，证据不足保留 `inconclusive` | [报告](docs/smoke/metric-defect-report.md) · [流水线](articheck/pipeline.py) |
+| 受控执行 | Docker / `bwrap` 禁网、只读挂载、非 root、自动识别 `PyTorch/CUDA` 路由并补齐纯 Python 依赖；拦截 `caffe` 等不可 `pip` 编译框架 | [沙箱](articheck/sandbox.py) · [GPU Worker](articheck/gpu_worker.py) |
+| 可审计执行器 | 不可变材料工作区、PDF / ZIP / 计划指纹、阶段与种子矩阵、断网续传状态同步与产物清理 | [执行引擎](docs/REPRODUCTION_ENGINE.md) · [实现](articheck/reproduction/) |
+| 知识图谱与一键复现 | 接入 OpenAlex 构建论文脉络与贡献节点；选定论文支持自动检索关联 PDF 与 GitHub 源码、一键发起「论文+代码」或「仅论文」复现 | [图谱服务](articheck/kg_service.py) · [前端图谱](web/dist/knowledge-graph.mjs) |
+| 归档与用户共享 | 个人归档支持 7 维条件组合检索；用户共享平台支持发布/撤回已完成复现案例及原始材料，并与系统内置基线档案对照 | [执行与归档中心](web/dist/execution-center.mjs) · [OpenAPI](web/dist/openapi.json) |
 | 训练轨迹契约 | 保留采样器提供的 token IDs、行为 log-prob 与策略版本；外部接受后的教师轨迹可导出 SFT，缺失原生 token 时拒绝 RL 导出 | [轨迹契约与测试范围](docs/TRAINING.md#5-原生训练轨迹契约) · [导出实现](articheck/training/export.py) |
 
 <a id="showcase"></a>
 
 ## 5. 界面展示
 
-在开始页进入在线审查，提交材料后查看报告、执行日志、图表证据与角色记录。本地工作台保留完整实验与归档案例入口。审查中实时展示各职责的实际活动；图表指标按数据集、类别、图表与评测协议分层，支持作者方法筛选。
+在线工作台围绕「**开始导览 → 材料导入 → 审查与实测报告 → 知识图谱 → 归档与共享 → 本地部署**」组织界面。以下截图均来自当前正式部署版本的实际运行画面。
 
-| 动态协作进度 | 分层图表指标 |
-|---|---|
-| ![实际审查期间的角色活动](docs/assets/review-collaboration-live.png) | ![数据集、类别、协议与模型分层](docs/assets/metrics-classified.png) |
-
-| 注册与登录 | 个人中心 |
-|---|---|
-| ![账户登录表单](docs/assets/account-login.png) | ![个人资料、安全设置与最近审查](docs/assets/account-center.png) |
-
-[账户与协作功能说明](docs/ACCOUNTS_AND_COLLABORATION.md)。
-
-| 在线审查报告 | 实际 CPU 执行 |
-|---|---|
-| ![问题分组、修正建议与八项条件](docs/assets/online-report.png) | ![真实阶段、环境与执行状态](docs/assets/online-execution.png) |
-
-[打开开始页](https://articheck-workbench.edgeone.dev/#home) · [浏览执行中心](https://articheck-workbench.edgeone.dev/#workbench) · [查看角色协作](https://articheck-workbench.edgeone.dev/#roles) · [完整界面图集](docs/UI_GALLERY.md)
+### 5.1 核心工作流：开始、材料绑定与双模式报告
 
 <table>
 <tr>
 <td width="50%" valign="top">
-<strong>开始页 · 从论文材料进入</strong><br>
-新建评估、继续个人项目，或先查看公开案例。
-<a href="docs/assets/home-desktop.jpg"><img src="docs/assets/home-desktop.jpg" alt="ArtiCheck 开始页：新建论文评估、继续项目与公开案例" width="100%"></a>
+<strong>ArtiCheck 开始 · 一篇论文，一条证据链</strong><br>
+三步快速开启在线审查，右侧直观展示 LIBLINEAR 15 次运行与四层验收指标卡片。<br><br>
+<a href="docs/assets/ui-home.png"><img src="docs/assets/ui-home.png" alt="ArtiCheck 开始页：三步审查引导与 LIBLINEAR 四层验收卡片" width="100%"></a>
 </td>
 <td width="50%" valign="top">
-<strong>执行中心 · 找到一次运行</strong><br>
-按来源、执行方式与状态检索，再打开任务详情。
-<a href="docs/assets/execution-center.jpg"><img src="docs/assets/execution-center.jpg" alt="执行中心：任务来源、执行状态、进度与详情入口" width="100%"></a>
+<strong>在线审查 · 材料管理与 GitHub 固定提交</strong><br>
+同屏导入论文 PDF、代码 ZIP 或绑定公开 GitHub 仓库（显示精确 commit），右侧实时切换「自我审查 / 复现他人」。<br><br>
+<a href="docs/assets/ui-materials-review.png"><img src="docs/assets/ui-materials-review.png" alt="在线审查材料管理页：PDF、代码 ZIP、GitHub commit 绑定与审查目的选择" width="100%"></a>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<strong>角色协作 · 查看实际分工</strong><br>
-可选择短时核查或完整实验，对照六角色的输入输出契约与任务中的真实事件。
-<a href="docs/assets/role-workspace.jpg"><img src="docs/assets/role-workspace.jpg" alt="角色协作：六角色导航、职责契约与 Planner 实际事件" width="100%"></a>
+<strong>自我审查报告 · 分级修改清单</strong><br>
+面向投稿前自查，汇总「需要修改 / 可优化 / 待你确认」数量，逐条定位 PDF 原文页码并给出可执行改进方案。<br><br>
+<a href="docs/assets/ui-report-selfreview.png"><img src="docs/assets/ui-report-selfreview.png" alt="自我审查最终报告：分级问题数量、代码跑通状态与可执行优化建议" width="100%"></a>
 </td>
 <td width="50%" valign="top">
-<strong>案例验收 · 对照结果与证据</strong><br>
-展示多次运行指标，分别核对执行完成与结论依据。
-<a href="docs/assets/execution-detail.jpg"><img src="docs/assets/execution-detail.jpg" alt="LIBLINEAR 案例详情：15 次运行、实际指标和分层验收" width="100%"></a>
+<strong>复现他人报告 · GPU 实测与七步时间轴</strong><br>
+输出复现程度、阶段完成度、指标比对率、创新点逐字依据、分歧与差异清单，并记录完整 7 步审查流程与折叠附录。<br><br>
+<a href="docs/assets/ui-report-reproduce.png"><img src="docs/assets/ui-report-reproduce.png" alt="复现他人最终报告：部分复现结论、GPU 16秒执行、创新点核验与七步审查时间轴" height="360"></a>
 </td>
 </tr>
 </table>
 
-在线审查按「提交材料 → 自动审查 → 云端执行 → 证据与报告」组织，无需预先绑定本地命令。本地项目保留实验覆盖、人工主张编辑、服务器核对与完整实验的配置流程。[开始页设计](docs/HOME_SCREEN.md) · [界面与模块对应](docs/REVIEW_WORKSPACE.md) · [八项复现条件](docs/IMPLEMENTATION_STATUS.md)。
+### 5.2 知识图谱、归档与用户共享平台
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<strong>科学贡献知识图谱 · 引文脉络与一键复现</strong><br>
+浏览 36 篇论文的引文与贡献关系（支持按名称、年份、方向、期刊过滤），选中主节点可直接展开子贡献、扩展论文或左上角「一键复现 / 删除节点」。<br><br>
+<a href="docs/assets/ui-knowledge-graph.png"><img src="docs/assets/ui-knowledge-graph.png" alt="知识图谱页面：论文关系网络、右侧节点详情与左上角一键复现按钮" width="100%"></a>
+</td>
+<td width="50%" valign="top">
+<strong>个人归档 · 多维筛选与状态追踪</strong><br>
+集中管理全部审查项目，支持按项目名、论文名、代码/仓库名、审查结论、执行状态、材料类型与时间快速检索与诊断跳转。<br><br>
+<a href="docs/assets/ui-personal-archive.png"><img src="docs/assets/ui-personal-archive.png" alt="个人归档页面：七维组合筛选与项目执行状态表格" width="100%"></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<strong>公共案例 · 用户共享平台与基线档案</strong><br>
+上方展示受邀用户公开发布的复现报告与原始材料（支持查看最终报告或撤回分享），下方汇总系统内置 LIBLINEAR 与教学基准档案。<br><br>
+<a href="docs/assets/ui-public-platform.png"><img src="docs/assets/ui-public-platform.png" alt="公共案例页面：用户共享平台表格与系统内置基线档案" width="100%"></a>
+</td>
+<td width="50%" valign="top">
+<strong>本地项目 · 一键部署私有工作台</strong><br>
+当私有论文或代码需留在本地机器时，提供环境要求说明与可一键复制的本地克隆、虚拟环境与启动命令。<br><br>
+<a href="docs/assets/ui-local-project.png"><img src="docs/assets/ui-local-project.png" alt="本地项目页面：开源仓库本地启动步骤与环境要求" width="100%"></a>
+</td>
+</tr>
+</table>
+
+<details>
+<summary>查看更多页面截图：四步使用指南（帮助页）</summary>
+<br>
+<a href="docs/assets/ui-help-guide.png"><img src="docs/assets/ui-help-guide.png" alt="帮助页面：四步完成从材料到最终报告的引导与内置样例入口" width="100%"></a>
+</details>
+
+[打开开始页](https://articheck-workbench.edgeone.dev/#home) · [打开在线审查](https://articheck-workbench.edgeone.dev/#api-review) · [浏览个人归档](https://articheck-workbench.edgeone.dev/#personal-archive) · [浏览公共案例](https://articheck-workbench.edgeone.dev/#public-cases) · [打开知识图谱](https://articheck-workbench.edgeone.dev/#knowledge-graph) · [完整界面图集](docs/UI_GALLERY.md)
 
 <a id="architecture"></a>
 
@@ -299,7 +324,7 @@ python -m articheck run --task examples/task.json --output runs/review
 | 公开 CPU 案例 | LIBLINEAR / news20，15 次运行、60 个阶段；L2-SVM 准确率 96.76%，样本标准差 0.31 个百分点 | [案例 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563) · [报告](web/dist/samples/liblinear-reproduction.json) |
 | 内置受控缺陷基准 | 单仓库 4 个版本、12 条主张；FixedPlanner + 规则核查：TP=3、FP=0、TN=9、FN=0，宏 F1=1.000，问题召回率 100%，误报率 0% | [原始结果](docs/smoke/metrics.json) · [问题报告](docs/smoke/metric-defect-report.md) |
 | Python 工程测试 | 173 项：本地 169 项通过、4 项 Docker 专项跳过；CI 覆盖 Python 3.10–3.12 | [网站与回归验收](docs/ONLINE_ACCEPTANCE.md) · [历史验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
-| 前端测试 | 106 项通过，覆盖完整实验角色事件、API 接入、演示评测、开始页、材料、验收、资源、执行中心和审查状态 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
+| 前端测试 | 139 项通过，覆盖完整实验角色事件、API 接入、演示评测、开始页、材料、归档与共享、知识图谱一键复现、个人中心图表和审查控制 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
 
 内置基准的阈值为 0.5，包含正例 3 条、负例 9 条。这组结果仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 评测 [待完成]；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
 
@@ -433,7 +458,7 @@ GRPO 方案已采用 SFT 检查点初始化策略，并通过 verl 自定义 Age
 | v0.3 · SFT / GRPO Planner [待完成] | 使用冻结数据训练 GPU SFT、三种子 GRPO，保存曲线、置信区间与等预算对照，发布模型权重与下载说明 |
 | v0.4 · 效率与部署 [待完成] | 测量 GPU 训练、缓存与量化的质量、显存、吞吐、延迟和成本，部署微调权重服务并完成效果对照；网站的模型 API 与 CPU 执行见第 2.3 节 |
 
-更新日期：**2026-11-03**。版本范围已按上表划分，结果、配置与日志纳入统一归档协议。GitHub Release 发布 [待完成]。
+更新日期：**2026-11-17**。版本范围已按上表划分，结果、配置与日志纳入统一归档协议。GitHub Release 发布 [待完成]。
 
 <a id="docs"></a>
 
