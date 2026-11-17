@@ -69,14 +69,14 @@ class OwnedGPUExecutor:
         if state=='queued' and time.time()>record['deadline']:
             self.store.command('SET',self.key(record['id'])+':cancel','1','EX','900')
             state='expired'
-        if state == 'running' and record.get('worker_boot'):
+        if state == 'running':
             raw_hb = self.store.command('GET', self.prefix + 'heartbeat')
             if raw_hb:
                 try:
                     hb = json.loads(raw_hb)
                 except ValueError:
                     hb = {}
-                if hb.get('worker_boot') and hb['worker_boot'] != record['worker_boot']:
+                if hb.get('worker_boot') and hb['worker_boot'] != record.get('worker_boot'):
                     state = 'failed'
                     record['status'] = 'failed'
                     record['notice'] = '云端执行节点已重启，本次执行未完成；可点击重新执行继续。'

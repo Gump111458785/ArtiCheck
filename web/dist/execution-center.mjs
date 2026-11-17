@@ -448,8 +448,8 @@ export class ExecutionCenter {
   const e=this.h.esc, signedIn=Boolean(this.h.accountId?.());
   const cases=this.publicCaseOwner===this.h.accountId?.()?this.publicCases:null;
   const error=this.caseRequestOwner===this.h.accountId?.()?this.caseError:'';
-  return `<section class="shared-cases"><div class="execution-list-head"><h2>公共复现案例与核查归档库</h2></div>
-   ${signedIn?`<section class="shared-cases-community"><h3>平台用户分享</h3>${this.caseBusy?'<p role="status">正在加载案例…</p>':''}${error?`<p role="alert">${e(error)} <button type="button" class="btn small" data-archive-action="reload-cases">重试</button></p>`:''}
+  return `<section class="shared-cases"><div class="execution-list-head"><h2>用户共享平台</h2></div>
+   ${signedIn?`<section class="shared-cases-community">${this.caseBusy?'<p role="status">正在加载案例…</p>':''}${error?`<p role="alert">${e(error)} <button type="button" class="btn small" data-archive-action="reload-cases">重试</button></p>`:''}
    ${cases?.items.length?this.sharedCaseRows(cases.items):cases&&!this.caseBusy?'<p>暂无用户分享的案例。</p>':''}
    ${cases?.next?`<button type="button" class="btn small" data-archive-action="more-cases" ${this.caseBusy?'disabled':''}>查看更多案例</button>`:''}</section>`:''}
    ${this.recordList(this.rows().filter(row=>row.source!=='runtime'),'系统内置基线档案',true)}</section>`;
