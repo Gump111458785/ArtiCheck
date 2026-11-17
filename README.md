@@ -191,7 +191,7 @@ flowchart LR
 <td width="50%" valign="top">
 <strong>复现他人报告 · GPU 实测与七步时间轴</strong><br>
 输出复现程度、阶段完成度、指标比对率、创新点逐字依据、分歧与差异清单，并记录完整 7 步审查流程与折叠附录。<br><br>
-<a href="docs/assets/ui-report-reproduce.png"><img src="docs/assets/ui-report-reproduce.png" alt="复现他人最终报告：部分复现结论、GPU 16秒执行、创新点核验与七步审查时间轴" height="360"></a>
+<a href="docs/assets/ui-report-reproduce.png"><img src="docs/assets/ui-report-reproduce.png" alt="复现他人最终报告：部分复现结论、GPU 16秒执行、创新点核验与七步审查时间轴" width="100%"></a>
 </td>
 </tr>
 </table>
