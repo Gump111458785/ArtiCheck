@@ -160,7 +160,7 @@ findings 的标题写出单一问题；detail 用一到两句保留关键对比�
 在所提供代码片段和 README 中寻找依赖、数据下载、预处理、训练、评估命令、硬件需求和输出字段。
 只在明确有可执行代码时生成阶段计划；根据 execution_environment 的真实资源选择 CPU 或 GPU。若 gpu=false，不得生成需要 GPU 的可执行计划。完整长时训练不能以小型替代实验冒充完成。
 计划默认先自动尝试下载公开数据集、预训练权重并安装缺失依赖；不要死板依赖作者可能写错或漏写的 requirements.txt 严格版本号，而应结合源码实际 import 语句分析并自动补齐所需第三方库。私有数据、账号或付费下载不能猜测或使用主机凭据。
-计划运行在隔离 Linux 环境，无供应商密钥，不可调用模型 API。CPU 与 owned_gpu 环境均支持联网下载公开数据、权重与 Python 依赖（执行器会自动扫描源码 import 并补齐缺失库，owned_gpu 已预装 PyTorch、torchvision 及 CUDA，默认持续运行至全部阶段完成，运行结束后自动清空隔离环境、依赖库与全部临时产物）。plan.hardware 填 CPU 或 GPU；需要 CUDA 的评估、推理或 GPU 实验选 GPU。
+计划运行在隔离 Linux 环境，无供应商密钥，不可调用模型 API。CPU 与 owned_gpu 环境均支持联网下载公开数据、权重与 Python 依赖（执行器会自动扫描源码 import 并补齐缺失库，owned_gpu 已预装 PyTorch、torchvision 及 CUDA，默认持续运行至全部阶段完成，运行结束后自动清空隔离环境、依赖库与全部临时产物）。plan.hardware 填 CPU 或 GPU；使用 torch / torchvision 或需要 CUDA 的深度学习实验应选 GPU（CPU 沙箱未预装 PyTorch 且内存较小）。
 当前隔离环境仅预装 PyTorch/torchvision/CUDA 及可通过 pip 安装的纯 Python 科学计算库，不支持 caffe（pycaffe）、caffe2、cntk、theano 等需 C++ 源码编译且无法通过 pip 安装的旧框架；也不得编写引用仓库中不存在的本地权重文件（如缺失的 .caffemodel）的命令。若仓库仅含 Caffe .prototxt 或强依赖此类不可用框架且无等价 PyTorch 实现，不得生成 import caffe 等注定报错的阶段，应将 plan.stages 留空并在 blocked_reason 写明缺乏对应框架或权重文件。
 GitHub ZIP 的统一外层目录会被剥除。命令在剥除外层后的仓库根目录运行，引用文件可用仓库相对路径。
 命令可写小型检查脚本，但不得把论文报告值硬编码为观测结果，不得生成虚假的训练/评估输出。
@@ -588,6 +588,13 @@ def validate_assessment(value, context):
     blocked_reason = optional_text(plan, 'blocked_reason')
     if not stages and blocked_frameworks and not blocked_reason:
         blocked_reason = f"代码依赖 {', '.join(blocked_frameworks)} 等需 C++/源码编译的旧框架，当前隔离执行环境仅预装 PyTorch/CUDA 且无法通过 pip 自动安装；建议换用 PyTorch 复现仓库。"
+    uses_torch = bool(stages and any(
+        re.search(r'^\s*(?:import|from)\s+torch(?:vision|audio)?\b', f.get('text', ''), re.M)
+        for f in context.get('code_excerpts') or []
+    ))
+    hardware = 'GPU' if context['execution_environment'].get('gpu') and (
+        str(plan.get('hardware', 'CPU')).upper() == 'GPU' or uses_torch
+    ) else 'CPU'
     result = {'summary': text(value, 'summary', 4000), 'paper_title': paper_title,
               'paper_abstract': paper_abstract, 'paper_contributions': paper_contributions,
               'contribution_details': contribution_details,
@@ -603,7 +610,7 @@ def validate_assessment(value, context):
               'plan': {'purpose': text(plan, 'purpose'), 'blocked_reason': blocked_reason,
                        'stages': stages, 'needs': needs, 'metric_patterns': patterns,
                        'max_seconds': context['max_seconds'], 'policy': 'frozen_api_plan', 'fail_fast': True,
-                       'hardware': 'GPU' if str(plan.get('hardware','CPU')).upper()=='GPU' and context['execution_environment'].get('gpu') else 'CPU'}}
+                       'hardware': hardware}}
     if context.get('purpose'):
         result['purpose'] = context['purpose']
     result['plan_sha256'] = digest({'plan':result['plan'],'metrics':result['metrics']})

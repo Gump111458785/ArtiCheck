@@ -1123,6 +1123,17 @@ class HostedReviewTests(unittest.TestCase):
                 self.assertEqual(caffe_res['status'], 'failed')
                 self.assertIn('Caffe (pycaffe)', caffe_res['result']['stages'][0]['reason'])
 
+                # Torch-importing code routes to owned_gpu even when planner said CPU, and hosted_runner avoids --user in venv
+                torch_ctx = copy.deepcopy(ctx)
+                torch_ctx['code_excerpts'] = [{'file': 'train_eval.py', 'text': 'import torch\nprint(1)\n'}]
+                torch_raw = copy.deepcopy(raw_out)
+                torch_raw['plan']['hardware'] = 'CPU'
+                self.assertEqual(validate_assessment(torch_raw, torch_ctx)['plan']['hardware'], 'GPU')
+
+                runner_src = (ROOT / 'articheck/hosted_runner.py').read_text()
+                self.assertIn("install_flags = f\"--target '{pydeps_dir}'\" if in_venv else '--user'", runner_src)
+                self.assertIn("**({'PYTHONPATH': str(pydeps_dir)} if in_venv else {'PYTHONUSERBASE': str(pydeps_dir), 'PIP_USER': '1'})", runner_src)
+
 
 if __name__ == '__main__':
     unittest.main()

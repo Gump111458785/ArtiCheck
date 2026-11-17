@@ -126,7 +126,12 @@ class HybridExecutor:
     @property
     def capacity(self):return self.gpu.capacity or self.cpu.capacity
     def launch(self,assessment,body):
-        if assessment['review']['plan'].get('hardware')=='GPU':return self.gpu.launch(assessment,body)
+        plan = assessment['review']['plan']
+        uses_torch = bool(re.search(r'\b(?:torch|torchvision|torchaudio)\b', json.dumps(plan, ensure_ascii=False))
+                          or any(re.search(r'\b(?:import|from)\s+torch(?:vision|audio)?\b', s.get('text', ''))
+                                 for s in assessment['review'].get('core_code_snippets') or []))
+        if plan.get('hardware')=='GPU' or (uses_torch and self.gpu.capacity):
+            return self.gpu.launch(assessment,body)
         return self.cpu.launch(assessment,body)
     def poll(self,execution):return (self.gpu if execution.get('provider')=='owned_gpu' else self.cpu).poll(execution)
     def stop(self,execution):

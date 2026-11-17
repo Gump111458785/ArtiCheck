@@ -278,11 +278,11 @@ def _run_plan(plan, root, results, run_as, venv, cleanup):
     failed = False
     fail_fast = plan.get('fail_fast', plan.get('policy') == 'frozen_api_plan')
     failed_stage_id = None
+    in_venv = bool(venv)
     stage_env = {
         'PATH': ':'.join([str(pydeps_dir / 'bin'), *([str(venv / 'bin')] if venv else []), '/usr/local/bin', '/usr/bin', '/bin']),
         'HOME': str(root),
-        'PYTHONUSERBASE': str(pydeps_dir),
-        'PIP_USER': '1',
+        **({'PYTHONPATH': str(pydeps_dir)} if in_venv else {'PYTHONUSERBASE': str(pydeps_dir), 'PIP_USER': '1'}),
         'PIP_CACHE_DIR': str(cache_dir / 'pip'),
         'XDG_CACHE_HOME': str(cache_dir),
         'LANG': 'C.UTF-8',
@@ -369,7 +369,8 @@ def _run_plan(plan, root, results, run_as, venv, cleanup):
             if heal_pkgs:
                 heal_log = results / (stage['id'] + '_autoheal.log')
                 pkg_args = ' '.join(heal_pkgs)
-                retry_cmd = ['/bin/bash', '-c', f"python3 -m pip install --user --no-input --prefer-binary {pkg_args} && ({stage['command']})"]
+                install_flags = f"--target '{pydeps_dir}'" if in_venv else '--user'
+                retry_cmd = ['/bin/bash', '-c', f"python3 -m pip install {install_flags} --no-input --prefer-binary {pkg_args} && ({stage['command']})"]
                 code, timed_out, heal_text, heal_truncated = run_command(retry_cmd, heal_log)
                 log_text = (log_text.rstrip() + f"\n\n[ArtiCheck 自动补齐依赖: {', '.join(heal_pkgs)}]\n" + heal_text)[-24000:]
                 truncated = truncated or heal_truncated
