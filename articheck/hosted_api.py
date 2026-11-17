@@ -392,8 +392,13 @@ def register(app, env, reviewer, *, store=None, executor=None):
         if execution and execution['status'] in {'queued', 'running', 'cancelling'}:
             try:
                 value['execution'] = executor.poll(execution)
-                if execution['status'] == 'cancelling' and value['execution']['status'] in {'queued', 'running'}:
-                    value['execution']['status'] = 'cancelling'
+                if execution['status'] == 'cancelling' and value['execution']['status'] in {'queued', 'running', 'cancelling'}:
+                    if execution.get('provider') == 'owned_gpu' and not execution.get('awaiting_launch') and executor.stop(value['execution']):
+                        value['execution'] = executor.poll(value['execution'])
+                        if value['execution']['status'] in {'queued', 'running', 'cancelling'}:
+                            value['execution']['status'] = 'cancelled'
+                    elif value['execution']['status'] in {'queued', 'running'}:
+                        value['execution']['status'] = 'cancelling'
                 complete_termination(value)
             except ReviewError:
                 raise
@@ -565,6 +570,8 @@ def register(app, env, reviewer, *, store=None, executor=None):
                 value['execution'] = {**execution, 'status': 'cancelling'}
                 if execution['status'] == 'starting':
                     value['execution']['awaiting_launch'] = True
+                else:
+                    value['execution'].pop('awaiting_launch', None)
             elif value.get('review') and payload.get('execution_request') is True and (
                 not execution or execution.get('attempt_id') == payload.get('retry_of')
             ):

@@ -178,27 +178,102 @@ export class OnlineWorkspace{
    if(!p.paper&&pdf)await this.upload('paper',pdf);
    if(!this.isViewing(p))return;
    if(!p.paper)p.online_graph_pdf_notice=this.error||pdfError||'未找到可用的开放 PDF。你可以上传原文。';
-   const url=normalizeGitHubUrl(repositoryUrl);
+   const pdfLinks=[...new Set((p.paper?.pages||[]).flatMap(v=>v.links||[]).map(u=>normalizeGitHubUrl(u)).filter(Boolean))];
+   const url=normalizeGitHubUrl(repositoryUrl)||pdfLinks[0]||'';
+   let fetchError='';
    if(url){
     p.repo_url=url;
     await this.save(p);
     if(this.isViewing(p)&&!hasCode(p))await this.github(false,false,p);
+    if(!hasCode(p)&&this.error)fetchError=this.error;
    }
-   if(!hasCode(p)&&url&&this.error){
+   if(!hasCode(p)&&url&&fetchError){
     p.online_graph_code_notice='代码获取失败，可重新读取仓库或上传 ZIP。';
-   }
-   if(!p.paper&&!hasCode(p)&&!url){
+   }else if(!hasCode(p)&&!url){
     p.online_graph_code_notice='尚无可确认的代码来源。你可以填写 GitHub 地址或上传 ZIP。';
    }
    await this.save(p);
    if(!this.isViewing(p))return;
-   if(p.paper||hasCode(p)){
+   if(hasCode(p)){
+    p.online_purpose='reproduce_other';
+    p.online_skip_code_lookup=false;
+    await this.save(p);
     this.consent=true;
     void this.action('submit',p);
-   }else this.renderNow();
+   }else{
+    this.renderNow();
+    if(p.paper)this.promptMissingCodeForReproduce(p,{attemptedUrl:url,fetchError});
+   }
   }finally{
    this.creatingGraphReview=false;
   }
+ }
+ promptMissingCodeForReproduce(p,{attemptedUrl='',fetchError=''}={}){
+  if(typeof document==='undefined'||!this.i?.h?.modal)return;
+  const e=v=>this.esc(v);
+  const intro=attemptedUrl
+   ?`已尝试读取仓库 <code>${e(attemptedUrl)}</code>，但未获取到可执行源码${fetchError?'（'+e(fetchError)+'）':''}。`
+   :'已检索该论文正文与公开来源，暂未自动匹配到相关代码仓库。';
+  this.i.h.modal('未检测到相关代码 · 选择复现方式',`<form id="kg-missing-code-form" class="kg-missing-code-form">
+   <p>${intro}</p>
+   <p>你可以补充代码仓库或压缩包（按<strong>论文 + 代码复现</strong>），也可以暂不填代码，直接按<strong>仅论文复现</strong>核查论文方法与实验证据：</p>
+   <div class="online-field">
+    <label for="kg-repro-repo-url">GitHub 仓库地址</label>
+    <input id="kg-repro-repo-url" name="repo_url" type="text" value="${e(attemptedUrl)}" placeholder="https://github.com/owner/repo 或 owner/repo">
+   </div>
+   <div class="online-field">
+    <label for="kg-repro-code-zip">或上传代码 ZIP 压缩包</label>
+    <input id="kg-repro-code-zip" name="code_zip" type="file" accept=".zip,application/zip">
+   </div>
+   <p id="kg-missing-code-alert" class="online-error" role="alert" hidden></p>
+   <div class="modal-actions" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px;">
+    <button type="button" class="btn" data-kg-repro-choice="cancel">暂不开始</button>
+    <button type="button" class="btn" data-kg-repro-choice="paper_only">暂不填代码，仅论文复现</button>
+    <button type="submit" class="btn primary">补充代码并复现</button>
+   </div>
+  </form>`);
+  const form=document.getElementById('kg-missing-code-form');
+  if(!form)return;
+  const showErr=msg=>{const el=form.querySelector('#kg-missing-code-alert');if(el){el.textContent=msg;el.hidden=false;}};
+  form.querySelector('[data-kg-repro-choice="cancel"]')?.addEventListener('click',()=>this.i.h.closeModal?.());
+  form.querySelector('[data-kg-repro-choice="paper_only"]')?.addEventListener('click',async()=>{
+   this.i.h.closeModal?.();
+   p.online_purpose='reproduce_other';
+   p.online_skip_code_lookup=true;
+   p.repo_url='';
+   p.online_graph_code_notice='';
+   this.error='';
+   await this.save(p);
+   this.consent=true;
+   void this.action('submit',p);
+  });
+  form.addEventListener('submit',async ev=>{
+   ev.preventDefault();
+   const zip=form.querySelector('input[name="code_zip"]')?.files?.[0];
+   const rawUrl=(form.querySelector('input[name="repo_url"]')?.value||'').trim();
+   if(!zip&&!rawUrl){showErr('请填写 GitHub 仓库地址或选择代码 ZIP；若暂不提供，请点击「暂不填代码，仅论文复现」。');return;}
+   if(zip){
+    this.i.h.closeModal?.();
+    p.online_purpose='reproduce_other';
+    p.online_skip_code_lookup=false;
+    p.online_graph_code_notice='';
+    this.error='';
+    await this.upload('code',zip);
+    if(hasCode(p)){this.consent=true;void this.action('submit',p);}
+    return;
+   }
+   const url=normalizeGitHubUrl(rawUrl);
+   if(!url){showErr('请输入有效的 GitHub 仓库链接或 用户名/仓库名。');return;}
+   this.i.h.closeModal?.();
+   p.online_purpose='reproduce_other';
+   p.online_skip_code_lookup=false;
+   p.online_graph_code_notice='';
+   p.repo_url=url;
+   this.error='';
+   await this.save(p);
+   await this.github(true,false,p);
+   if(hasCode(p)){this.consent=true;void this.action('submit',p);}
+  });
  }
  viewReport(p){
   if(this.operationProject===p?.id&&this.liveReport)return this.liveReport;
@@ -597,8 +672,8 @@ export class OnlineWorkspace{
  x=pending&&pending.id===r.id&&(!r.execution||r.execution.attempt_id===pending.retry_of)?{status:'starting'}:r.execution,
  p=r.review.plan,terminated=Boolean(r.terminated_at),isRunning=!terminated&&['queued','starting','running','cancelling'].includes(x?.status);
 
- return `<section id="online-execution-section" class="online-execution-block"><section class="online-summary"><div><h2>${x?e(executionNames[x.status]||x.status):'执行计划'}</h2>${!p.stages.length&&p.blocked_reason?`<p>${e(p.blocked_reason)}</p>`:!x&&p.stages.length&&!terminated?'<p>实验尚未启动。</p>':''}</div><div class="source-actions">${!terminated&&!x&&p.stages.length?`<button class="btn primary" data-online="execute" ${stale||this.busy||this.cancelling?'disabled':''}>执行本次计划</button>`:''}${isRunning?`<button class="btn" data-online="refresh">刷新状态</button>`:''}${!terminated&&!this.controlState(this.current()).paused&&x?.attempt_id&&['failed','expired','cancelled'].includes(x.status)&&(r.execution_history?.length||0)<2?`<button class="btn" data-online="retry" ${stale||this.busy||this.cancelling?'disabled':''}>重试执行</button>`:''}<button class="btn" data-online="export">导出报告</button></div></section>${this.execNotice?`<div class="online-notice warning-notice" role="status"><strong>实验自动启动提示：</strong>${e(this.execNotice)}</div>`:''}${!p.stages.length?`<p class="online-notice">${e(p.blocked_reason||'材料不足以生成真实执行计划。可以先查看已完成的材料审查。')}</p>`:''}
- ${p.stages.length?`<div class="online-terminal-box online-stage-list" role="region" aria-label="动态运行终端"><div class="terminal-topbar"><div class="terminal-dots" aria-hidden="true"><i></i><i></i><i></i></div><div class="terminal-title">${UI_SVG.terminal}<span>实验复现运行终端</span></div><div class="terminal-topbar-right"><div class="terminal-live-state ${isRunning?'running':x?.status||'planned'}">${isRunning?'<span class="online-spinner" aria-hidden="true"></span>':''}<span>${e(x?executionNames[x.status]||x.status:'尚未启动')}</span></div></div></div><div class="terminal-stream-body" data-terminal-key="${e(r.id)}:${e(x?.attempt_id||'planned')}">${p.stages.map((s,n)=>{const a=x?.stages?.find(z=>z.id===s.id),state=a?.status==='running'&&x.status==='cancelled'?'skipped':a?.status||'planned',liveLines=extractStageLiveLines(a);return `<div class="online-stage stage-${e(state)}"><div class="terminal-stage-head"><span class="terminal-step-num">[${n+1}/${p.stages.length}]</span><strong class="terminal-stage-title">${e(s.title)}</strong>${a?.exit_code!=null?`<span class="online-citation">退出码 ${e(a.exit_code)}</span>`:''}${a?.retry_count&&state==='running'?`<span class="online-citation">正在重试 ${e(a.retry_count)} / 3</span>`:''}<span class="online-status status-${e(state)} ${state==='failed'?'missing':state==='completed'?'documented':state==='running'?'running':'needs_review'}">${e({planned:'计划中',running:'执行中',completed:'已执行',failed:a?.timed_out?'超时中断':'报错中断',skipped:'已跳过'}[state]||state)}</span></div><div class="terminal-cmd-row"><span class="terminal-prompt">$</span><pre class="terminal-cmd">${e(s.command)}</pre></div>${liveLines.length?`<div class="terminal-live-tail" role="log" aria-label="阶段最新输出"><pre class="terminal-tail-lines">${liveLines.map(ln=>e(ln)).join('\n')}</pre></div>`:''}${a?.reason?`<p class="terminal-reason">${e(a.reason)}</p>`:''}</div>`;}).join('')}</div></div>`:''}
+ return `<section id="online-execution-section" class="online-execution-block"><section class="online-summary"><div><h2>${x?e(executionNames[x.status]||x.status):'执行计划'}</h2>${!p.stages.length&&p.blocked_reason?`<p>${e(p.blocked_reason)}</p>`:!x&&p.stages.length&&!terminated?'<p>实验尚未启动。</p>':isRunning&&(x?.notice||x?.elapsed_seconds!=null)?`<p>${e(x?.notice||'云端执行中…')}${x?.elapsed_seconds!=null?' · 已运行 '+Math.floor(x.elapsed_seconds)+' 秒':''}</p>`:''}</div><div class="source-actions">${!terminated&&!x&&p.stages.length?`<button class="btn primary" data-online="execute" ${stale||this.busy||this.cancelling?'disabled':''}>执行本次计划</button>`:''}${isRunning?`<button class="btn" data-online="refresh">刷新状态</button>`:''}${!terminated&&!this.controlState(this.current()).paused&&x?.attempt_id&&['failed','expired','cancelled'].includes(x.status)&&(r.execution_history?.length||0)<2?`<button class="btn" data-online="retry" ${stale||this.busy||this.cancelling?'disabled':''}>重试执行</button>`:''}<button class="btn" data-online="export">导出报告</button></div></section>${this.execNotice?`<div class="online-notice warning-notice" role="status"><strong>实验自动启动提示：</strong>${e(this.execNotice)}</div>`:''}${!p.stages.length?`<p class="online-notice">${e(p.blocked_reason||'材料不足以生成真实执行计划。可以先查看已完成的材料审查。')}</p>`:''}
+ ${p.stages.length?`<div class="online-terminal-box online-stage-list" role="region" aria-label="动态运行终端"><div class="terminal-topbar"><div class="terminal-dots" aria-hidden="true"><i></i><i></i><i></i></div><div class="terminal-title">${UI_SVG.terminal}<span>实验复现运行终端</span></div><div class="terminal-topbar-right"><div class="terminal-live-state ${isRunning?'running':x?.status||'planned'}">${isRunning?'<span class="online-spinner" aria-hidden="true"></span>':''}<span>${e(x?executionNames[x.status]||x.status:'尚未启动')}</span></div></div></div><div class="terminal-stream-body" data-terminal-key="${e(r.id)}:${e(x?.attempt_id||'planned')}">${isRunning&&x?.runtime?.prep_tail?.length&&!x?.stages?.some(s=>s.status==='running')?`<div class="online-stage stage-running"><div class="terminal-stage-head"><span class="terminal-step-num">[环境]</span><strong class="terminal-stage-title">正在准备任务隔离依赖</strong><span class="online-status status-running running">准备中</span></div><div class="terminal-live-tail" role="log" aria-label="环境准备输出"><pre class="terminal-tail-lines">${x.runtime.prep_tail.map(ln=>e(ln)).join('\n')}</pre></div></div>`:''}${p.stages.map((s,n)=>{const a=x?.stages?.find(z=>z.id===s.id),state=a?.status==='running'&&x.status==='cancelled'?'skipped':a?.status||'planned',liveLines=extractStageLiveLines(a);return `<div class="online-stage stage-${e(state)}"><div class="terminal-stage-head"><span class="terminal-step-num">[${n+1}/${p.stages.length}]</span><strong class="terminal-stage-title">${e(s.title)}</strong>${a?.exit_code!=null?`<span class="online-citation">退出码 ${e(a.exit_code)}</span>`:''}${a?.retry_count&&state==='running'?`<span class="online-citation">正在重试 ${e(a.retry_count)} / 3</span>`:''}<span class="online-status status-${e(state)} ${state==='failed'?'missing':state==='completed'?'documented':state==='running'?'running':'needs_review'}">${e({planned:'计划中',running:'执行中',completed:'已执行',failed:a?.timed_out?'超时中断':'报错中断',skipped:'已跳过'}[state]||state)}</span></div><div class="terminal-cmd-row"><span class="terminal-prompt">$</span><pre class="terminal-cmd">${e(s.command)}</pre></div>${liveLines.length?`<div class="terminal-live-tail" role="log" aria-label="阶段最新输出"><pre class="terminal-tail-lines">${liveLines.map(ln=>e(ln)).join('\n')}</pre></div>`:''}${a?.reason?`<p class="terminal-reason">${e(a.reason)}</p>`:''}</div>`;}).join('')}</div></div>`:''}
  ${!terminated&&!x&&r.review.resource_preflight?.needs_user?`<section class="online-blocker"><h3>运行前条件待确认</h3><p>${e(r.review.resource_preflight.reason)}</p>${r.availability?`<strong>${e(r.availability.verdict)}</strong>`:'<div class="online-blocker-actions"><button class="btn" data-online="can-provide">可补充所需材料</button><button class="btn" data-online="unavailable">确认无法提供</button></div>'}<div class="online-blocker-route"><span>也可以切换执行方式</span><button class="btn" data-online="local">使用本地环境</button></div></section>`:''}${!terminated&&!x&&r.review.task==='reproduction'&&!r.materials.code?`<section class="online-blocker"><h3>需要补充代码来源</h3><p>${e(r.source_discovery?.reason||'自动分析未能取得可执行源码，请补充 GitHub 地址或代码 ZIP。')}</p>${r.availability?`<strong>${e(r.availability.verdict)}</strong><button class="btn" data-online-tab="materials">补充材料</button>`:'<button class="btn" data-online="can-provide">可以补充</button><button class="btn" data-online="unavailable">确认无法获取</button>'}</section>`:''}${!terminated&&x?.needs_user?`<section class="online-blocker"><h3>需要补充材料</h3><p>${e(x.question)}</p>${x.user_answer?`<strong>${e(x.availability_verdict)}</strong>${x.user_answer==='can_provide'?'<button class="btn" data-online-tab="materials">补充材料</button>':''}`:'<button class="btn" data-online="can-provide">可以补充</button><button class="btn" data-online="unavailable">确认无法提供</button>'}</section>`:''}
  ${x?.runtime?`<p class="online-footnote">运行环境：Python ${e(x.runtime.python||'3.x')}${x.elapsed_seconds!=null?' · 耗时 '+e(x.elapsed_seconds)+' 秒':''}${x.runtime?.workspace_cleaned?' · 隔离环境与临时依赖库已清理':''}</p>`:''}<p class="online-footnote">日志和数值来自本次代码执行。进程成功、数值吻合与论文主要结论成立分别判断；本页不自动将主要结论标记为通过。</p></section>`;}
 
@@ -619,10 +694,10 @@ export class OnlineWorkspace{
   return `<div class="metric-toolbar"><label for="metric-search">查找指标<input id="metric-search" type="search" value="${e(this.metricQuery)}" placeholder="模型、图表或数据集" data-metric-query></label><label for="metric-audience">展示对象<select id="metric-audience" data-metric-audience><option value="all" ${this.metricAudience==='all'?'selected':''}>全部方法</option><option value="author" ${this.metricAudience==='author'?'selected':''}>作者方法</option><option value="baseline" ${this.metricAudience==='baseline'?'selected':''}>对照方法</option></select></label><span>显示 ${catalog.count} / ${metrics.length} 项</span></div><div class="metric-catalog">${catalog.datasets.map((d,di)=>`<details class="metric-dataset" ${di===0?'open':''}><summary><strong>${e(d.name)}</strong><span>${d.count} 项 · ${d.families.length} 类</span></summary>${d.families.map(f=>`<section class="metric-family"><h3>${e(f.name)}<span>${f.count} 项</span></h3>${f.groups.map((g,gi)=>`<details class="metric-protocol" ${gi===0?'open':''}><summary><strong>${e(g.reference)}</strong><span class="metric-protocol-label" title="${e(g.protocol)}">${e(g.protocol||'未标注评测协议')}</span><span>${g.rows.length} 项</span></summary><div class="online-table-wrap"><table class="online-table"><thead><tr><th>模型 / 方法</th><th>指标</th><th class="number">报告值</th><th>出处</th></tr></thead><tbody>${g.rows.map(({row:m})=>`<tr class="${m.author_method?'author-method':''}"><td><strong>${e(m.model)}</strong>${m.author_method?'<span>作者方法</span>':'<span>对照方法</span>'}</td><td>${e(m.metric)}</td><td class="number">${e(m.value)} ${e(metricUnit(m))}</td><td><details><summary>第 ${e(m.page)} 页 · 原文</summary><blockquote>${e(m.quote)}</blockquote><small>${m.evidence_kind==='image_reading'?'来自页面图像识别，建议对照原图核对':'已与该页提取文字对应'}</small><button class="btn text" data-online-page="${e(m.page)}">打开 PDF 原页</button></details></td></tr>`).join('')}</tbody></table></div></details>`).join('')}</section>`).join('')}</details>`).join('')||'<p class="online-notice">没有匹配的指标，请调整筛选。</p>'}</div>`;
  }
  async pollProgress(p,id){
-  try{const value=checkAssessment(await this.request('/assessments/'+id));if(this.progressId!==id||this.controlProject===p.id)return;this.liveReport=value;if(!this.isViewing(p))return;const region=document.querySelector('#online-activity');if(region)region.innerHTML=this.timelineView(value,{activeRole:this.activeRoleNode});const sidebar=document.querySelector('#sidebar-review');if(sidebar)sidebar.innerHTML=this.sidebar();}catch{} // A not-yet-claimed request is normal while parsing.
+  try{const value=checkAssessment(await this.request('/assessments/'+id,undefined,{timeoutMs:12000}));if(this.progressId!==id||this.controlProject===p.id)return;this.liveReport=value;if(!this.isViewing(p))return;const region=document.querySelector('#online-activity');if(region)region.innerHTML=this.timelineView(value,{activeRole:this.activeRoleNode});const sidebar=document.querySelector('#sidebar-review');if(sidebar)sidebar.innerHTML=this.sidebar();}catch{} // A not-yet-claimed request is normal while parsing.
  }
  roles(r){const e=v=>this.esc(v),events=activityEvents(r).map(x=>({...x,kind:x.kind||x.title,stage:x.stage||x.detail,role:x.role||x.roles?.[0]})),roles=[['literature_reader','文献审阅','模型 API 识别材料类型、图表和引用。'],['code_inspector','代码检查','模型 API 阅读提供的源文件和依赖。'],['planner','计划编排','模型 API 生成计划；执行器按冻结计划排程。'],['experiment_runner','实验执行','隔离环境运行实际命令。'],['cross_auditor','交叉核查','校验出处、阶段退出码和数值比较。'],['reporter','报告整理','汇总审查建议、执行状态与覆盖缺口。']];return `<section class="online-roles"><h2>角色职责与记录</h2><p class="online-footnote">文献与代码审查由同一次模型请求处理；角色名称表示工作流职责。</p>${roles.map(([id,name,note])=>{const rows=events.filter(v=>(v.roles||[v.role]).includes(id));return `<details><summary><strong>${name}</strong><span>${rows.length?rows.length+' 条执行事件':id==='literature_reader'&&!r.materials.paper?'未提供论文':id==='code_inspector'&&!r.materials.code?'未提供代码':id==='literature_reader'||id==='code_inspector'?'模型审查已返回':id==='planner'&&r.review.plan.stages.length?'已生成计划':'尚无执行事件'}</span></summary><p>${note}</p>${rows.map(row=>`<div class="online-role-event"><code>${e(row.kind)}</code><span>${e(row.stage||row.status||row.reason||row.policy||'')}</span></div>`).join('')}</details>`;}).join('')}${events.length?`<section class="online-role-stream"><h3>最近执行事件</h3>${events.slice(-6).map(row=>`<div class="online-role-event"><span>${e({planner:'计划编排',experiment_runner:'实验执行',cross_auditor:'交叉核查',reporter:'报告整理'}[row.role]||row.role)}</span><strong>${e({plan_scheduled:'按冻结计划排程',stage_started:'开始执行',stage_finished:'执行结束',stage_checked:'核对阶段结果',execution_checked:'汇总执行证据',report_written:'写入报告',stopped:'结束排程'}[row.kind]||row.kind)}</strong><span>${e(r.review.plan.stages.find(s=>s.id===row.stage)?.title||row.status||row.reason||'')}</span></div>`).join('')}</section>`:''}</section>`;}
- async request(path,payload,{track=true}={}){if(!this.owner)throw Error('浏览器存储不可用，无法提交。');const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),115000);if(track&&payload!==undefined)this.activeController=controller;try{const response=await fetch('/v1'+path,{method:payload===undefined?'GET':'POST',headers:{'X-ArtiCheck-Client':'review-api','X-ArtiCheck-Session':this.owner,...(payload===undefined?{}:{'Content-Type':'application/json'})},body:payload===undefined?undefined:JSON.stringify(payload),signal:controller.signal,credentials:'same-origin',redirect:'error'});let value;try{value=await response.json();}catch{throw Error('服务暂时没有返回有效响应，请稍后重试。');}if(!response.ok){if(response.status===401&&typeof location!=='undefined')location.assign('./login.html?next='+encodeURIComponent(location.pathname+location.hash));const error=Error(value.error?.message||'请求失败。');error.code=value.error?.code;throw error;}return value;}catch(err){if(err.name==='AbortError'){if(track&&this.userAborted)throw Error('已按请求中断运行。');throw Error('等待服务返回超时，请刷新已有任务；不要连续重复提交。');}throw err;}finally{clearTimeout(timer);if(this.activeController===controller)this.activeController=null;}}
+ async request(path,payload,{track=true,timeoutMs=115000}={}){if(!this.owner)throw Error('浏览器存储不可用，无法提交。');const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);if(track&&payload!==undefined)this.activeController=controller;try{const response=await fetch('/v1'+path,{method:payload===undefined?'GET':'POST',headers:{'X-ArtiCheck-Client':'review-api','X-ArtiCheck-Session':this.owner,...(payload===undefined?{}:{'Content-Type':'application/json'})},body:payload===undefined?undefined:JSON.stringify(payload),signal:controller.signal,credentials:'same-origin',redirect:'error'});let value;try{value=await response.json();}catch{throw Error('服务暂时没有返回有效响应，请稍后重试。');}if(!response.ok){if(response.status===401&&typeof location!=='undefined')location.assign('./login.html?next='+encodeURIComponent(location.pathname+location.hash));const error=Error(value.error?.message||'请求失败。');error.code=value.error?.code;throw error;}return value;}catch(err){if(err.name==='AbortError'){if(track&&this.userAborted)throw Error('已按请求中断运行。');throw Error('等待服务返回超时，请刷新已有任务；不要连续重复提交。');}throw err;}finally{clearTimeout(timer);if(this.activeController===controller)this.activeController=null;}}
  checkOperation(generation){
   if(generation!==(this.pollGeneration||0))throw Error('已按请求中断运行。');
  }
@@ -872,7 +947,7 @@ export class OnlineWorkspace{
     let value=await this.reviewOnce(p,startGen);
     if(value.status==='cancelled'||startGen!==(this.pollGeneration||0))return;
     const repoHint=normalizeGitHubUrl(value.review?.repository_hint);
-    const graphLookup=p.online_graph_paper_id&&p.online_purpose==='reproduce_other'&&repoHint!==normalizeGitHubUrl(p.repo_url);
+    const graphLookup=!p.online_skip_code_lookup&&p.online_graph_paper_id&&p.online_purpose==='reproduce_other'&&repoHint!==normalizeGitHubUrl(p.repo_url);
     if(repoHint&&!hasCode(p)&&(graphLookup||!p.online_purpose&&value.review?.task==='reproduction')){
      p.repo_url=repoHint;
      this.busy='已找到代码来源线索，正在自动获取源码…';this.renderNow();
@@ -902,14 +977,17 @@ export class OnlineWorkspace{
     if(!silentRefresh){this.busy='正在读取任务状态…';this.renderNow();}
     const suffix=action==='refresh'?'':'/feedback';
     const payload=action==='refresh'?undefined:{answer:action==='unavailable'?'unavailable':'can_provide'};
-    const nextReport=checkAssessment(await this.request('/assessments/'+(action==='refresh'?(p.online_pending_request?.id||p.online_report?.id):p.online_report?.id)+suffix,payload));
+    const nextReport=checkAssessment(await this.request('/assessments/'+(action==='refresh'?(p.online_pending_request?.id||p.online_report?.id):p.online_report?.id)+suffix,payload,{timeoutMs:silentRefresh?12000:115000}));
     if(startGen!==(this.pollGeneration||0)||controlRevision!==p.online_control_revision||this.controlProject===p.id||action==='refresh'&&pollTarget!==(p.online_pending_request?.id||p.online_report?.id))return;
+    const pendingCompleted=p.online_pending_request?.id===nextReport.id&&nextReport.status==='completed';
     p.online_report=nextReport;
     if(!p.online_cancel_error||nextReport.terminated_at||nextReport.execution?.status==='cancelled'||nextReport.status==='cancelled'&&p.online_control_request==='pause')this.resolveStop(p,nextReport);
     if(p.online_execution_pending&&(nextReport.terminated_at||nextReport.execution?.attempt_id&&nextReport.execution.attempt_id!==p.online_execution_pending.retry_of))p.online_execution_pending=null;
     if(p.online_pending_request?.id===p.online_report.id){p.online_input_key=p.online_pending_request.key;if(p.online_report.status!=='reviewing')p.online_pending_request=null;}
     await this.save(p);
-    if(action==='refresh')await this.notifyFinished(p);
+    if(pendingCompleted&&!nextReport.execution&&!nextReport.terminated_at&&!p.online_paused&&p.online_auto_execute!==false&&nextReport.review?.plan?.stages?.length&&hasCode(p)){
+     try{await this.execute(p,{generation:startGen});}catch(execErr){if(startGen===(this.pollGeneration||0)){this.execNotice=execErr.message||'自动启动实验未完成，可在此手动点击“执行本次计划”重试。';this.error='';}}
+    }else if(action==='refresh')await this.notifyFinished(p);
    }
   }catch(err){
    if(err.message==='已按请求中断运行。'||startGen!==(this.pollGeneration||0)||this.cancelling)return;
@@ -943,10 +1021,12 @@ export class OnlineWorkspace{
    };
   }
  }
- afterRender(){this.bindMaterialInputs();const reportId=document.querySelector('[data-report-conflicts]')?.dataset.reportConflicts;if(reportId&&this.conflictState?.id!==reportId)this.loadConflicts(reportId);clearTimeout(this.timer);clearTimeout(this.repoTicker);if(this.repoStartedAt){const tick=()=>{const sec=Math.floor((Date.now()-this.repoStartedAt)/1000),node=document.querySelector('[data-repo-elapsed]'),railNode=document.querySelector('[data-rail-repo-elapsed]');if(node)node.textContent='已等待 '+sec+' 秒';if(railNode)railNode.textContent=(this.repoState||'正在读取源码…')+' · 已等待 '+sec+' 秒';if(this.repoStartedAt)this.repoTicker=setTimeout(tick,1000);};tick();}if(!this.capabilities&&!this.pending){this.pending=true;this.request('/capabilities').then(v=>{this.capabilities=v;this.renderNow();}).catch(()=>{}).finally(()=>{this.pending=false;});}const pending=this.projects().filter(p=>!p.online_report?.terminated_at&&(['queued','running','starting','cancelling'].includes(p.online_report?.execution?.status)||p.online_report?.status==='reviewing'||p.online_pending_request||p.online_execution_pending));if(pending.length&&!this.busy&&!this.controlProject)this.timer=setTimeout(()=>{const index=(this.pollProjectIndex||0)%pending.length;this.pollProjectIndex=index+1;this.action('refresh-silent',pending[index]);},2500);}
+ afterRender(){this.bindMaterialInputs();const reportId=document.querySelector('[data-report-conflicts]')?.dataset.reportConflicts;if(reportId&&this.conflictState?.id!==reportId)this.loadConflicts(reportId);clearTimeout(this.timer);clearTimeout(this.repoTicker);if(this.repoStartedAt){const tick=()=>{const sec=Math.floor((Date.now()-this.repoStartedAt)/1000),node=document.querySelector('[data-repo-elapsed]'),railNode=document.querySelector('[data-rail-repo-elapsed]');if(node)node.textContent='已等待 '+sec+' 秒';if(railNode)railNode.textContent=(this.repoState||'正在读取源码…')+' · 已等待 '+sec+' 秒';if(this.repoStartedAt)this.repoTicker=setTimeout(tick,1000);};tick();}if(!this.capabilities&&!this.pending){this.pending=true;this.request('/capabilities').then(v=>{this.capabilities=v;this.renderNow();}).catch(()=>{}).finally(()=>{this.pending=false;});}const pending=this.projects().filter(p=>!p.online_report?.terminated_at&&(['queued','running','starting','cancelling'].includes(p.online_report?.execution?.status)||p.online_report?.status==='reviewing'||p.online_pending_request||p.online_execution_pending));if(pending.length&&!this.busy&&!this.controlProject){const delay=!this.lastSilentPollAt||Date.now()-this.lastSilentPollAt>5000?50:2500;this.timer=setTimeout(()=>{this.lastSilentPollAt=Date.now();const index=(this.pollProjectIndex||0)%pending.length;this.pollProjectIndex=index+1;this.action('refresh-silent',pending[index]);},delay);}}
  bind(){
   document.addEventListener('submit',event=>{if(event.target.id==='new-review-form'){event.preventDefault();if(event.target.reportValidity()){const form=new FormData(event.target);this.createProject(form.get('title'));}}});
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){const p=this.current();if((['queued','running','starting','cancelling'].includes(p?.online_report?.execution?.status)||p?.online_report?.status==='reviewing'||p?.online_pending_request||p?.online_execution_pending)&&!this.busy)this.action('refresh-silent');}});
+  const refreshActive=()=>{const pending=this.projects().filter(p=>!p.online_report?.terminated_at&&(['queued','running','starting','cancelling'].includes(p.online_report?.execution?.status)||p.online_report?.status==='reviewing'||p.online_pending_request||p.online_execution_pending));const p=pending.find(x=>x===this.current())||pending[0];if(p&&!this.busy&&!this.controlProject)this.action('refresh-silent',p);};
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshActive();});
+  if(typeof window!=='undefined'&&window.addEventListener)window.addEventListener('online',refreshActive);
   document.addEventListener('click',event=>{
    const conflictAction=event.target.closest('[data-conflict-retry],[data-conflict-id]');
    if(conflictAction){

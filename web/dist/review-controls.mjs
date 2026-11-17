@@ -3,7 +3,7 @@ export const activeExecution=status=>['queued','starting','running','cancelling'
 export function reviewControlState(project,{inFlight=false,running=false,preparing=false}={}){
  const report=project?.online_report,execution=report?.execution;
  const terminated=Boolean(report?.terminated_at);
- const intent=project?.online_control_request||(report?.termination_requested?'terminate':'pause');
+ const intent=project?.online_control_request||(report?.termination_requested||execution?.status==='cancelling'?'terminate':'pause');
  const pendingReview=project?.online_pending_request;
  const pendingExecution=project?.online_execution_pending;
  const pending=Boolean(
@@ -13,7 +13,7 @@ export function reviewControlState(project,{inFlight=false,running=false,prepari
  const serverActive=report?.status==='reviewing'||activeExecution(execution?.status);
  const active=Boolean(running||pending||serverActive);
  const retry=!terminated&&!inFlight&&active&&Boolean(
-  project?.online_cancel_error||project?.online_control_request&&execution?.status!=='cancelling'
+  project?.online_cancel_error||project?.online_control_request||execution?.status==='cancelling'
  );
  const stopping=!terminated&&!retry&&Boolean(inFlight||execution?.status==='cancelling');
  const paused=!terminated&&!stopping&&!active&&(

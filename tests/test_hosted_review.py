@@ -1017,8 +1017,8 @@ class HostedReviewTests(unittest.TestCase):
                 active = hybrid.launch(assessment, {'code': materials()['code']})
                 def cancel_during_stage(work_dir, log_path, command, deadline, job_id):
                     (work_dir / '.pydeps' / 'task_only').touch()
-                    self.assertFalse(hybrid.stop(active))
-                    self.assertEqual(hybrid.poll(active)['status'], 'cancelling')
+                    self.assertTrue(hybrid.stop(active))
+                    self.assertEqual(hybrid.poll(active)['status'], 'cancelled')
                     self.assertTrue(work_dir.exists())
                     log_path.write_text('retained progress')
                     return -9, False, True
@@ -1030,6 +1030,17 @@ class HostedReviewTests(unittest.TestCase):
                 self.assertEqual(list(Path(tmp).iterdir()), [])
                 self.assertEqual(hybrid.poll(active)['status'], 'cancelled')
                 worker.run_stage_command = local_stage
+
+                # Seventh-batch: worker_boot mismatch marks running job as failed instead of hanging forever
+                boot_test = hybrid.launch(assessment, {'code': materials()['code']})
+                self.assertEqual(store.command('LPOP', hybrid.gpu.prefix + 'queue'), boot_test['gpu_job_id'])
+                bkey = worker.job_key(boot_test['gpu_job_id'])
+                brec = json.loads(store.kv[bkey])
+                brec.update(status='running', worker_boot='old-worker-boot-id')
+                store.kv[bkey] = json.dumps(brec)
+                worker.send_heartbeat(force=True)
+                self.assertEqual(hybrid.poll(boot_test)['status'], 'failed')
+                hybrid.stop(boot_test)
 
                 launched4 = hybrid.launch(assessment, {'code': materials()['code']})
                 key = worker.job_key(launched4['gpu_job_id'])

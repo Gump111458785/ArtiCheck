@@ -381,6 +381,20 @@ class ContributionExtractionTests(unittest.TestCase):
         self.assertIn(('W8', 'W1'), edges)
         self.assertIn(('W10', 'W8'), edges)
 
+    def test_kg_bibliography_notice_removed_and_repo_discovered_for_repro(self):
+        from articheck.kg_service import FULLTEXT_LABELS
+        self.assertNotIn('仅有书目', FULLTEXT_LABELS['no_full_text'])
+        self.assertEqual(FULLTEXT_LABELS['not_checked'], '')
+        owner = 'a' * 64
+        graph = KnowledgeGraphService({}, SimpleNamespace(namespace='repo-discovery'))
+        paper = {'id': 'W9', 'title': 'Sparse Routing Paper', 'abstract': 'Code at https://github.com/org/sparse-routing.git.'}
+        graph.update_literature(owner, lambda state: state['papers'].update({'W9': paper}))
+        raw = (Path(__file__).resolve().parents[1] / 'web/dist/samples/articheck-method-note.pdf').read_bytes()
+        record = graph.pdfs.save(graph._owner_hash(owner), raw, paper, 'https://arxiv.org/pdf/1706.03762')
+        with patch.object(graph, 'acquire_paper_pdf', return_value=([], 'verified', record)):
+            result = graph.prepare_reproduction_pdf(owner, 'W9')
+        self.assertEqual(result['repository_url'], 'https://github.com/org/sparse-routing')
+
 
 if __name__ == '__main__':
     unittest.main()

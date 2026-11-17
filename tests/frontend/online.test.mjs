@@ -498,3 +498,50 @@ test('personal center renders API-platform style usage bar chart with daily revi
  assert.match(html,/usage-bar-seg exec/);
  assert.match(html,/usage-bar-seg review/);
 });
+
+test('cancelling execution still exposes retry-control and KG removes bibliography banners',async()=>{
+ const {reviewControlState,reviewControlButtons}=await import('../../web/dist/review-controls.mjs');
+ const stuck={online_report:{id:'r1',status:'completed',execution:{attempt_id:'a1',status:'cancelling'}}};
+ assert.match(reviewControlButtons(reviewControlState(stuck),a=>`data-online="${a}"`),/data-online="retry-control"[^>]*>重试终止<\/button>/);
+
+ const {KnowledgeGraphWorkspace}=await import('../../web/dist/knowledge-graph.mjs');
+ const kg=new KnowledgeGraphWorkspace({esc:v=>String(v??''),icon:()=>'',startReproduction:async()=>{},projects:()=>[]});
+ kg.data={nodes:[
+  {id:'P1',node_type:'Paper',layer:1,label:'Paper 1',full_title:'Paper 1',source_type:'PUBLIC_LITERATURE',fulltext_status:'not_checked',fulltext_label:'',metadata:{year:{value:2026,source:'OpenAlex'},direction:{value:'AI',source:'OpenAlex'},venue:{value:'CVPR',source:'OpenAlex'}}}
+ ],edges:[],timeline:[]};
+ kg.selected='P1';
+ const insp=kg.inspector();
+ assert.doesNotMatch(insp,/仅有书目|公开书目|已有书目|kg-fulltext-note/);
+});
+
+test('reproduceGraphPaper prompts user when code is missing and auto-submits when code is found',async()=>{
+ const {OnlineWorkspace}=await import('../../web/dist/online-workspace.mjs');
+ const makeWs=()=>{
+  const ws=Object.create(OnlineWorkspace.prototype);
+  const proj={id:'p1',title:'Test',online_purpose:'reproduce_other'};
+  const calls=[];
+  Object.assign(ws,{
+   esc:v=>String(v??''),
+   i:{h:{modal:(t,b)=>calls.push(['modal',t,b]),closeModal:()=>calls.push(['closeModal'])}},
+   isViewing:()=>true,
+   createProject:async(_t,init)=>Object.assign(proj,init,{paper:{name:'paper.pdf',pages:[]}}),
+   upload:async()=>{},
+   save:async()=>{},
+   renderNow:()=>{},
+   github:async()=>{},
+   action:async(a,p)=>calls.push(['action',a,p.online_purpose]),
+   promptMissingCodeForReproduce:(p,opts)=>calls.push(['prompt',p.id,opts]),
+  });
+  return {ws,proj,calls};
+ };
+ const {ws:ws1,calls:c1}=makeWs();
+ await ws1.reproduceGraphPaper('Test',{paper:{name:'p.pdf',pages:[]},paperId:'W1'});
+ assert.ok(c1.some(x=>x[0]==='prompt'),'should prompt when no code found');
+ assert.ok(!c1.some(x=>x[0]==='action'),'should not auto-submit when no code found');
+
+ const {ws:ws2,proj:p2,calls:c2}=makeWs();
+ ws2.github=async()=>{p2.repository={name:'code.zip',remote:{repository:'repo-1'}};};
+ await ws2.reproduceGraphPaper('Test',{paper:{name:'p.pdf',pages:[]},repositoryUrl:'https://github.com/org/repo',paperId:'W2'});
+ assert.ok(!c2.some(x=>x[0]==='prompt'),'should not prompt when code was loaded');
+ assert.deepEqual(c2.find(x=>x[0]==='action'),['action','submit','reproduce_other']);
+});

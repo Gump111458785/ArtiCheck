@@ -23,6 +23,9 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
+
+WORKER_BOOT_ID = uuid.uuid4().hex
 import urllib.parse
 import urllib.request
 import zipfile
@@ -429,7 +432,7 @@ class GPUWorker:
         now = time.time()
         if not force and now - self.last_heartbeat < 20:
             return
-        payload = {'time': now, 'capacity': self.capacity}
+        payload = {'time': now, 'capacity': self.capacity, 'worker_boot': WORKER_BOOT_ID}
         self.store.command('SET', self.prefix + 'heartbeat', json.dumps(payload, ensure_ascii=False), 'EX', '120')
         self.last_heartbeat = now
 
@@ -439,6 +442,10 @@ class GPUWorker:
         return self.prefix + 'job:' + job_id
 
     def save_record(self, record):
+        if self.is_cancelled(record['id']) and record.get('status') in {'queued', 'running'}:
+            record['status'] = 'cancelled'
+            if isinstance(record.get('result'), dict):
+                record['result']['status'] = 'cancelled'
         self.store.command('SET', self.job_key(record['id']), json.dumps(record, ensure_ascii=False), 'EX', '604800')
 
     def is_cancelled(self, job_id):
@@ -529,6 +536,13 @@ class GPUWorker:
                                   'failure_category': 'transient_service'})
             self.save_record(record)
             return record
+        if self.is_cancelled(job_id):
+            record.update(status='cancelled', source_url=None,
+                          notice='任务已按请求停止。',
+                          result={'status': 'cancelled', 'stages': [], 'metrics': [], 'events': [],
+                                  'execution_performed': False, 'scientific_validation': False})
+            self.save_record(record)
+            return record
 
         plan = record['plan']
         started = time.time()
@@ -568,8 +582,9 @@ class GPUWorker:
             provisioned_pkgs = []
             stages = plan['stages']
             installs_dependencies = bool(stages and PIP_INSTALL_COMMAND.search(stages[0]['command']))
-            record.update(status='running', source_url=None,
-                          notice='云端隔离执行器已接单，额外依赖安装到任务专用目录。',
+            report['runtime'] = {'prep_tail': []}
+            record.update(status='running', source_url=None, worker_boot=WORKER_BOOT_ID,
+                          notice='云端隔离执行器已接单，正在准备运行环境与依赖…',
                           result=report)
             self.save_record(record)
             if auto_candidates and not installs_dependencies and not self.is_cancelled(job_id):
@@ -582,12 +597,23 @@ class GPUWorker:
                     f"print(\"[ArtiCheck Auto-Env] Inferred imports:\", list(mapping.keys()), \"-> Missing packages:\", missing); "
                     f"sys.exit(subprocess.call([sys.executable, \"-m\", \"pip\", \"install\", \"--user\", \"--no-input\", \"--prefer-binary\", *missing]) if missing else 0)'"
                 )
+                def on_prep_tick(cur_log_path):
+                    live_text, _ = read_bounded_log(cur_log_path)
+                    report['elapsed_seconds'] = round(time.time() - started, 2)
+                    if live_text:
+                        report['runtime']['prep_tail'] = extract_live_tail(live_text)
+                    record['notice'] = f"正在自动安装缺失依赖（{int(time.time() - started)}s）…"
+                    record['result'] = report
+                    self.save_record(record)
+                self._stage_tick = on_prep_tick
                 try:
                     p_code, _, _ = self.run_stage_command(work_dir, prep_log, prep_cmd, deadline, job_id)
                     if p_code == 0:
                         provisioned_pkgs = auto_candidates
                 except Exception:
                     pass
+                finally:
+                    self._stage_tick = None
             report['runtime'] = {'python': platform.python_version(), 'system': platform.system(),
                                  'release': platform.release(), 'architecture': platform.machine(),
                                  'gpu_name': self.capacity.get('gpu_name'),
@@ -632,11 +658,13 @@ class GPUWorker:
 
                 def on_stage_tick(cur_log_path, cur_row=row):
                     live_text, _ = read_bounded_log(cur_log_path)
+                    report['elapsed_seconds'] = round(time.time() - started, 2)
                     if live_text:
                         cur_row['output'] = live_text
                         cur_row['live_tail'] = extract_live_tail(live_text)
-                        record['result'] = report
-                        self.save_record(record)
+                    record['notice'] = f"正在执行阶段 {cur_row['id']}（{int(max(0, time.time() - cur_row.get('started_at', time.time())))}s）…"
+                    record['result'] = report
+                    self.save_record(record)
 
                 def run_command(command, attempt_log):
                     self._stage_tick = on_stage_tick

@@ -9,6 +9,7 @@ from contextlib import contextmanager
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 import tempfile
@@ -26,7 +27,7 @@ from .review_api import ReviewError, decode_material, now
 KG_TTL = 30 * 86400
 METHOD_REASONS = {
     'pending': '方法提取尚未完成，可重试。',
-    'no_full_text': '暂未取得可读取的正文。可查看公开书目获取原文。',
+    'no_full_text': '暂未取得可读取的正文。',
     'insufficient_evidence': '现有正文片段不足以核实技术贡献。',
     'no_sub_contributions': '已核实主要贡献，正文未提供足以细分的独立依据。',
     'unavailable': '尚无可核实的方法证据，可尝试提取。',
@@ -36,9 +37,9 @@ FULLTEXT_LABELS = {
     'verified': '已核验正文',
     'download_failed': '开放原文下载失败，可重试',
     'unreadable_pdf': '原文无法提取正文，可能为扫描件',
-    'identity_mismatch': '下载文件与书目标题无法核对',
-    'no_full_text': '仅有书目，未取得可读开放原文',
-    'not_checked': '仅有书目，正文待核验',
+    'identity_mismatch': '下载文件与论文标题无法核对',
+    'no_full_text': '未取得可读开放原文',
+    'not_checked': '',
 }
 
 
@@ -630,6 +631,61 @@ return 1
         record = self.paper_file_record(owner,paper_id)
         return self.pdfs.read(self._owner_hash(owner),record,offset=offset,size=size), record
 
+    def search_public_repository(self, paper):
+        if not paper or not os.environ.get('ARTICHECK_API_KEY') or paper.get('code_search_checked'):
+            return ''
+        identifier = (paper.get('arxiv_id') or paper.get('doi') or '').strip()
+        title = re.sub(r'\s+', ' ', str(paper.get('title') or '')).strip()
+        query_term = identifier or title
+        if not query_term:
+            return ''
+        try:
+            from .hosted_sources import provider_tool
+            result = provider_tool('search', {
+                'query': f'"{query_term}" official code github',
+                'count': 6,
+                'need_content': False,
+            })
+        except Exception:
+            return ''
+        github_re = re.compile(r'https?://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)')
+        ignored = {'orgs', 'topics', 'features', 'settings', 'about', 'sponsors', 'marketplace'}
+        title_words = [w.casefold() for w in re.findall(r'[A-Za-z0-9]{4,}', title)[:4]]
+        for item in (result.get('results') or [])[:6]:
+            if not isinstance(item, dict):
+                continue
+            blob = ' '.join(str(item.get(k) or '') for k in ('url', 'title', 'summary', 'snippet'))
+            if not identifier and title_words and not any(w in blob.casefold() for w in title_words):
+                continue
+            for m in github_re.finditer(blob):
+                owner_name, repo_name = m.group(1), m.group(2).rstrip('.,;:)]}').removesuffix('.git')
+                if owner_name.lower() not in ignored and repo_name:
+                    return f'https://github.com/{owner_name}/{repo_name}'
+        return ''
+
+    def discover_paper_repository(self, paper, pages=None, raw_pdf=None, *, allow_web_search=False):
+        if not paper:
+            return ''
+        if repo := (paper.get('repository_url') or '').strip():
+            return repo
+        if pages is None and raw_pdf:
+            try:
+                pages, _ = extract_paper(raw_pdf)
+            except Exception:
+                pages = None
+        github_re = re.compile(r'https?://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)')
+        ignored = {'orgs', 'topics', 'features', 'settings', 'about', 'sponsors', 'marketplace'}
+        texts = [paper.get('abstract') or '', paper.get('fallback_url') or '', paper.get('source_url') or '',
+                 *(p.get('text') or '' for p in (pages or [])[:8])]
+        for text in texts:
+            for m in github_re.finditer(text):
+                owner_name, repo_name = m.group(1), m.group(2).rstrip('.,;:)]}').removesuffix('.git')
+                if owner_name.lower() not in ignored and repo_name:
+                    return f'https://github.com/{owner_name}/{repo_name}'
+        if allow_web_search:
+            return self.search_public_repository(paper)
+        return ''
+
     def prepare_reproduction_pdf(self, owner, paper_id):
         def saved():
             try:
@@ -639,17 +695,40 @@ return 1
                     raise
                 return None
 
+        def existing_payload(record):
+            _, state = self.literature_state(owner)
+            own = next((paper for paper in self.owned_papers(owner) if paper['id'] == paper_id), None)
+            target = state['papers'].get(state['matches'].get(paper_id, paper_id)) or own
+            repo_url = self.discover_paper_repository(target)
+            if not repo_url and target:
+                try:
+                    raw_pdf = self.pdfs.read(self._owner_hash(owner), record)
+                except Exception:
+                    raw_pdf = None
+                repo_url = self.discover_paper_repository(target, raw_pdf=raw_pdf, allow_web_search=True)
+                if paper_id in state.get('papers', {}) and (repo_url or os.environ.get('ARTICHECK_API_KEY')):
+                    def remember_repo(cur_state):
+                        p = cur_state.get('papers', {}).get(paper_id)
+                        if p is not None:
+                            p['code_search_checked'] = True
+                            if repo_url:
+                                p['repository_url'] = repo_url
+                    self.update_literature(owner, remember_repo)
+            return {'pdf_available': True, 'filename': record['filename'],
+                    **({'repository_url': repo_url} if repo_url else {})}
+
         if record := saved():
-            return {'pdf_available': True, 'filename': record['filename']}
+            return existing_payload(record)
         with self.extraction_slot(owner, paper_id):
             if record := saved():
-                return {'pdf_available': True, 'filename': record['filename']}
+                return existing_payload(record)
             _, state = self.literature_state(owner)
             own = next((paper for paper in self.owned_papers(owner) if paper['id'] == paper_id), None)
             public = state['papers'].get(state['matches'].get(paper_id, paper_id))
             if state['choices'].get(paper_id, {}).get('removed') or not (own or public):
                 raise ReviewError('paper_not_found', '当前图谱没有这篇论文。', 404)
-            _, status, record = self.acquire_paper_pdf(owner, public or own, time.monotonic()+28)
+            pages, status, record = self.acquire_paper_pdf(owner, public or own, time.monotonic()+28)
+            repo_url = self.discover_paper_repository(public or own, pages, allow_web_search=True)
 
             def remember(state):
                 if state['choices'].get(paper_id, {}).get('removed'):
@@ -657,9 +736,14 @@ return 1
                 state.setdefault('pdf_attempts', {})[paper_id] = status
                 if record:
                     state.setdefault('pdf_files', {})[paper_id] = record
+                if paper_id in state.get('papers', {}):
+                    state['papers'][paper_id]['code_search_checked'] = True
+                    if repo_url:
+                        state['papers'][paper_id]['repository_url'] = repo_url
 
             self.update_literature(owner, remember)
-            return {'pdf_available': bool(record), 'filename': record['filename'] if record else ''}
+            return {'pdf_available': bool(record), 'filename': record['filename'] if record else '',
+                    **({'repository_url': repo_url} if repo_url else {})}
 
     def paper_index(self, owner):
         _, state = self.literature_state(owner)

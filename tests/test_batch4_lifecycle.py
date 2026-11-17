@@ -81,6 +81,21 @@ class LifecycleRaces(unittest.TestCase):
         self.assertEqual((self.executor.launches, self.executor.stops), (1, 1))
         self.assertEqual(self.client.post(path + '/execute', json=payload, headers=HEADERS).status_code, 409)
 
+    def test_poll_resolves_stuck_cancelling_owned_gpu_execution(self):
+        report = self.client.post('/assessments', json=materials(), headers=HEADERS).json
+        path = '/assessments/' + report['id']
+        self.executor.launch = lambda value, payload: {'attempt_id': 'a1', 'provider': 'owned_gpu', 'status': 'running', 'gpu_job_id': 'a' * 32}
+        self.client.post(path + '/execute', json={'code': materials()['code'], 'plan_sha256': report['review']['plan_sha256']}, headers=HEADERS)
+        self.executor.poll = lambda ex: {**ex, 'status': 'running'}
+        self.executor.stop = lambda ex: False
+        waiting = self.client.post(path + '/cancel', json={'terminate': True}, headers=HEADERS).json
+        self.assertEqual(waiting['execution']['status'], 'cancelling')
+        self.executor.stop = lambda ex: True
+        self.executor.poll = lambda ex: {**ex, 'status': 'running'}
+        resolved = self.client.get(path, headers=HEADERS).json
+        self.assertEqual(resolved['execution']['status'], 'cancelled')
+        self.assertIn('terminated_at', resolved)
+
     def test_unavailable_execution_logs_do_not_prevent_stop(self):
         report = self.client.post('/assessments', json=materials(), headers=HEADERS).json
         path = '/assessments/' + report['id']

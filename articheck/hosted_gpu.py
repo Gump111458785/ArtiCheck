@@ -69,6 +69,20 @@ class OwnedGPUExecutor:
         if state=='queued' and time.time()>record['deadline']:
             self.store.command('SET',self.key(record['id'])+':cancel','1','EX','900')
             state='expired'
+        if state == 'running' and record.get('worker_boot'):
+            raw_hb = self.store.command('GET', self.prefix + 'heartbeat')
+            if raw_hb:
+                try:
+                    hb = json.loads(raw_hb)
+                except ValueError:
+                    hb = {}
+                if hb.get('worker_boot') and hb['worker_boot'] != record['worker_boot']:
+                    state = 'failed'
+                    record['status'] = 'failed'
+                    record['notice'] = '云端执行节点已重启，本次执行未完成；可点击重新执行继续。'
+                    result = dict(result, status='failed', failure_category='transient_service')
+                    record['result'] = result
+                    self.store.command('SET', self.key(record['id']), json.dumps(record, ensure_ascii=False), 'EX', '604800')
         if state in {'queued', 'running'} and self.store.command('GET', self.key(record['id']) + ':cancel'):
             state = 'cancelling'
         if state in {'completed', 'failed', 'expired', 'cancelled'}:
@@ -78,13 +92,22 @@ class OwnedGPUExecutor:
         return {**execution,**{key:result[key] for key in fields if key in result},'status':state,
                 'scientific_validation':False,'notice':record.get('notice') or execution.get('notice','')}
     def stop(self, execution):
-        record = self.record(execution)
+        try:
+            record = self.record(execution)
+        except ReviewError as error:
+            if error.code == 'gpu_job_missing':
+                return True
+            raise
         if record['status'] in {'completed', 'failed', 'cancelled', 'expired'}:
             return True
-        self.store.command('SET', self.key(record['id']) + ':cancel', '1', 'EX', '900')
-        # Only jobs removed from the queue are guaranteed to have no workspace.
-        if not self.store.command('LREM', self.prefix + 'queue', '0', record['id']):
-            return False
+        self.store.command('SET', self.key(record['id']) + ':cancel', '1', 'EX', '86400')
+        self.store.command('LREM', self.prefix + 'queue', '0', record['id'])
+        result = record.get('result')
+        if isinstance(result, dict):
+            for stage in result.get('stages', []):
+                if stage.get('status') == 'running':
+                    stage.update(status='skipped', reason='任务已按请求停止。')
+            result['status'] = 'cancelled'
         record.update(status='cancelled', source_url=None, notice='用户停止执行，保留已产生的证据。')
         self.store.command('SET', self.key(record['id']), json.dumps(record, ensure_ascii=False), 'EX', '604800')
         self.cleanup(record)
