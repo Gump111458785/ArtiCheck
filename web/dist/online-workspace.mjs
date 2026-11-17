@@ -214,7 +214,7 @@ export class OnlineWorkspace{
   const intro=attemptedUrl
    ?`已尝试读取仓库 <code>${e(attemptedUrl)}</code>，但未获取到可执行源码${fetchError?'（'+e(fetchError)+'）':''}。`
    :'已检索该论文正文与公开来源，暂未自动匹配到相关代码仓库。';
-  this.i.h.modal('未检测到相关代码 · 选择复现方式',`<form id="kg-missing-code-form" class="kg-missing-code-form">
+  this.i.h.modal('未检测到相关代码',`<form id="kg-missing-code-form" class="kg-missing-code-form">
    <p>${intro}</p>
    <p>你可以补充代码仓库或压缩包（按<strong>论文 + 代码复现</strong>），也可以暂不填代码，直接按<strong>仅论文复现</strong>核查论文方法与实验证据：</p>
    <div class="online-field">
