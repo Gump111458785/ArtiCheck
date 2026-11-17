@@ -559,4 +559,6 @@ test('share archive modal constrains select width inside narrowed modal bounds',
  const rowsHtml=center.sharedCaseRows([{id:'c1',paper_title:'Demo Paper',files:{},publisher:'Alice',report_available:true,can_delete:false}]);
  assert.doesNotMatch(rowsHtml,/未提交/);
  assert.match(rowsHtml,/>—<\/span>/);
+ assert.match(css,/\.archive-table-row\.status-completed>td\.archive-col-status:nth-child\(3\) \.order-status-pill\{background:#ecfdf5;color:#047857\}/);
+ assert.match(css,/\.record-status\.completed\{background:#ecfdf5;color:#047857/);
 });
