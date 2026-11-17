@@ -552,4 +552,11 @@ test('share archive modal constrains select width inside narrowed modal bounds',
  assert.match(css,/\.modal:has\(#share-archive-form\)[^}]*width:min\(460px,100%\)/);
  assert.match(css,/#share-archive-form label\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
  assert.match(css,/#share-archive-form select,#share-archive-form input\{[^}]*width:100%;max-width:100%;min-width:0/);
+
+ const {ExecutionCenter}=await import('../../web/dist/execution-center.mjs');
+ const center=Object.create(ExecutionCenter.prototype);
+ center.h={esc:v=>String(v??'')};
+ const rowsHtml=center.sharedCaseRows([{id:'c1',paper_title:'Demo Paper',files:{},publisher:'Alice',report_available:true,can_delete:false}]);
+ assert.doesNotMatch(rowsHtml,/未提交/);
+ assert.match(rowsHtml,/>—<\/span>/);
 });

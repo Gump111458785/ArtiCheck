@@ -431,14 +431,14 @@ export class ExecutionCenter {
  }
  sharedCaseRows(items){
   const e=this.h.esc;
-  const cell=(name,placeholder='未提交')=>{
+  const cell=(name,placeholder='—')=>{
    const text=name||placeholder;
    const chars=Array.from(text);
    return `<span class="shared-case-name" title="${e(text)}">${e(chars.length>48?chars.slice(0,47).join('')+'…':text)}</span>`;
   };
   return `<div class="shared-case-table-wrap"><table class="shared-case-table"><thead><tr><th scope="col">论文名称</th><th scope="col">代码名称</th><th scope="col">分享者</th><th scope="col">最终报告</th><th scope="col">操作</th></tr></thead><tbody>${items.map(item=>`<tr>
-   <td>${cell(item.paper_title||item.files?.paper,item.report_available?'未提交':'未记录')}${item.report_available?'':`<small class="shared-legacy-name">${cell(item.title,'旧版案例')}</small>`}</td>
-   <td>${cell(item.files?.code,item.report_available?'未提交':'未记录')}</td>
+   <td>${cell(item.paper_title||item.files?.paper,item.report_available?'—':'未记录')}${item.report_available?'':`<small class="shared-legacy-name">${cell(item.title,'旧版案例')}</small>`}</td>
+   <td>${cell(item.files?.code,item.report_available?'—':'未记录')}</td>
    <td>${cell(item.publisher,'未记录')}</td>
    <td>${item.report_available?`<button class="btn small primary" data-archive-action="case-report" data-case-id="${e(item.id)}">查看最终报告</button>`:'<span>旧版摘要</span>'}</td>
    <td>${item.can_delete?`<button class="btn small danger" data-archive-action="case-retract" data-case-id="${e(item.id)}">撤回分享</button>`:'—'}</td>
