@@ -178,7 +178,7 @@ flowchart LR
 </td>
 <td width="50%" valign="top">
 <strong>在线审查 · 材料管理与 GitHub 固定提交</strong><br>
-同屏导入论文 PDF、代码 ZIP 或绑定公开 GitHub 仓库（显示精确 commit），右侧实时切换「自我审查 / 复现他人」。<br><br>
+同屏导入论文 PDF、代码 ZIP 或绑定公开 GitHub 仓库，右侧实时切换「自我审查 / 复现他人」。<br><br>
 <a href="docs/assets/ui-materials-review.png"><img src="docs/assets/ui-materials-review.png" alt="在线审查材料管理页：PDF、代码 ZIP、GitHub commit 绑定与审查目的选择" width="100%"></a>
 </td>
 </tr>
@@ -190,7 +190,7 @@ flowchart LR
 </td>
 <td width="50%" valign="top">
 <strong>复现他人报告 · GPU 实测与七步时间轴</strong><br>
-输出复现程度、阶段完成度、指标比对率、创新点逐字依据、分歧与差异清单，并记录完整 7 步审查流程与折叠附录。<br><br>
+输出复现程度、阶段完成度、指标比对率、创新点逐字依据、分歧与差异，并记录完整 7 步审查流程与折叠附录。<br><br>
 <a href="docs/assets/ui-report-reproduce.png"><img src="docs/assets/ui-report-reproduce.png" alt="复现他人最终报告：部分复现结论、GPU 16秒执行、创新点核验与七步审查时间轴" width="100%"></a>
 </td>
 </tr>
@@ -202,7 +202,7 @@ flowchart LR
 <tr>
 <td width="50%" valign="top">
 <strong>科学贡献知识图谱 · 引文脉络与一键复现</strong><br>
-浏览 36 篇论文的引文与贡献关系（支持按名称、年份、方向、期刊过滤），选中主节点可直接展开子贡献、扩展论文或左上角「一键复现 / 删除节点」。<br><br>
+浏览 104 篇论文的引文与贡献关系（支持按名称、年份、方向、期刊过滤），选中主节点可直接展开子贡献、扩展论文或左上角「一键复现 / 删除节点」。<br><br>
 <a href="docs/assets/ui-knowledge-graph.png"><img src="docs/assets/ui-knowledge-graph.png" alt="知识图谱页面：论文关系网络、右侧节点详情与左上角一键复现按钮" width="100%"></a>
 </td>
 <td width="50%" valign="top">
@@ -214,7 +214,7 @@ flowchart LR
 <tr>
 <td width="50%" valign="top">
 <strong>公共案例 · 用户共享平台与基线档案</strong><br>
-上方展示受邀用户公开发布的复现报告与原始材料（支持查看最终报告或撤回分享），下方汇总系统内置 LIBLINEAR 与教学基准档案。<br><br>
+上方展示受邀用户公开发布的复现报告与原始材料，下方汇总系统内置 LIBLINEAR 与教学基准档案。<br><br>
 <a href="docs/assets/ui-public-platform.png"><img src="docs/assets/ui-public-platform.png" alt="公共案例页面：用户共享平台表格与系统内置基线档案" width="100%"></a>
 </td>
 <td width="50%" valign="top">
