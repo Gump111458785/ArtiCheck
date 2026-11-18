@@ -21,10 +21,6 @@
 
 ![ArtiCheck 工作台导览：开始页、材料管理、最终报告、知识图谱、个人归档与用户共享平台](docs/assets/workbench-tour.gif)
 
-*轮播展示新版 ArtiCheck 在线工作台核心界面：开始导览、材料与 GitHub 仓库绑定、结构化审查报告、科学贡献知识图谱、个人归档筛选与用户共享平台。*
-
-[解决的问题](#problem) · [使用方式](#usage) · [核心能力](#capabilities) · [界面展示](#showcase) · [系统架构](#architecture) · [实测结果](#results) · [Planner 后训练](#training) · [路线图](#roadmap) · [文档](#docs)
-
 <a id="problem"></a>
 
 ## 1. 要解决的问题
