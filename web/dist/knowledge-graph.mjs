@@ -13,14 +13,17 @@ const SEARCH_FIELDS=[
 const titleKey=value=>String(value||'').normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' ');
 const RELATIONS={previous:'前序引用',next:'后续引用',similar:'相似研究'};
 
+const ASK_STORAGE='articheck:kg-ask';
+const ASK_PLACEHOLDER='例如：哪些论文在 CIFAR-10 上报告了 Top-1 准确率？';
+
 const expansionPhases={downloading:'正在获取开放原文…',reading:'正在解析并核验原文…',searching:'正在检索公开文献…',extracting:'正在核验已有贡献的关联…'};
 
 export class KnowledgeGraphWorkspace{
- constructor(h){this.h=h;this.data=null;this.loading=false;this.error='';this.filters={paper_id:'',year:'',direction:'',venue:''};this.generation=0;this.selected=null;this.inspectorTab='detail';this.expanded=new Set();this.pinned=new Set();this.zoom=1;this.pan={x:0,y:0};this.focusMode=false;this.mutating=false;this.expansionPaper=null;this.enableKg=true;this.focusProject=null;this.drag=null;this.layoutQueue=Promise.resolve();this.initialPositions=new WeakMap();this.operations=new Map();this.taskFeedback=new Map();this.dismissedFulltext=new Set();}
+ constructor(h){this.h=h;this.data=null;this.loading=false;this.error='';this.filters={paper_id:'',year:'',direction:'',venue:''};this.generation=0;this.selected=null;this.inspectorTab='detail';this.expanded=new Set();this.pinned=new Set();this.zoom=1;this.pan={x:0,y:0};this.focusMode=false;this.mutating=false;this.expansionPaper=null;this.enableKg=true;this.focusProject=null;this.drag=null;this.layoutQueue=Promise.resolve();this.initialPositions=new WeakMap();this.operations=new Map();this.taskFeedback=new Map();this.dismissedFulltext=new Set();this.ask=null;this.askDraft='';this.askFocusDismissed='';this.askLoop=0;this.askRestored=false;}
  esc(v){return this.h.esc(v??'');}
  headers(json){let s='';try{s=sessionCapability();}catch{}return {'X-ArtiCheck-Client':'review-api',...(s?{'X-ArtiCheck-Session':s}:{}),...(json?{'Content-Type':'application/json'}:{})};}
  async api(path,payload){const res=await fetch('/v1/kg'+path,{method:payload===undefined?'GET':'POST',headers:this.headers(payload!==undefined),body:payload===undefined?undefined:JSON.stringify(payload),keepalive:path==='/layout',credentials:'same-origin',signal:AbortSignal.timeout(path==='/layout'||path.endsWith('/progress')?8000:110000)});let v;try{v=await res.json();}catch{throw Error('知识图谱服务暂未返回有效响应。');}if(!res.ok)throw Error(v?.error?.message||'知识图谱请求失败。');return v;}
- clear(){this.generation++;this.reproductionPaper=null;this.operations.clear();this.taskFeedback.clear();this.dismissedFulltext.clear();this.data=null;this.selected=null;this.linkSource=null;this.linkDraft=null;this.contextNode=null;this.mutating=false;this.expansionPaper=null;this.loading=false;this.error='';this.attachedPDF=null;this.expanded.clear();this.pinned.clear();this.focusMode=false;this.inspectorTab='detail';this.zoom=1;this.pan={x:0,y:0};this.filters={paper_id:'',year:'',direction:'',venue:''};}
+ clear(){this.generation++;this.reproductionPaper=null;this.operations.clear();this.taskFeedback.clear();this.dismissedFulltext.clear();this.data=null;this.selected=null;this.linkSource=null;this.linkDraft=null;this.contextNode=null;this.mutating=false;this.expansionPaper=null;this.loading=false;this.error='';this.attachedPDF=null;this.expanded.clear();this.pinned.clear();this.focusMode=false;this.inspectorTab='detail';this.zoom=1;this.pan={x:0,y:0};this.filters={paper_id:'',year:'',direction:'',venue:''};this.ask=null;this.askLoop++;this.askRestored=false;this.askFocusDismissed='';}
  async open(projectId){
   await this.layoutQueue;
   this.clear();
@@ -40,6 +43,7 @@ export class KnowledgeGraphWorkspace{
    alreadyExists=data.already_exists;
    this.applyGraph(data);
    if(payload||!this.node(this.selected))this.selected=data.focus_paper_id||null;
+   this.restoreAsk();
   }catch(error){if(version===this.generation){this.data=null;this.error=error.message;}}
   finally{if(version===this.generation){this.loading=false;this.h.render();}}
   if(payload&&version===this.generation&&this.selected){
@@ -391,9 +395,11 @@ export class KnowledgeGraphWorkspace{
  }
  inspector(){
   const e=v=>this.esc(v),n=this.node(this.selected);
-  const tabs=[['detail','节点详情'],['relations','主要贡献'],['lineage','研究脉络']];
+  const tabs=[['detail','节点详情'],['relations','主要贡献'],['lineage','研究脉络'],['ask','图谱问答']];
   let body='';
-  if(this.inspectorTab==='lineage'){
+  if(this.inspectorTab==='ask'){
+   body=this.askPanel();
+  }else if(this.inspectorTab==='lineage'){
    body=`<ol class="kg-lineage">${(this.data.timeline||[]).map(t=>`<li class="${t.paper_id===this.paperId(n?.id)?'current':''}"><span>${e(t.year||'未知年份')}</span><div><button class="link" data-kg-select="${e(t.paper_id)}">${e(t.title)}</button><small class="kg-reading ${t.read?'read':'unread'}">${t.read?'已读':'未读'}${t.hidden?' · 已隐藏':''}</small></div>${this.paperManagement(t)}</li>`).join('')}</ol>`;
   }else if(!n){
    body='<p class="kg-notice">选择论文或贡献，查看完整标题和依据。</p>';
@@ -426,6 +432,146 @@ export class KnowledgeGraphWorkspace{
   const lookup=preferred?.startsWith('https://arxiv.org/')?preferred:
    paper?.pdf_available||local?paper?.source_url||preferred:preferred||paper?.source_url;
   return `<div class="kg-insp-tabs">${tabs.map(([key,label])=>`<button type="button" class="${this.inspectorTab===key?'active':''}" data-kg-tab="${key}">${label}</button>`).join('')}</div><div class="kg-insp-body">${body}</div>${paper?`<footer class="kg-insp-footer">${lookup?`<a class="btn small" href="${e(lookup)}" target="_blank" rel="noopener noreferrer">打开原文来源</a>`:''}${paper.pdf_available||local?`<button type="button" class="btn small primary" data-kg-view-pdf="${e(paper.id)}">查看论文</button>`:`<button type="button" class="btn small" data-kg-find-pdf="${e(paper.id)}" ${this.mutating?'disabled':''}>查找原文</button><label class="btn small primary kg-pdf-upload">插入论文<input type="file" accept="application/pdf,.pdf" data-kg-original="${e(paper.id)}" ${this.mutating?'disabled':''}></label>`}<button type="button" class="btn small" data-kg-reading="${e(paper.id)}" data-kg-reading-action="${paper.read?'unread':'read'}" ${this.mutating?'disabled':''}>${paper.read?'设为未读':'设为已读'}</button></footer>`:''}`;
+ }
+ askFocus(){
+  const paper=this.node(this.paperId(this.selected));
+  return paper?.node_type==='Paper'&&paper.id!==this.askFocusDismissed?paper:null;
+ }
+ askPanel(){
+  const e=v=>this.esc(v),papers=(this.data?.nodes||[]).filter(node=>node.node_type==='Paper');
+  const saved=papers.filter(paper=>paper.pdf_available).length,focus=this.askFocus();
+  return `<div class="kg-ask" data-kg-ask><p class="kg-meta kg-ask-scope"><span>范围：我的图谱 · ${papers.length} 篇论文 · 其中 ${saved} 篇已保存原文</span>${focus?`<span class="kg-ask-focus">围绕：《${e(focus.full_title||focus.label)}》<button type="button" data-kg-ask-unfocus aria-label="移除围绕的论文">×</button></span>`:''}</p><form class="kg-ask-form" data-kg-ask-form><label class="kg-ask-label" for="kg-ask-question">问题</label><textarea id="kg-ask-question" name="question" rows="3" maxlength="500" required placeholder="${ASK_PLACEHOLDER}">${e(this.askDraft)}</textarea><div class="kg-insp-actions" data-kg-ask-actions>${this.askActions()}</div></form><p class="kg-meta kg-ask-progress" aria-live="polite" data-kg-ask-progress>${e(this.askProgress())}</p><div class="kg-ask-result" data-kg-ask-result>${this.askResult()}</div></div>`;
+ }
+ askActions(){
+  const running=this.ask?.status==='running';
+  return `<button type="submit" class="btn small primary" ${running?'disabled':''}>提问</button>${running?`<button type="button" class="btn small" data-kg-ask-stop ${this.ask.stopping?'disabled':''}>${this.ask.stopping?'正在停止…':'停止'}</button>`:''}`;
+ }
+ askProgress(){
+  const ask=this.ask;
+  if(!ask)return '';
+  const turns=`已进行 ${ask.turns||0} 轮`;
+  if(ask.status!=='running')return ask.turns?turns:'';
+  const detail=ask.phase_detail||{};
+  const phase=ask.phase==='reading'&&detail.title?`正在阅读《${detail.title}》${detail.page?` 第 ${detail.page} 页`:''}`:
+   ask.phase==='answering'?'正在整理回答':'正在检索图谱';
+  return `${phase} · ${turns}`;
+ }
+ askResult(){
+  const e=v=>this.esc(v),ask=this.ask;
+  if(!ask||ask.status==='running')return '';
+  const resume='<div class="kg-insp-actions"><button type="button" class="btn small" data-kg-ask-continue>继续</button></div>';
+  const sources=this.askSources(ask.citations||[]);
+  if(ask.status==='answered'){
+   const paragraphs=String(ask.answer||'').split(/\n\s*\n/).filter(part=>part.trim());
+   return paragraphs.map(part=>`<p>${e(part.trim()).replaceAll('\n','<br>')}</p>`).join('')+sources;
+  }
+  if(ask.status==='no_information')return `<p class="kg-notice">图谱中没有足够信息回答这个问题。</p>${sources}`;
+  if(ask.status==='failed')return `<p class="kg-notice">${e(ask.error?.message||'问答未完成。')}</p>${resume}${sources}`;
+  if(ask.status==='stopped')return `<p class="kg-meta">已停止。可从断点继续。</p>${resume}${sources}`;
+  return '';
+ }
+ askSources(citations){
+  if(!citations.length)return '';
+  const e=v=>this.esc(v);
+  return `<h3 class="kg-ask-heading">出处</h3><ol class="kg-ask-sources">${citations.map(row=>{
+   const node=this.node(row.paper_id),readable=Boolean(node?.pdf_available||row.has_pdf||this.localPaper(node));
+   const page=row.page?(readable?`<button type="button" class="link" data-kg-ask-page="${e(row.paper_id)}" data-page="${e(row.page)}">第 ${e(row.page)} 页</button>`:`<span>第 ${e(row.page)} 页</span>`):'';
+   return `<li><button type="button" class="link" data-kg-ask-node="${e(row.paper_id)}">${e(row.title||node?.full_title||row.paper_id)}</button>${page||row.quote?`<span class="kg-ask-source-meta">${page}${row.quote?`<span class="kg-ask-quote">“${e(row.quote)}”</span>`:''}</span>`:''}</li>`;
+  }).join('')}</ol>`;
+ }
+ renderAsk(){
+  const root=globalThis.document?.querySelector?.('[data-kg-ask]');
+  if(!root){if(this.inspectorTab==='ask'&&this.h.isOpen?.()!==false)this.h.render();return;}
+  root.querySelector('[data-kg-ask-actions]').innerHTML=this.askActions();
+  const progress=root.querySelector('[data-kg-ask-progress]'),text=this.askProgress();
+  if(progress.textContent!==text)progress.textContent=text;
+  root.querySelector('[data-kg-ask-result]').innerHTML=this.askResult();
+ }
+ rememberAsk(id){try{id?localStorage.setItem(ASK_STORAGE,id):localStorage.removeItem(ASK_STORAGE);}catch{}}
+ applyAsk(value){
+  const running=value.status==='running';
+  this.ask={...this.ask,...value,id:value.ask_id||this.ask?.id,stopping:running&&Boolean(this.ask?.stopping)};
+  this.renderAsk();
+ }
+ async submitAsk(raw){
+  const question=String(raw??'').trim();
+  if(!question||this.ask?.status==='running')return;
+  if(question.length>500){this.finishTask('问题最多 500 字',true);return;}
+  const focus=this.askFocus(),token=++this.askLoop;
+  this.ask={id:null,question,focus_paper_id:focus?.id||'',status:'running',phase:'searching',phase_detail:null,turns:0};
+  this.renderAsk();
+  try{
+   const {ask_id}=await this.api('/ask',{question,...(focus?{focus_paper_id:focus.id}:{})});
+   if(token!==this.askLoop)return;
+   this.ask.id=ask_id;
+   this.rememberAsk(ask_id);
+   await this.driveAsk(token);
+  }catch(error){
+   if(token===this.askLoop){this.ask={...this.ask,status:'failed',error:{message:error.message}};this.renderAsk();}
+  }
+ }
+ async driveAsk(token,resume=false){
+  while(token===this.askLoop&&this.ask?.id){
+   let value;
+   try{value=await this.api('/ask/'+encodeURIComponent(this.ask.id)+'/step',resume?{resume:true}:{});}
+   catch(error){
+    if(token!==this.askLoop)return;
+    this.ask={...this.ask,status:'failed',stopping:false,error:{message:error.name==='TimeoutError'?'问答请求超时，可点击继续。':error.message}};
+    this.renderAsk();
+    return;
+   }
+   resume=false;
+   if(token!==this.askLoop)return;
+   this.applyAsk(value);
+   if(value.status!=='running')return;
+   if(value.busy)await new Promise(done=>setTimeout(done,1500));
+  }
+ }
+ async stopAsk(){
+  const ask=this.ask;
+  if(!ask||ask.status!=='running'||ask.stopping)return;
+  if(!ask.id){this.askLoop++;this.ask={...ask,status:'stopped'};this.renderAsk();return;}
+  ask.stopping=true;
+  this.renderAsk();
+  try{
+   const value=await this.api('/ask/'+encodeURIComponent(ask.id)+'/cancel',{});
+   if(this.ask?.id===ask.id&&this.ask.status==='running'&&value.status!=='running')this.applyAsk(value);
+  }catch(error){
+   if(this.ask?.id===ask.id){this.ask.stopping=false;this.renderAsk();this.finishTask('停止问答失败',true);}
+  }
+ }
+ continueAsk(){
+  const ask=this.ask;
+  if(!ask||ask.status==='running')return;
+  if(!ask.id)return this.submitAsk(ask.question);
+  const token=++this.askLoop;
+  this.ask={...ask,status:'running',error:null,stopping:false};
+  this.renderAsk();
+  return this.driveAsk(token,true);
+ }
+ async restoreAsk(){
+  if(this.askRestored||this.ask)return;
+  this.askRestored=true;
+  let id=null;
+  try{id=localStorage.getItem(ASK_STORAGE);}catch{}
+  if(!id)return;
+  const token=++this.askLoop;
+  try{
+   const value=await this.api('/ask/'+encodeURIComponent(id));
+   if(token!==this.askLoop||this.ask)return;
+   this.ask={...value,id:value.ask_id};
+   this.askDraft=this.askDraft||value.question||'';
+   this.renderAsk();
+   if(value.status==='running')await this.driveAsk(token);
+  }catch{if(token===this.askLoop)this.rememberAsk(null);}
+ }
+ focusCitation(id){
+  if(!this.node(id)){this.finishTask('图谱中已没有这篇论文',true);return;}
+  if(!this.matchingPapers().some(row=>row.paper_id===id))this.filters={paper_id:'',year:'',direction:'',venue:''};
+  this.linkSource=null;
+  this.select(id,true);
+  this.inspectorTab='ask';
+  this.h.render();
  }
  localPaper(paper){
   const project=(this.h.projects?.()||[]).find(p=>p.id===paper?.project_id);
@@ -485,7 +631,7 @@ export class KnowledgeGraphWorkspace{
   if(blob.size!==first.total||sha!==first.sha)throw Error('PDF 完整性校验失败，请重试。');
   return blob;
  }
- async viewPaper(paper){
+ async viewPaper(paper,page){
   const tab=window.open('about:blank','_blank');
   if(!tab){this.h.toast?.('请允许浏览器打开论文窗口。');return;}
   tab.opener=null;
@@ -502,7 +648,7 @@ export class KnowledgeGraphWorkspace{
    const blob=attached||this.localPaper(paper)||await this.savedPDF(paper.id);
    if(tab.closed)return;
    const href=URL.createObjectURL(blob.type==='application/pdf'?blob:new Blob([blob],{type:'application/pdf'}));
-   tab.location.replace(href);
+   tab.location.replace(href+(page?'#page='+encodeURIComponent(page):''));
    setTimeout(()=>URL.revokeObjectURL(href),120000);
   }catch(error){
    if(tab.closed)return;
@@ -846,6 +992,11 @@ export class KnowledgeGraphWorkspace{
   window.addEventListener('resize',()=>this.syncOperationOverlay());
   window.addEventListener('scroll',()=>this.syncOperationOverlay(),true);
   document.addEventListener('submit',ev=>{
+   if(ev.target.matches('[data-kg-ask-form]')){
+    ev.preventDefault();
+    this.askDraft=String(new FormData(ev.target).get('question')||'');
+    return this.submitAsk(this.askDraft);
+   }
    if(ev.target.matches('[data-kg-link-form]')){
     ev.preventDefault();
     if(!this.linkDraft)return;
@@ -872,7 +1023,21 @@ export class KnowledgeGraphWorkspace{
    if(ev.target.matches('[data-kg-import-pdf]')&&ev.target.files?.[0])return this.importPaper(null,ev.target.files[0]);
    if(ev.target.matches('[data-kg-original]')&&ev.target.files?.[0])this.extractPaper(this.node(ev.target.dataset.kgOriginal),ev.target.files[0]);
   });
+  document.addEventListener('input',ev=>{if(ev.target.matches?.('#kg-ask-question'))this.askDraft=ev.target.value;});
+  document.addEventListener('keydown',ev=>{
+   if(ev.target.matches?.('#kg-ask-question')&&ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey)&&!ev.isComposing){
+    ev.preventDefault();
+    ev.target.form?.requestSubmit();
+   }
+  });
   document.addEventListener('click',async ev=>{
+   if(ev.target.closest('[data-kg-ask-stop]'))return this.stopAsk();
+   if(ev.target.closest('[data-kg-ask-continue]'))return this.continueAsk();
+   if(ev.target.closest('[data-kg-ask-unfocus]')){this.askFocusDismissed=this.askFocus()?.id||'';return this.h.render();}
+   const cited=ev.target.closest('[data-kg-ask-node]');
+   if(cited)return this.focusCitation(cited.dataset.kgAskNode);
+   const citedPage=ev.target.closest('[data-kg-ask-page]');
+   if(citedPage){const paper=this.node(citedPage.dataset.kgAskPage);return paper?this.viewPaper(paper,Number(citedPage.dataset.page)):this.finishTask('图谱中已没有这篇论文',true);}
    const stop=ev.target.closest('[data-kg-stop]');
    if(stop)return this.stopTask(this.operations.get(stop.dataset.kgStop));
    const dismiss=ev.target.closest('[data-kg-dismiss-fulltext]');

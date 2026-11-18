@@ -46,6 +46,11 @@ def subcontribution_phrase(summary):
     return ''
 
 
+def compact_whitespace(value):
+    """Quote check used for paper citations: whitespace from PDF line breaks is ignored."""
+    return re.sub(r'\s+', '', value)
+
+
 def text(value, key, limit=3000):
     item = value.get(key)
     if not isinstance(item, str) or len(item) > limit:
@@ -383,7 +388,7 @@ def validate_assessment(value, context):
              'suggestion_type': 'fix' if confirmed else 'optimize'} |
                               {'severity': row['severity'], **ref})
     clean_metrics = []; rejected = []; seen = set();visual_observations=[]
-    normalize = lambda s: re.sub(r'\s+', '', s)
+    normalize = compact_whitespace
     for row in metrics:
         if not isinstance(row, dict):
             raise ReviewError('invalid_model_output', '指标格式无效。', 502)

@@ -15,7 +15,10 @@ class DeepSeekReviewer(ModelReviewer):
         super().__init__('https://api.deepseek.com', 'deepseek-flash')
 
     def post(self, body):
-        body = {**body, 'thinking': {'type': 'disabled'}, 'response_format': {'type': 'json_object'}}
+        extra = {'thinking': {'type': 'disabled'}}
+        if 'tools' not in body:
+            extra['response_format'] = {'type': 'json_object'}
+        body = {**body, **extra}
         # UTF-8 bytes conservatively bound prompt tokens, with ample message overhead.
         text_bytes=0;image_bytes=0;image_count=0
         for message in body['messages']:

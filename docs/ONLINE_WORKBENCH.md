@@ -69,6 +69,10 @@ E2B 免费额度、平台免费配额与实际账单以各控制台为准。
 | POST | `/v1/kg/contributions/extract` | `paper_id`、`operation_id`，可补充原始 `paper` → 带证据的贡献及提取状态 |
 | GET | `/v1/kg/operations/{id}/progress` | 获取、解析、检索和提取进度 |
 | POST | `/v1/kg/operations/{id}/cancel` | 停止图谱检索或提取，返回 `cancelled` 或 `completed` |
+| POST | `/v1/kg/ask` | `question`（1–500 字）、可选 `focus_paper_id` → `{ask_id}`，问答状态保留 7 天 |
+| POST | `/v1/kg/ask/{id}/step` | 推进问答直到本次请求接近截止，可选 `resume: true` 从停止或失败处继续 → `status`、`phase`、`turns`、`answer`、`citations`、`error` |
+| POST | `/v1/kg/ask/{id}/cancel` | 停止问答，正在进行的这一轮结束后生效 |
+| GET | `/v1/kg/ask/{id}` | 读取问答状态，刷新页面后据此恢复 |
 | POST | `/v1/assessments/{id}/feedback` | 受阻后提交 `answer: unavailable / can_provide`，记录材料可获得性，不改变科学验收为通过 |
 
 `paper` / `code` 小文件使用 `{name, content_base64}`，大文件使用 `{name,upload_id,kind}`；GitHub 大仓库使用服务返回的 `{name,repository,commit,sha256,bytes}`。引用解析与大小、哈希校验均在服务端完成，不接受任意下载地址。上传的签名只允许写入固定文件路径，不含模型或 E2B 账号 key。`request_id` 推荐使用无连字符 UUID；同一编号不得替换材料、任务目的、范围或时限。报告来源为 `model_api_review`，运行观测单独放在 `execution` 中。
@@ -132,3 +136,15 @@ EdgeOne 的 Python 3.10 环境使用 `e2b==2.55.1`；新版本 SDK 的 Python �
 - 账号内下载索引通过 `GET /v1/kg/papers/index.md` 导出。保存的文件按 `年份_第一作者_论文标题.pdf` 命名；书目缺失的字段标为未知。
 - 线上沿用隔离的 pypdf 解析。章节结构和双栏阅读顺序可参考 [GROBID 全文解析](https://grobid.readthedocs.io/en/latest/training/fulltext/) 与 [Docling](https://github.com/docling-project/docling)。当前扫描件无可提取正文时显示解析失败并允许补充文件。
 - 贡献提取保留方法章节、页码和引文。Related Work 用于归属判断，主贡献与子贡献由方法证据支持。可用 [NLPContributionGraph](https://aclanthology.org/2021.semeval-1.44/) 的贡献句、短语和关系标注作为后续评测参考。
+
+### 图谱问答
+
+知识图谱右侧检查器的第 4 个页签「图谱问答」用自然语言查询自己的图谱。选中论文后提问时，默认围绕这篇论文，可以移除。实现见 `articheck/kg_assistant.py`。
+
+- **只读**：助理只能调用白名单内的 6 个工具：`graph_search`、`get_paper`、`get_neighbors`、`search_paper_text`、`read_paper_page` 和 `answer`。它不新增、删除或修改节点与关系，不联网检索，也不触发 PDF 下载。原文检索只读取已经保存的 PDF。
+- **只查自己的图谱**：所有工具按账号隔离。其他账号的论文编号一律返回 `not_found`。论文标题、贡献和正文作为不可信数据传给模型，其中的指令不会执行；白名单外的工具名计为无效调用。
+- **出处由程序校验**：每条出处的论文必须在当前图谱中。给出引文时，引文需逐字出现在该论文对应页，比对时忽略空白，方式与在线审查的引文核验相同。正式回答至少要有 1 条有效出处；校验不通过的出处不展示。图谱中查不到时回答「图谱中没有足够信息」。
+- **分步执行，总时长不设上限**：每次 `step` 请求在接近单次请求截止时间前保存状态并返回，前端在 `running` 时自动继续。总时长、总轮数和 token 用量都不设上限。会话只在以下情况结束：提交的回答通过校验、用户停止、连续 3 次无效工具调用，或同一工具以相同参数调用到第 3 次（第 2 次直接返回缓存结果）。单次模型请求失败会重试 1 次，仍失败则显示「继续」，从断点接着推进。
+- 模型调用复用在线审查的同一模型配置。供应商不支持函数调用时，自动改为严格 JSON 模式。每轮的工具、参数、成败、token 用量和耗时随会话状态保存在 Redis 中，保留 7 天。
+
+界面截图：[空闲](assets/kg-ask-idle-1280.png)、[运行中](assets/kg-ask-running-1280.png)、[有回答](assets/kg-ask-answered-1280.png)；手机宽度：[空闲](assets/kg-ask-idle-390.png)、[运行中](assets/kg-ask-running-390.png)、[有回答](assets/kg-ask-answered-390.png)。

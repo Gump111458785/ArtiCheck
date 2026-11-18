@@ -123,3 +123,11 @@ class CloudTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.json)
         h['Origin'] = 'https://untrusted.example'
         self.assertEqual(client.post('/reviews', json=materials(), headers=h, base_url='http://internal-function.local').status_code, 403)
+
+    def test_tool_calls_do_not_force_json_object_response_format(self):
+        self.reviewer.post({'model': 'deepseek-flash', 'messages': [{'role': 'user', 'content': 'hi'}],
+                            'tools': [{'type': 'function', 'function': {'name': 'ping', 'parameters': {'type': 'object'}}}]})
+        sent = Provider.requests[-1]
+        self.assertIn('tools', sent)
+        self.assertNotIn('response_format', sent)
+        self.assertEqual(sent['thinking'], {'type': 'disabled'})

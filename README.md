@@ -94,7 +94,7 @@ python -m articheck run --task examples/task.json --output runs/provider-api \
 
 - **开始与帮助**：开始页提供「准备材料 → 选择审查目的 → 执行并审查证据」引导、项目列表入口与右侧 4 个案例轮播（LIBLINEAR、ResNet-110、GAT-Variant、QLoRA-Adapter）的四层验收卡片；帮助页提供四步操作指南与内置样例入口。
 - **在线审查（材料管理 → 过程详情 → 最终报告）**：支持上传论文 PDF（最大 `20 MB` / `150 页`）、代码 ZIP（最大 `100 MB`），或绑定公开 GitHub 仓库。普通脚本在 E2B 隔离沙箱（自动补齐缺失依赖）运行，导入 `torch` / 需要 CUDA 的实验自动派发至自有 RTX 4090 GPU 隔离节点（`bwrap` 无特权命名空间与禁网执行）；「过程详情」支持实时查看角色节点活动、阶段日志、断网续传以及随时暂停/继续/终止。选择**自我审查**时生成「需要修改 / 可优化 / 待你确认」分级清单并比对知识图谱中的相关工作；选择**复现他人**时则聚焦复现程度、阶段实测、指标吻合度、创新点逐字依据与分歧差异，并将七步审查时间轴（材料接收、联合审阅、交叉复核、执行计划、环境与运行、指标比对、报告汇总）与折叠附录整合在同一报告页中。
-- **科学贡献知识图谱**：支持通过「标题、arXiv 或 DOI」添加论文或直接「插入论文」上传本地 PDF，接入 OpenAlex 脉络自动构建论文节点、主贡献与细分贡献网络；右侧「节点详情 / 主要贡献 / 研究脉络」三栏支持查找原文、查看论文与标记已读/未读，画布支持展开子贡献、扩展此论文与手动建立联系；选中任意论文节点点击**一键复现**时，自动寻找配套 GitHub 仓库，未找到时弹窗由你选择补充代码（论文+代码复现）或仅按论文核查。
+- **科学贡献知识图谱**：支持通过「标题、arXiv 或 DOI」添加论文或直接「插入论文」上传本地 PDF，接入 OpenAlex 脉络自动构建论文节点、主贡献与细分贡献网络；右侧「节点详情 / 主要贡献 / 研究脉络 / 图谱问答」四栏支持查找原文、查看论文、标记已读/未读，以及对自己的图谱与已保存原文发起只读自然语言问答（回答附程序校验过的原文出处）；画布支持展开子贡献、扩展此论文与手动建立联系；选中任意论文节点点击**一键复现**时，自动寻找配套 GitHub 仓库，未找到时弹窗由你选择补充代码（论文+代码复现）或仅按论文核查。
 - **个人归档与公共案例**：**个人归档**支持按项目名、论文名、代码/仓库名、审查结论、执行状态、材料类型与更新时间 7 维筛选；**公共案例**包含上方「用户共享平台」（支持发布已完成归档与原始材料、查看公开报告或撤回分享）与下方「系统内置基线档案」。
 - **本地项目与个人中心**：**本地项目**提供本地运行环境说明与一键复制的克隆/启动命令；右上角**个人中心**提供自定义头像与显示名、近 7/14/30 天审查调用与实验执行量柱状图及近期项目跳转（管理员还可在此创建、重置密码或停用受邀账户）。
 
@@ -153,7 +153,7 @@ flowchart LR
 | 主张级核查 | [六角色](#roles)协作，核对指标、样本重叠和训练预算；每条判定引用 PDF 页码与源码出处，证据不足保留 `inconclusive` | [报告](docs/smoke/metric-defect-report.md) · [流水线](articheck/pipeline.py) |
 | 受控执行 | Docker / `bwrap` 禁网、只读挂载、非 root、自动识别 `PyTorch/CUDA` 路由并补齐纯 Python 依赖；拦截 `caffe` 等不可 `pip` 编译框架 | [沙箱](articheck/sandbox.py) · [GPU Worker](articheck/gpu_worker.py) |
 | 可审计执行器 | 不可变材料工作区、PDF / ZIP / 计划指纹、阶段与种子矩阵、断网续传状态同步与产物清理 | [执行引擎](docs/REPRODUCTION_ENGINE.md) · [实现](articheck/reproduction/) |
-| 知识图谱与一键复现 | 接入 OpenAlex 构建论文脉络与贡献节点；选定论文支持自动检索关联 PDF 与 GitHub 源码、一键发起「论文+代码」或「仅论文」复现 | [图谱服务](articheck/kg_service.py) · [前端图谱](web/dist/knowledge-graph.mjs) |
+| 知识图谱与一键复现 | 接入 OpenAlex 构建论文脉络与贡献节点；选定论文支持自动检索关联 PDF 与 GitHub 源码、一键发起「论文+代码」或「仅论文」复现；「图谱问答」只读查询自己的图谱与已保存原文，回答附程序校验过的出处 | [图谱服务](articheck/kg_service.py) · [前端图谱](web/dist/knowledge-graph.mjs) |
 | 归档与用户共享 | 个人归档支持 7 维条件组合检索；用户共享平台支持发布/撤回已完成复现案例及原始材料，并与系统内置基线档案对照 | [执行与归档中心](web/dist/execution-center.mjs) · [OpenAPI](web/dist/openapi.json) |
 | 训练轨迹契约 | 保留采样器提供的 token IDs、行为 log-prob 与策略版本；外部接受后的教师轨迹可导出 SFT，缺失原生 token 时拒绝 RL 导出 | [轨迹契约与测试范围](docs/TRAINING.md#5-原生训练轨迹契约) · [导出实现](articheck/training/export.py) |
 
@@ -198,7 +198,7 @@ flowchart LR
 <tr>
 <td width="50%" valign="top">
 <strong>科学贡献知识图谱 · 引文脉络与一键复现</strong><br>
-浏览 104 篇论文的引文与贡献关系（支持按名称、年份、方向、期刊过滤，以及标题/arXiv/DOI 添加或上传 PDF 插入论文），选中主节点可在右侧查看「节点详情 / 主要贡献 / 研究脉络」并使用「展开子贡献 / 扩展此论文 / 建立联系 / 一键复现 / 删除节点」。<br><br>
+浏览 104 篇论文的引文与贡献关系（支持按名称、年份、方向、期刊过滤，以及标题/arXiv/DOI 添加或上传 PDF 插入论文），选中主节点可在右侧查看「节点详情 / 主要贡献 / 研究脉络 / 图谱问答」并使用「展开子贡献 / 扩展此论文 / 建立联系 / 一键复现 / 删除节点」。<br><br>
 <a href="docs/assets/ui-knowledge-graph.png"><img src="docs/assets/ui-knowledge-graph.png" alt="知识图谱页面：论文关系网络、右侧节点详情与左上角一键复现按钮" width="100%"></a>
 </td>
 <td width="50%" valign="top">
@@ -319,8 +319,8 @@ python -m articheck run --task examples/task.json --output runs/review
 |---|---|---|
 | 公开 CPU 案例 | LIBLINEAR / news20，15 次运行、60 个阶段；L2-SVM 准确率 96.76%，样本标准差 0.31 个百分点 | [案例 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563) · [报告](web/dist/samples/liblinear-reproduction.json) |
 | 内置受控缺陷基准 | 单仓库 4 个版本、12 条主张；FixedPlanner + 规则核查：TP=3、FP=0、TN=9、FN=0，宏 F1=1.000，问题召回率 100%，误报率 0% | [原始结果](docs/smoke/metrics.json) · [问题报告](docs/smoke/metric-defect-report.md) |
-| Python 工程测试 | 244 项：本地 240 项通过、4 项 Docker 专项跳过；CI 覆盖 Python 3.10–3.12 | [网站与回归验收](docs/ONLINE_ACCEPTANCE.md) · [历史验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
-| 前端测试 | 139 项通过，覆盖完整实验角色事件、API 接入、演示评测、开始页、材料、归档与共享、知识图谱一键复现、个人中心图表和审查控制 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
+| Python 工程测试 | 259 项：本地 255 项通过、4 项 Docker 专项跳过；CI 覆盖 Python 3.10–3.12 | [网站与回归验收](docs/ONLINE_ACCEPTANCE.md) · [历史验证记录](docs/VALIDATION.md) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
+| 前端测试 | 147 项通过，覆盖完整实验角色事件、API 接入、演示评测、开始页、材料、归档与共享、知识图谱一键复现与图谱问答、个人中心图表和审查控制 | [测试代码](tests/frontend/) · [CI](https://github.com/Gump111458785/ArtiCheck/actions/workflows/ci.yml) |
 
 内置基准的阈值为 0.5，包含正例 3 条、负例 9 条。这组结果仅验证工程链路，不能外推到真实论文或独立仓库。ArtiCheck-Claims、CORE-Bench、JudgeEval 评测 [待完成]；[评测协议与公平对照要求](docs/BENCHMARKS.md)。
 

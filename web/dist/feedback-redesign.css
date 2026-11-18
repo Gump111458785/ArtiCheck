@@ -2251,7 +2251,7 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .kg-edge-label{font-size:12px}
 .kg-legend{color:#283f5d;background:#f5f8fd;padding:6px;border-radius:6px}
 .kg-legend .hint{color:#526781}
-.kg-insp-tabs{grid-template-columns:repeat(3,1fr)}
+.kg-insp-tabs{grid-template-columns:repeat(4,1fr)}
 .kg-insp-body h3{overflow-wrap:anywhere}
 .report-conflicts article{border:1px solid #dce6f1;border-radius:10px;padding:14px;margin-top:10px}
 .report-conflicts blockquote{border-left:2px solid #c9d6e5;margin:6px 0;padding-left:10px;overflow-wrap:anywhere}
@@ -2308,6 +2308,26 @@ button.link{background:none;border:0;color:#1d4ed8;cursor:pointer;padding:0;text
 .kg-search-progress progress{width:calc(100% + 28px);margin:5px -14px 0;height:3px;accent-color:#177d72}
 .kg-delete-actions{border-top:1px solid #dce6f1;margin-top:12px;padding-top:10px}
 .kg-method-missing{padding:8px 10px;background:#f3f7f9;color:#475569;border-radius:6px}
+/* 图谱问答 (inspector tab 4): reuses kg-meta, kg-notice, kg-insp-actions and button.link. */
+.kg-ask{min-width:0;overflow-wrap:anywhere}
+.kg-ask-scope{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:0 0 10px}
+.kg-ask-focus{display:inline-flex;align-items:center;max-width:100%;min-width:0;padding-left:8px;border:1px solid var(--line);border-radius:4px;background:var(--raised);color:var(--muted)}
+.kg-ask-focus button{flex:none;border:0;background:none;padding:2px 7px;color:var(--faint);font:inherit;font-size:14px;line-height:1;cursor:pointer}
+.kg-ask-focus button:hover{color:var(--ink)}
+.kg-ask-label{display:block;margin-bottom:4px;color:var(--ink);font-weight:600}
+.kg-ask-form textarea{box-sizing:border-box;display:block;width:100%;min-width:0;max-width:100%;padding:8px 10px;border:1px solid var(--control);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;line-height:1.6;resize:vertical}
+.kg-ask-form textarea:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.kg-ask-progress{margin:10px 0 0}
+.kg-ask-progress:empty{margin:0}
+.kg-ask-result{margin-top:12px}
+.kg-ask-result>p{margin:0 0 8px}
+.kg-insp-body .kg-ask-heading{margin:14px 0 6px;font-size:13px;color:var(--ink)}
+.kg-ask-sources{margin:0;padding-left:20px}
+.kg-ask-sources li{margin-bottom:8px}
+.kg-ask-sources li>button.link{display:block;max-width:100%;overflow-wrap:anywhere}
+.kg-ask-source-meta{display:block}
+.kg-ask-source-meta>*+*{margin-left:6px}
+.kg-ask-quote{color:var(--faint)}
 
 /* PDF feedback: material rail, report evidence, and process detail. */
 .online-rail .rail-source-name,

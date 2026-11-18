@@ -19,6 +19,7 @@ from .hosted_store import HostedStore
 from .hosted_images import text_materials
 from .hosted_sources import lookup, public_identifier
 from .hosted_audit import cross_audit
+from .kg_assistant import GraphAssistant
 from .kg_service import KnowledgeGraphService
 from .review_api import ReviewError, decode_material, now
 
@@ -44,6 +45,7 @@ def register(app, env, reviewer, *, store=None, executor=None):
         return accounts.owner()
 
     kg = KnowledgeGraphService(env, store, reviewer)
+    assistant = GraphAssistant(kg)
     app.extensions['articheck_accounts']=accounts
     app.extensions['articheck_authorize']=authorize
 
@@ -798,3 +800,22 @@ def register(app, env, reviewer, *, store=None, executor=None):
     def save_kg_layout():
         owner = authorize()
         return jsonify(kg.save_layout(owner, body()))
+
+    @app.post('/kg/ask')
+    def create_kg_ask():
+        owner = authorize()
+        payload = body()
+        return jsonify(assistant.create(owner, payload.get('question'), payload.get('focus_paper_id')))
+
+    @app.post('/kg/ask/<ask_id>/step')
+    def step_kg_ask(ask_id):
+        owner = authorize()
+        return jsonify(assistant.step(owner, ask_id, resume=body().get('resume') is True))
+
+    @app.post('/kg/ask/<ask_id>/cancel')
+    def cancel_kg_ask(ask_id):
+        return jsonify(assistant.cancel(authorize(), ask_id))
+
+    @app.get('/kg/ask/<ask_id>')
+    def get_kg_ask(ask_id):
+        return jsonify(assistant.get(authorize(), ask_id))

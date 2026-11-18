@@ -1461,11 +1461,20 @@ return 1
                         candidates.append(comparison)
         return sorted(candidates, key=lambda item: (-item['overlap_score'], item['id']))[:24]
 
-    def paper_slots(self, owner, papers, library):
+    def paper_slots(self, owner, papers, library, *, persist=True):
         slots = library.get('paper_slots', {})
         missing = [paper['id'] for paper in papers if paper['id'] not in slots]
         if not missing:
             return slots
+        if not persist:
+            # Read-only callers get the same allocation without saving it.
+            current, used, index = dict(slots), set(slots.values()), 0
+            for paper_id in missing:
+                while index in used:
+                    index += 1
+                current[paper_id] = index
+                used.add(index)
+            return current
 
         def allocate(state):
             current = state.setdefault('paper_slots', {})
@@ -1541,7 +1550,7 @@ return 1
                 step += 1
         return points
 
-    def build_graph_response(self, owner, *, focus_paper_id=''):
+    def build_graph_response(self, owner, *, focus_paper_id='', persist=True):
         own = self.owned_papers(owner)
         _, library = self.literature_state(owner)
         aliases = {}
@@ -1587,7 +1596,7 @@ return 1
         focus_paper_id = aliases.get(focus_paper_id, focus_paper_id)
         if not any(paper['id'] == focus_paper_id for paper in papers):
             focus_paper_id = next((paper['id'] for paper in reversed(papers) if paper['source_type'] == 'USER_UPLOAD'), papers[0]['id'] if papers else '')
-        slots = self.paper_slots(owner, papers, library)
+        slots = self.paper_slots(owner, papers, library, persist=persist)
         layout = self.get_layout(owner)
         positions = layout.get('positions') or {}
         paper_points = self.initial_paper_positions(papers, focus_paper_id, aliases, library['links'], positions)
