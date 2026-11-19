@@ -1,0 +1,230 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1580" height="1060" viewBox="0 0 1580 1060">
+<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif; }</style>
+<defs><marker id="a" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><polygon points="0 0, 10 4, 0 8" fill="#44546A"/></marker><marker id="ab" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><polygon points="0 0, 10 4, 0 8" fill="#4472C4"/></marker></defs>
+<rect data-graph-role="background" width="1580" height="1060" fill="#FFFFFF"/>
+<rect data-graph-role="container" x="18.0" y="16.0" width="1510.0" height="68.0" rx="5" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<rect data-graph-role="decoration" x="18.0" y="16.0" width="212.0" height="68.0" rx="5" fill="#E3ECF8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="124.0" y="46.0" font-size="20" font-weight="700" fill="#2F5597" text-anchor="middle">ArtiCheck 入口</text>
+<text x="124.0" y="69.0" font-size="13.5" font-weight="400" fill="#5B6B7D" text-anchor="middle">(Web · API · CLI)</text>
+<g data-graph-role="decoration"><rect x="256.0" y="38" width="30" height="24" rx="4" fill="none" stroke="#172434" stroke-width="2"/><line x1="256.0" y1="45" x2="286.0" y2="45" stroke="#172434" stroke-width="1.8"/><circle cx="262.0" cy="41.5" r="1.2" fill="#172434"/><circle cx="267.0" cy="41.5" r="1.2" fill="#172434"/></g>
+<text x="414.2" y="46.0" font-size="16.5" font-weight="700" fill="#172434" text-anchor="middle">在线工作台</text>
+<text x="414.2" y="67.0" font-size="13" font-weight="400" fill="#3B4A5C" text-anchor="middle">EdgeOne Pages · 受邀登录</text>
+<line x1="554.5" y1="29" x2="554.5" y2="71" stroke="#BEC8D4" stroke-width="1.4"/>
+<g data-graph-role="decoration"><path d="M590.5,43 L583.5,51 L590.5,59" fill="none" stroke="#172434" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M602.5,43 L609.5,51 L602.5,59" fill="none" stroke="#172434" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/><line x1="598.5" y1="41" x2="594.5" y2="61" stroke="#172434" stroke-width="2" stroke-linecap="round"/></g>
+<text x="738.8" y="46.0" font-size="16.5" font-weight="700" fill="#172434" text-anchor="middle">静态审阅 API</text>
+<text x="738.8" y="67.0" font-size="13" font-weight="400" fill="#3B4A5C" text-anchor="middle">/v1 OpenAPI 契约接入</text>
+<line x1="879.0" y1="29" x2="879.0" y2="71" stroke="#BEC8D4" stroke-width="1.4"/>
+<g data-graph-role="decoration"><rect x="905.0" y="38" width="30" height="24" rx="4" fill="none" stroke="#172434" stroke-width="2"/><path d="M912.0,46 L918.0,50.5 L912.0,55" fill="none" stroke="#172434" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="921.0" y1="55" x2="929.0" y2="55" stroke="#172434" stroke-width="2" stroke-linecap="round"/></g>
+<text x="1063.2" y="46.0" font-size="16.5" font-weight="700" fill="#172434" text-anchor="middle">本地工作台 / CLI</text>
+<text x="1063.2" y="67.0" font-size="13" font-weight="400" fill="#3B4A5C" text-anchor="middle">python -m articheck</text>
+<line x1="1203.5" y1="29" x2="1203.5" y2="71" stroke="#BEC8D4" stroke-width="1.4"/>
+<g data-graph-role="decoration"><path d="M1232.5,36 h16 l7,7 v22 h-23 z M1248.5,36 v7 h7" fill="none" stroke="#172434" stroke-width="2" stroke-linejoin="round"/><text x="1244.0" y="59" font-size="8" font-weight="800" fill="#172434" text-anchor="middle">PDF</text></g>
+<text x="1387.8" y="46.0" font-size="16.5" font-weight="700" fill="#172434" text-anchor="middle">输入材料</text>
+<text x="1387.8" y="67.0" font-size="13" font-weight="400" fill="#3B4A5C" text-anchor="middle">PDF · 代码 ZIP · GitHub 提交</text>
+<path d="M483.0,84.0 V114.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="495.0" y="104.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">在线审查 / 图谱请求</text>
+<path d="M1250.0,84.0 V114.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="1262.0" y="104.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">本地任务 / 复现命令</text>
+<rect data-graph-role="container" x="18.0" y="114.0" width="930.0" height="640.0" rx="6" fill="#FFFFFF" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="38.0" y="144.0" font-size="17.5" font-weight="700" fill="#172434" text-anchor="start">在线工作台与云端服务</text>
+<rect x="38.0" y="158.0" width="890.0" height="42.0" rx="4" fill="#4472C4" stroke="#2F5597" stroke-width="1.4"/>
+<text x="483.0" y="185.0" font-size="17.5" font-weight="700" fill="#FFFFFF" text-anchor="middle">在线审查与云端执行引擎（EdgeOne Pages + Flask /v1）</text>
+<rect x="38.0" y="214.0" width="200.0" height="96.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="138.0" y="249.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">材料解析（确定性）</text>
+<text x="138.0" y="270.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">PDF 布局文 / 原页图</text>
+<text x="138.0" y="288.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">ZIP · GitHub 固定提交</text>
+<rect x="268.0" y="214.0" width="200.0" height="96.0" rx="5" fill="#EDF3FB" stroke="#4472C4" stroke-width="1.8"/>
+<rect data-graph-role="decoration" x="341.0" y="223.0" width="54.0" height="17.0" rx="8.5" fill="#4472C4" stroke="#4472C4" stroke-width="0"/>
+<text x="368.0" y="235.0" font-size="9.5" font-weight="700" letter-spacing="0.7" fill="#FFFFFF" text-anchor="middle">AGENT</text>
+<text x="368.0" y="258.0" font-size="13.5" font-weight="700" fill="#2F5597" text-anchor="middle">Review Agent · 联合审阅</text>
+<text x="368.0" y="278.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">主审材料 · arXiv/DOI 检索</text>
+<text x="368.0" y="295.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">生成建议与冻结执行计划</text>
+<rect x="498.0" y="214.0" width="200.0" height="96.0" rx="5" fill="#EDF3FB" stroke="#4472C4" stroke-width="1.8"/>
+<rect data-graph-role="decoration" x="571.0" y="223.0" width="54.0" height="17.0" rx="8.5" fill="#4472C4" stroke="#4472C4" stroke-width="0"/>
+<text x="598.0" y="235.0" font-size="9.5" font-weight="700" letter-spacing="0.7" fill="#FFFFFF" text-anchor="middle">AGENT</text>
+<text x="598.0" y="258.0" font-size="13.5" font-weight="700" fill="#2F5597" text-anchor="middle">Audit Agent · 交叉复核</text>
+<text x="598.0" y="278.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">独立复核疑点与图表指标</text>
+<text x="598.0" y="295.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">撤回弱指控 · 容差 ≤1%</text>
+<rect x="728.0" y="214.0" width="200.0" height="96.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="828.0" y="249.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">四段最终报告</text>
+<text x="828.0" y="270.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">自查清单 / 复现结论</text>
+<text x="828.0" y="288.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">个人归档 · 公共共享</text>
+<path d="M240.0,262.0 H266.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<path d="M470.0,262.0 H496.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<path d="M700.0,262.0 H726.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<rect data-graph-role="container" x="246.0" y="350.0" width="474.0" height="116.0" rx="5" fill="#FAFCFF" stroke="#BEC8D4" stroke-width="1.3"/>
+<text x="260.0" y="374.0" font-size="14.5" font-weight="700" fill="#2F5597" text-anchor="start">云端隔离执行（确定性沙箱）</text>
+<rect x="260.0" y="388.0" width="215.0" height="64.0" rx="4" fill="#FFFFFF" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="367.5" y="407.5" font-size="14" font-weight="700" fill="#172434" text-anchor="middle">E2B CPU 沙箱</text>
+<text x="367.5" y="428.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">独立实例 · 允许配置公共源</text>
+<text x="367.5" y="446.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">自动补齐纯 Python 依赖</text>
+<rect x="491.0" y="388.0" width="215.0" height="64.0" rx="4" fill="#FFFFFF" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="598.5" y="407.5" font-size="14" font-weight="700" fill="#172434" text-anchor="middle">自有 RTX 4090 Worker</text>
+<text x="598.5" y="428.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">Redis 私有队列拉取</text>
+<text x="598.5" y="446.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">bwrap 命名空间 + 禁网执行</text>
+<path d="M368.0,310.0 V350.0" fill="none" stroke="#4472C4" stroke-width="1.8" marker-end="url(#ab)"/>
+<text x="378.0" y="334.0" font-size="12.5" font-weight="400" fill="#2F5597" text-anchor="start">冻结执行计划</text>
+<path d="M720.0,408.0 H782.0 V312.0" fill="none" stroke="#4472C4" stroke-width="1.8" marker-end="url(#ab)"/>
+<text x="790.0" y="370.0" font-size="12" font-weight="400" fill="#2F5597" text-anchor="start">实测日志</text>
+<text x="790.0" y="386.0" font-size="12" font-weight="400" fill="#2F5597" text-anchor="start">与指标</text>
+<rect data-graph-role="container" x="38.0" y="510.0" width="890.0" height="224.0" rx="5" fill="#FAFCFF" stroke="#BEC8D4" stroke-width="1.3"/>
+<text x="52.0" y="534.0" font-size="14.5" font-weight="700" fill="#2F5597" text-anchor="start">科学贡献知识图谱与图谱问答</text>
+<rect x="52.0" y="552.0" width="194.5" height="104.0" rx="4" fill="#FFFFFF" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="149.2" y="591.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">论文入图与扩展</text>
+<text x="149.2" y="612.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">报告 / arXiv / DOI / PDF</text>
+<text x="149.2" y="630.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">OpenAlex 2–3 级引文</text>
+<rect x="274.5" y="552.0" width="194.5" height="104.0" rx="5" fill="#EDF3FB" stroke="#4472C4" stroke-width="1.8"/>
+<rect data-graph-role="decoration" x="344.8" y="561.0" width="54.0" height="17.0" rx="8.5" fill="#4472C4" stroke="#4472C4" stroke-width="0"/>
+<text x="371.8" y="573.0" font-size="9.5" font-weight="700" letter-spacing="0.7" fill="#FFFFFF" text-anchor="middle">AGENT</text>
+<text x="371.8" y="596.0" font-size="13.5" font-weight="700" fill="#2F5597" text-anchor="middle">Contribution · 贡献抽取</text>
+<text x="371.8" y="616.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">主/细分贡献与逐字出处</text>
+<text x="371.8" y="633.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">跨论文关系 · 手动联系</text>
+<rect x="497.0" y="552.0" width="194.5" height="104.0" rx="5" fill="#EDF3FB" stroke="#4472C4" stroke-width="1.8"/>
+<rect data-graph-role="decoration" x="567.2" y="561.0" width="54.0" height="17.0" rx="8.5" fill="#4472C4" stroke="#4472C4" stroke-width="0"/>
+<text x="594.2" y="573.0" font-size="9.5" font-weight="700" letter-spacing="0.7" fill="#FFFFFF" text-anchor="middle">AGENT</text>
+<text x="594.2" y="596.0" font-size="13.5" font-weight="700" fill="#2F5597" text-anchor="middle">GraphAssistant · 图谱问答</text>
+<text x="594.2" y="616.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">6 只读工具 · 分步决策循环</text>
+<text x="594.2" y="633.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">只读不写 · 防死循环熔断</text>
+<rect x="719.5" y="552.0" width="194.5" height="104.0" rx="4" fill="#FFFFFF" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="816.8" y="591.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">出处校验与展示</text>
+<text x="816.8" y="612.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">compact_whitespace 校验</text>
+<text x="816.8" y="630.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">逐字原文出处 · 页码直跳</text>
+<path d="M248.5,604.0 H272.5" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<path d="M471.0,604.0 H495.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<path d="M693.5,604.0 H717.5" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="52.0" y="674.0" width="862.0" height="36.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="66.0" y="697.0" font-size="13" font-weight="700" fill="#2F5597" text-anchor="start">确定性护栏</text>
+<circle data-graph-role="decoration" cx="168.0" cy="692.5" r="2.8" fill="#4472C4"/>
+<text x="177.0" y="697.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">&lt;untrusted_data&gt; 数据/指令隔离</text>
+<circle data-graph-role="decoration" cx="414.0" cy="692.5" r="2.8" fill="#4472C4"/>
+<text x="423.0" y="697.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">单账号并发限流（1 重型 / 全局 3）</text>
+<circle data-graph-role="decoration" cx="660.0" cy="692.5" r="2.8" fill="#4472C4"/>
+<text x="669.0" y="697.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">取消后迟到结果不覆盖</text>
+<path d="M882.0,310.0 V510.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="872.0" y="492.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="end">报告入图</text>
+<path d="M138.0,510.0 V312.0" fill="none" stroke="#4472C4" stroke-width="1.8" marker-end="url(#ab)"/>
+<text x="148.0" y="402.0" font-size="12.5" font-weight="600" fill="#2F5597" text-anchor="start">一键复现</text>
+<text x="148.0" y="420.0" font-size="11.5" font-weight="400" fill="#3B4A5C" text-anchor="start">(自动找仓 / 补代码)</text>
+<rect data-graph-role="container" x="972.0" y="114.0" width="556.0" height="640.0" rx="6" fill="#FFFFFF" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="992.0" y="144.0" font-size="17.5" font-weight="700" fill="#172434" text-anchor="start">本地核查引擎与完整实验</text>
+<rect data-graph-role="container" x="990.0" y="160.0" width="520.0" height="392.0" rx="5" fill="#FAFCFF" stroke="#BEC8D4" stroke-width="1.3"/>
+<text x="1004.0" y="184.0" font-size="14.5" font-weight="700" fill="#2F5597" text-anchor="start">短时主张核查（六角色 · 1 决策 Agent + 5 规则角色）</text>
+<rect x="1004.0" y="200.0" width="236.0" height="64.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="1122.0" y="219.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">LiteratureReader</text>
+<text x="1122.0" y="240.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">读取人工确认的主张清单</text>
+<text x="1122.0" y="258.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">（不解析 PDF · 无模型调用）</text>
+<rect x="1260.0" y="200.0" width="236.0" height="64.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="1378.0" y="219.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">CodeInspector</text>
+<text x="1378.0" y="240.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">列出仓库文件清单</text>
+<text x="1378.0" y="258.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">（仅作上下文 · 无模型调用）</text>
+<path d="M1122.0,264.0 V294.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<path d="M1378.0,264.0 V294.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="1004.0" y="294.0" width="492.0" height="62.0" rx="5" fill="#4472C4" stroke="#2F5597" stroke-width="1.6"/>
+<rect data-graph-role="decoration" x="1018.0" y="304.0" width="52.0" height="17.0" rx="8.5" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0"/>
+<text x="1044.0" y="316.0" font-size="9.5" font-weight="800" letter-spacing="0.6" fill="#2F5597" text-anchor="middle">AGENT</text>
+<text x="1078.0" y="318.0" font-size="15.5" font-weight="700" fill="#FFFFFF" text-anchor="start">Planner Agent · 规划决策</text>
+<text x="1018.0" y="341.0" font-size="11.8" font-weight="400" fill="#E3ECF8" text-anchor="start">默认 FixedPlanner · 可接本地/API ModelPlanner</text>
+<rect data-graph-role="decoration" x="1298.0" y="309.0" width="104.0" height="32.0" rx="4" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.5"/>
+<text x="1350" y="330" font-size="15" font-weight="700" fill="#2F5597" text-anchor="middle">check (c<tspan dy="3" font-size="11">i</tspan><tspan dy="-3">)</tspan></text>
+<rect data-graph-role="decoration" x="1414.0" y="309.0" width="68.0" height="32.0" rx="4" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.5"/>
+<text x="1448.0" y="330.0" font-size="15" font-weight="700" fill="#C00000" text-anchor="middle">stop</text>
+<rect x="1004.0" y="386.0" width="304.0" height="64.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="1156.0" y="411.0" font-size="15" font-weight="700" fill="#172434" text-anchor="middle">ExperimentRunner</text>
+<text x="1156.0" y="432.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">Docker 禁网沙箱 · 按仓库与命令缓存</text>
+<rect x="1004.0" y="462.0" width="304.0" height="74.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="1100.0" y="490.0" font-size="15" font-weight="700" fill="#172434" text-anchor="middle">CrossAuditor</text>
+<text x="1100.0" y="510.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">容差 / 划分 / 预算</text>
+<line x1="1192" y1="472" x2="1192" y2="526" stroke="#BEC8D4" stroke-width="1.2"/>
+<text x="1210.0" y="485.0" font-size="13.5" font-weight="700" fill="#2E7D32" text-anchor="middle">✓</text>
+<text x="1224.0" y="485.0" font-size="12.5" font-weight="400" fill="#2E7D32" text-anchor="start">supported</text>
+<text x="1210.0" y="505.0" font-size="13.5" font-weight="700" fill="#C00000" text-anchor="middle">×</text>
+<text x="1224.0" y="505.0" font-size="12.5" font-weight="400" fill="#C00000" text-anchor="start">issue</text>
+<text x="1210.0" y="525.0" font-size="13.5" font-weight="700" fill="#5B6B7D" text-anchor="middle">?</text>
+<text x="1224.0" y="525.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">inconclusive</text>
+<rect x="1354.0" y="386.0" width="142.0" height="150.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="1425.0" y="417.0" font-size="15.5" font-weight="700" fill="#172434" text-anchor="middle">Reporter</text>
+<line x1="1368" y1="430" x2="1482" y2="430" stroke="#BEC8D4" stroke-width="1.2"/>
+<text x="1425.0" y="456.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="middle">逐主张判定</text>
+<text x="1425.0" y="477.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="middle">执行证据</text>
+<text x="1425.0" y="498.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="middle">report.md</text>
+<text x="1425.0" y="519.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="middle">trace.jsonl</text>
+<path d="M1156.0,356.0 V386.0" fill="none" stroke="#4472C4" stroke-width="1.8" marker-end="url(#ab)"/>
+<path d="M1425.0,356.0 V386.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<path d="M1308.0,499.0 H1331.0 V358.0" fill="none" stroke="#4472C4" stroke-width="1.8" marker-end="url(#ab)"/>
+<rect data-graph-role="container" x="990.0" y="570.0" width="520.0" height="164.0" rx="5" fill="#FAFCFF" stroke="#BEC8D4" stroke-width="1.3"/>
+<text x="1004.0" y="594.0" font-size="14.5" font-weight="700" fill="#2F5597" text-anchor="start">完整实验执行器（确定性）</text>
+<rect x="1004.0" y="612.0" width="145.3" height="104.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="1076.7" y="651.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">冻结计划排程</text>
+<text x="1076.7" y="672.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">policy: frozen_plan</text>
+<text x="1076.7" y="690.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">Planner 不做决策</text>
+<path d="M1151.3,664.0 H1175.3" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="1177.3" y="612.0" width="145.3" height="104.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="1250.0" y="651.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">禁网 Docker</text>
+<text x="1250.0" y="672.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">镜像重建与校验</text>
+<text x="1250.0" y="690.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">阶段 × 种子矩阵</text>
+<path d="M1324.7,664.0 H1348.7" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="1350.7" y="612.0" width="145.3" height="104.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="1423.3" y="651.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">四层验收</text>
+<text x="1423.3" y="672.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">run / env / training</text>
+<text x="1423.3" y="690.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">conclusion · roles</text>
+<path d="M483.0,754.0 V790.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="495.0" y="777.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">状态落盘 / 外部检索</text>
+<rect data-graph-role="container" x="18.0" y="790.0" width="930.0" height="200.0" rx="6" fill="#FFFFFF" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="38.0" y="820.0" font-size="17.5" font-weight="700" fill="#172434" text-anchor="start">存储、传输与公开学术源</text>
+<rect x="38.0" y="838.0" width="207.5" height="132.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="141.8" y="880.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">浏览器 IndexedDB</text>
+<text x="141.8" y="901.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">个人归档与本地 PDF/ZIP</text>
+<text x="141.8" y="920.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">问答 ask_id 断点恢复</text>
+<text x="141.8" y="939.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">不写入服务端密钥</text>
+<rect x="265.5" y="838.0" width="207.5" height="132.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="369.2" y="880.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">Upstash Redis</text>
+<text x="369.2" y="901.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">审查 / 问答状态（7 天）</text>
+<text x="369.2" y="920.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">图谱状态（30 天）</text>
+<text x="369.2" y="939.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">公共案例 · GPU 私有队列</text>
+<rect x="493.0" y="838.0" width="207.5" height="132.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="596.8" y="880.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">临时签名直传通道</text>
+<text x="596.8" y="901.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">大文件直传（≤100 MiB）</text>
+<text x="596.8" y="920.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">服务端 SHA256 校验</text>
+<text x="596.8" y="939.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">15 分钟后自动回收</text>
+<rect x="720.5" y="838.0" width="207.5" height="132.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="824.2" y="880.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">公开学术数据源</text>
+<text x="824.2" y="901.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">OpenAlex / arXiv / Crossref</text>
+<text x="824.2" y="920.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">文献脉络与开放原文</text>
+<text x="824.2" y="939.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">公开依赖镜像源（E2B）</text>
+<path d="M1250.0,754.0 V790.0" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="1262.0" y="777.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">本地 runs/ · trace.jsonl</text>
+<rect data-graph-role="container" x="972.0" y="790.0" width="556.0" height="200.0" rx="6" fill="#FFFFFF" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="992.0" y="820.0" font-size="17.5" font-weight="700" fill="#172434" text-anchor="start">评测基准与 Planner 后训练</text>
+<rect x="990.0" y="836.0" width="520.0" height="42.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="1004.0" y="862.0" font-size="13.5" font-weight="700" fill="#2F5597" text-anchor="start">基准与回归</text>
+<text x="1086.0" y="862.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">受控缺陷集 F1=1.0 · LIBLINEAR 15 runs · Python 259 / 前端 147 项</text>
+<rect x="990.0" y="890.0" width="150.7" height="80.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5"/>
+<text x="1065.3" y="917.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">原生轨迹导出</text>
+<text x="1065.3" y="938.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">token_ids · log-prob</text>
+<text x="1065.3" y="956.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">人工复核过滤</text>
+<path d="M1142.7,930.0 H1172.7" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="1174.7" y="890.0" width="150.7" height="80.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5" stroke-dasharray="5,4"/>
+<text x="1250.0" y="917.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">LoRA SFT</text>
+<text x="1250.0" y="938.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">行为模仿</text>
+<text x="1250.0" y="956.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">[待完成]</text>
+<path d="M1327.3,930.0 H1357.3" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="1359.3" y="890.0" width="150.7" height="80.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5" stroke-dasharray="5,4"/>
+<text x="1434.7" y="917.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">verl GRPO</text>
+<text x="1434.7" y="938.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">策略优化</text>
+<text x="1434.7" y="956.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">[待完成]</text>
+<path d="M1510.0,930.0 H1550 V325.0 H1499.0" fill="none" stroke="#4472C4" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#ab)"/>
+<text x="1565" y="627.5" font-size="13.5" font-weight="600" fill="#2F5597" text-anchor="middle" transform="rotate(90 1565 627.5)">待验收策略（仅本地 Planner Agent）</text>
+<g data-graph-role="legend">
+<rect data-graph-role="legend" x="18.0" y="1006.0" width="1510.0" height="38.0" rx="5" fill="#FAFCFF" stroke="#BEC8D4" stroke-width="1.2"/>
+<text x="36.0" y="1030.0" font-size="13.5" font-weight="700" fill="#172434" text-anchor="start">图例</text>
+<rect data-graph-role="legend" x="92.0" y="1016.0" width="48.0" height="18.0" rx="9" fill="#4472C4" stroke="#4472C4" stroke-width="0"/>
+<text x="116" y="1028.5" font-size="9.5" font-weight="700" letter-spacing="0.6" fill="#FFFFFF" text-anchor="middle">AGENT</text>
+<text x="150.0" y="1030.0" font-size="12.5" font-weight="600" fill="#2F5597" text-anchor="start">核心模型 Agent（Review / Audit / Contribution / GraphAssistant / Planner）</text>
+<rect data-graph-role="legend" x="652.0" y="1016.0" width="26.0" height="18.0" rx="3" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.4"/>
+<text x="688.0" y="1030.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">确定性程序 / 护栏 / 隔离执行与存储</text>
+<rect data-graph-role="legend" x="950.0" y="1016.0" width="26.0" height="18.0" rx="3" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.4" stroke-dasharray="4,3"/>
+<text x="986.0" y="1030.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">后训练与 GPU 集成评测 [待完成]</text>
+<line x1="1216" y1="1025" x2="1242" y2="1025" stroke="#4472C4" stroke-width="2" marker-end="url(#ab)"/>
+<text x="1254.0" y="1030.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">执行 / 反馈 / 一键复现控制流</text>
+</g>
+</svg>

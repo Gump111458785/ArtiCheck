@@ -239,16 +239,20 @@ flowchart LR
 
 ## 6. 系统架构
 
-![ArtiCheck 系统架构：在线工作台与云端服务、科学贡献知识图谱与图谱问答、本地核查与完整实验、核心 Agent 及 Planner 后训练](docs/assets/architecture.svg)
+![ArtiCheck 目标总体架构：统一入口、Supervisor + Deterministic Runtime、四大专业科研 Agent、独立 Paper Tree 子系统、共享证据底座与训练评估体系](docs/assets/architecture.svg)
 
-[打开 SVG 原图](docs/assets/architecture.svg)。系统按运行域拆分为**在线工作台与云端服务**（EdgeOne Pages + Flask `/v1`）和**本地核查引擎与完整实验**（CLI / Local Workbench）两条路径：
+[打开 SVG 原图](docs/assets/architecture.svg) · [查看当前实现架构图（Current Architecture）](docs/assets/architecture-current.svg)。
 
-- **在线审查、云端执行与知识图谱**：材料经确定性解析（PDF 布局文字/原页图、代码 ZIP / GitHub 固定提交与 `SHA256` 指纹）进入 `Review Agent` 联合审阅与 `Audit Agent` 保守交叉复核；冻结执行计划（`plan_sha256`）按需路由至 **E2B CPU 沙箱**（独立实例、允许配置公开依赖源并自动补齐纯 Python 依赖）或 **自有 RTX 4090 GPU Worker**（Redis 私有队列拉取、`bwrap` 命名空间与禁网执行），实测日志与指标汇入四段最终报告。最终报告可**报告入图**进入科学贡献知识图谱（OpenAlex 2–3 级扩展、`Contribution` 抽取、`GraphAssistant` 只读问答与 `compact_whitespace` 出处校验），图谱节点亦可通过**一键复现**回流在线审查。状态分存于浏览器 IndexedDB、Upstash Redis（审查/问答 7 天、图谱 30 天、公共案例与 GPU 队列）及 15 分钟自动回收的临时签名直传通道；**在线流程不使用后训练权重**。
-- **本地核查、完整实验与 Planner 后训练**：短时主张核查通过 asyncio DAG 并发读取确认主张与仓库目录，再由 `Planner Agent` 循环决定 `check(cᵢ)` 或 `stop`（默认使用 `FixedPlanner`）；完整实验执行器（`reproduction/engine.py`）按冻结计划（`policy: frozen_plan`）在禁网 Docker 中运行阶段与种子矩阵并输出四层验收与 `roles.jsonl`（界面按角色读取实际事件，不补造活动，见 [执行中心的数据与模块对应](docs/EXECUTION_CENTER.md)）。本地 `runs/ · trace.jsonl` 经受控缺陷基准与轨迹过滤后仅对接本地短时核查的 `Planner Agent` 后训练（LoRA SFT / verl GRPO 与 GPU 集成评测 [待完成]）。
+上图展示 **ArtiCheck 目标总体架构（Target Architecture）**，将系统重构为**证据驱动、可验证、可训练的多 Agent 科研系统**，并与[当前已实现架构](docs/assets/architecture-current.svg)严格区分现状与演进目标：
 
-### 6.1 核心 Agent 与确定性边界
+- **主科研审查链路（Supervisor + Deterministic Runtime）**：**Supervisor Agent（LLM）** 负责任务拆解、动态调度与异常重规划，并通过 **Deterministic Runtime（Python）** 执行合法性校验、权限边界、统一状态机、预算熔断与恢复，受控调度四大专业科研 Agent（**Reviewer Agent**、**Novelty Agent**、**Auditor Agent**、**Fixer Agent**），经 **Tool Gateway**、**Evidence Validator** 与 **ExperimentRunner**（CPU / GPU / Docker）完成取证与复现。
+- **Paper Tree 子系统（独立 Workflow）**：保持独立入口与工作流编排，涵盖论文入库（PDF / arXiv / DOI）、OpenAlex 脉络扩展、**Relation Analysis Agent**（贡献抽取与演化关系分析）、人工确认及可选 **GraphAssistant**（只读图谱问答与页码跳转）；不绕经主审查 Supervisor，仅通过数据流共享脉络与证据。
+- **共享证据底座与训练评估闭环**：统一汇聚至 **Evidence Ledger**（不可变证据账本）、**Trace Store**（全链路 Agent 轨迹）、**Task & Material Store** 与 **Model Router**，底层由 EdgeOne / Flask、Redis / Worker、E2B / Docker 与 GPU 节点支撑；离线基于 Benchmark、SFT / LoRA、GRPO / RL 与模型对照验收持续迭代，验收通过后的策略经 **Model Router** 灰度发布。
+- **现状与规划边界**：当前线上与本地仓库已落地能力见[当前实现架构图](docs/assets/architecture-current.svg)及下方 `6.1 / 6.2` 节（含 EdgeOne + Flask `/v1`、`Review / Audit / Contribution / GraphAssistant`、E2B CPU / 自有 RTX 4090 Worker、IndexedDB / Upstash Redis、本地 `FixedPlanner / ModelPlanner` 与 `reproduction/engine.py`）；目标态中的全局 `Supervisor Agent`、统一 `Deterministic Runtime`、`Novelty / Fixer Agent`、`Evidence Ledger`、`Trace Store` 及离线 `SFT / GRPO` 训练集成 **[规划待实现]**。
 
-图中蓝框标注的 5 个核心 Agent 负责模型审阅、贡献抽取、工具调用或策略决策，其余解析、指纹校验、容差限幅、沙箱隔离与出处核验均由确定性程序执行：
+### 6.1 当前已实现 Agent 与确定性边界
+
+当前代码库中已实际运行并承担模型审阅、贡献抽取、工具调用或策略决策的核心组件如下（其余解析、指纹校验、容差限幅、沙箱隔离与出处核验均由确定性程序执行）：
 
 | Agent | 所在运行域 | 核心职责 | 对应实现 | 确定性约束 |
 |---|---|---|---|---|
