@@ -19,7 +19,7 @@
 
 </div>
 
-![ArtiCheck 工作台导览：开始页、材料管理、最终报告、知识图谱、个人归档与用户共享平台](docs/assets/workbench-tour.gif)
+![ArtiCheck 工作台导览：开始页、材料管理、最终报告、知识图谱、图谱问答、个人归档与用户共享平台](docs/assets/workbench-tour.gif)
 
 <a id="problem"></a>
 
@@ -192,40 +192,46 @@ flowchart LR
 </tr>
 </table>
 
-### 5.2 知识图谱、归档与用户共享平台
+### 5.2 知识图谱、图谱问答、归档与用户共享平台
 
 <table>
 <tr>
 <td width="50%" valign="top">
 <strong>科学贡献知识图谱 · 引文脉络与一键复现</strong><br>
 浏览 104 篇论文的引文与贡献关系（支持按名称、年份、方向、期刊过滤，以及标题/arXiv/DOI 添加或上传 PDF 插入论文），选中主节点可在右侧查看「节点详情 / 主要贡献 / 研究脉络 / 图谱问答」并使用「展开子贡献 / 扩展此论文 / 建立联系 / 一键复现 / 删除节点」。<br><br>
-<a href="docs/assets/ui-knowledge-graph.png"><img src="docs/assets/ui-knowledge-graph.png" alt="知识图谱页面：论文关系网络、右侧节点详情与左上角一键复现按钮" width="100%"></a>
+<a href="docs/assets/ui-knowledge-graph.png"><img src="docs/assets/ui-knowledge-graph.png" alt="知识图谱页面：104 篇论文关系网络、右侧四栏检查器与左上角一键复现按钮" width="100%"></a>
 </td>
+<td width="50%" valign="top">
+<strong>图谱问答 · 基于原图与 PDF 的循证检索</strong><br>
+在「图谱问答」页签用自然语言只读检索自己的图谱与已保存原文（支持限定围绕当前选中论文），回答列出轮次进度与经程序逐字核验的出处列表，点击论文或页码可直接定位节点并打开对应 PDF 页面。<br><br>
+<a href="docs/assets/ui-kg-ask.png"><img src="docs/assets/ui-kg-ask.png" alt="图谱问答页面：104 篇论文与 9 篇已保存原文范围、自然语言提问回答及经核验的原文章节与第 9 页引用" width="100%"></a>
+</td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 <strong>个人归档 · 多维筛选与状态追踪</strong><br>
 集中管理全部审查项目，支持按项目名、论文名、代码/仓库名、审查结论、执行状态、材料类型与时间快速检索与诊断跳转。<br><br>
 <a href="docs/assets/ui-personal-archive.png"><img src="docs/assets/ui-personal-archive.png" alt="个人归档页面：七维组合筛选与项目执行状态表格" width="100%"></a>
 </td>
-</tr>
-<tr>
 <td width="50%" valign="top">
 <strong>公共案例 · 用户共享平台与基线档案</strong><br>
 上方展示受邀用户公开发布的复现报告与原始材料，下方汇总系统内置 LIBLINEAR 与教学基准档案。<br><br>
 <a href="docs/assets/ui-public-platform.png"><img src="docs/assets/ui-public-platform.png" alt="公共案例页面：用户共享平台表格与系统内置基线档案" width="100%"></a>
 </td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 <strong>本地项目 · 一键部署私有工作台</strong><br>
 当私有论文或代码需留在本地机器时，提供环境要求说明与可一键复制的本地克隆、虚拟环境与启动命令。<br><br>
 <a href="docs/assets/ui-local-project.png"><img src="docs/assets/ui-local-project.png" alt="本地项目页面：开源仓库本地启动步骤与环境要求" width="100%"></a>
 </td>
+<td width="50%" valign="top">
+<strong>使用指南（帮助页） · 四步完成核查</strong><br>
+提供「命名并导入材料 → 选择审查需求 → 查看审查与实验执行 → 阅读最终报告与知识图谱」四步操作引导，以及内置教学样例、本地部署与账户说明入口。<br><br>
+<a href="docs/assets/ui-help-guide.png"><img src="docs/assets/ui-help-guide.png" alt="帮助页面：四步完成从材料到最终报告的引导与内置样例入口" width="100%"></a>
+</td>
 </tr>
 </table>
-
-<details>
-<summary>查看更多页面截图：四步使用指南（帮助页）</summary>
-<br>
-<a href="docs/assets/ui-help-guide.png"><img src="docs/assets/ui-help-guide.png" alt="帮助页面：四步完成从材料到最终报告的引导与内置样例入口" width="100%"></a>
-</details>
 
 [打开开始页](https://articheck-workbench.edgeone.dev/#home) · [打开在线审查](https://articheck-workbench.edgeone.dev/#api-review) · [浏览个人归档](https://articheck-workbench.edgeone.dev/#personal-archive) · [浏览公共案例](https://articheck-workbench.edgeone.dev/#public-cases) · [打开知识图谱](https://articheck-workbench.edgeone.dev/#knowledge-graph) · [完整界面图集](docs/UI_GALLERY.md)
 
