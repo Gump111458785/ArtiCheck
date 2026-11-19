@@ -1,289 +1,178 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="2044" viewBox="0 0 1400 2044" text-rendering="geometricPrecision">
-<rect x="0" y="0" width="1400" height="2044" fill="#FFFFFF"/>
-<rect x="36" y="28" width="1328" height="86" rx="12" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1.5"/>
-<text x="700.0" y="64" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="700" fill="#0F172A" text-anchor="middle">ArtiCheck 系统架构 · 核心工作台与双轨引擎</text>
-<text x="700.0" y="92" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#475569" text-anchor="middle">一体化论文审查、代码复现、科学贡献知识图谱与循证问答平台（articheck-workbench.edgeone.dev · python -m articheck）</text>
-<rect x="36" y="130" width="654.0" height="92" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
-<rect x="54" y="144" width="116" height="24" rx="12" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="112.0" y="160.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">网页工作台入口</text>
-<text x="182" y="161" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#0F172A" text-anchor="start">Hosted Workbench（EdgeOne Pages + Flask Serverless）</text>
-<text x="54" y="187" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">开始页轮播 · 在线审查（材料/过程/报告）· 个人归档 · 公共案例 · 知识图谱 &amp; 图谱问答</text>
-<text x="54" y="207" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748B" text-anchor="start">本地项目引导 · 个人中心（调用量统计 / 管理员受邀账户管理）</text>
-<rect x="710.0" y="130" width="654.0" height="92" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
-<rect x="728.0" y="144" width="126" height="24" rx="12" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1"/>
-<text x="791.0" y="160.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#0F172A" text-anchor="middle">本地运行时与 CLI</text>
-<text x="866.0" y="161" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#0F172A" text-anchor="start">Local Runtime &amp; CLI（python -m articheck）</text>
-<text x="728.0" y="187" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">demo（受控缺陷基准） · run（task.json 探针核查） · workbench（127.0.0.1:8787）</text>
-<text x="728.0" y="207" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#64748B" text-anchor="start">review_api · reproduction CLI（完整实验矩阵、镜像构建与独立重算）</text>
-<line x1="700.0" y1="222" x2="700.0" y2="253" stroke="#64748B" stroke-width="2"/>
-<polygon points="700.0,260 694.5,251 705.5,251" fill="#64748B"/>
-<rect x="615.5" y="229.0" width="169" height="22" rx="11" fill="#FFFFFF" stroke="#DCE4EE" stroke-width="1"/>
-<text x="700.0" y="244.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#475569" text-anchor="middle">受邀鉴权 / 本地任务入口</text>
-<rect x="36" y="260" width="1328" height="276" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
-<rect x="56" y="278" width="55" height="24" rx="12" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="83.5" y="294.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">第一层</text>
-<text x="123" y="295.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start">编排与确定性控制层 · Orchestration &amp; Guardrails</text>
-<text x="1344" y="295" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="end">混合调度策略与不可绕过的程序护栏</text>
-<rect x="56" y="314" width="1288" height="102" rx="10" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1.2"/>
-<text x="72" y="339" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#1D4ED8" text-anchor="start">Planning &amp; Loop Orchestrator · 规划决策与分步执行</text>
-<rect x="72.0" y="352" width="305.0" height="50" rx="8" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="84.0" y="373" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="start">Fixed / Model Planner</text>
-<text x="84.0" y="392" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">短时主张排序 · check / stop</text>
-<rect x="389.0" y="352" width="305.0" height="50" rx="8" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="401.0" y="373" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="start">冻结实验计划排程</text>
-<text x="401.0" y="392" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">按阶段命令与种子矩阵调度</text>
-<rect x="706.0" y="352" width="305.0" height="50" rx="8" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="718.0" y="373" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="start">GraphAssistant 分步引擎</text>
-<text x="718.0" y="392" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">38s 单步期限 · Redis 断点续跑</text>
-<rect x="1023.0" y="352" width="305.0" height="50" rx="8" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="1035.0" y="373" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="start">预算与状态控制</text>
-<text x="1035.0" y="392" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">暂停 / 继续 / 终止 · 预算上限保护</text>
-<rect x="56" y="428" width="1288" height="94" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
-<text x="72" y="452" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#0F172A" text-anchor="start">Deterministic Python Guardrails · 确定性程序校验与隔离规则</text>
-<rect x="72.0" y="463" width="410.6666666666667" height="22" rx="6" fill="#F1F5F9" stroke="#DCE4EE" stroke-width="1"/>
-<text x="82.0" y="478" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#0F172A" text-anchor="start">SHA256 材料与计划指纹 · 防版本混用与漂移</text>
-<rect x="494.6666666666667" y="463" width="410.6666666666667" height="22" rx="6" fill="#F1F5F9" stroke="#DCE4EE" stroke-width="1"/>
-<text x="504.6666666666667" y="478" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#0F172A" text-anchor="start">受邀鉴权与账号隔离 · authorize() + _owner_hash</text>
-<rect x="917.3333333333334" y="463" width="410.6666666666667" height="22" rx="6" fill="#F1F5F9" stroke="#DCE4EE" stroke-width="1"/>
-<text x="927.3333333333334" y="478" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#0F172A" text-anchor="start">空白归一化出处核验 · compact_whitespace 逐页比对</text>
-<rect x="72.0" y="489" width="410.6666666666667" height="22" rx="6" fill="#F1F5F9" stroke="#DCE4EE" stroke-width="1"/>
-<text x="82.0" y="504" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#0F172A" text-anchor="start">提示注入隔离标签 · &lt;untrusted_data&gt; 数据/指令分离</text>
-<rect x="494.6666666666667" y="489" width="410.6666666666667" height="22" rx="6" fill="#F1F5F9" stroke="#DCE4EE" stroke-width="1"/>
-<text x="504.6666666666667" y="504" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#0F172A" text-anchor="start">防死循环与超时重试 · 连续无效/重复调用熔断</text>
-<rect x="917.3333333333334" y="489" width="410.6666666666667" height="22" rx="6" fill="#F1F5F9" stroke="#DCE4EE" stroke-width="1"/>
-<text x="927.3333333333334" y="504" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#0F172A" text-anchor="start">覆盖缺口与诚实保留 · 缺失依据保留待核查，不编造通过</text>
-<line x1="700.0" y1="536" x2="700.0" y2="565" stroke="#64748B" stroke-width="2"/>
-<polygon points="700.0,572 694.5,563 705.5,563" fill="#64748B"/>
-<rect x="615.5" y="542.0" width="169" height="22" rx="11" fill="#FFFFFF" stroke="#DCE4EE" stroke-width="1"/>
-<text x="700.0" y="557.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#475569" text-anchor="middle">上下文切片与六角色任务派发</text>
-<rect x="36" y="572" width="1328" height="334" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
-<rect x="56" y="590" width="55" height="24" rx="12" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="83.5" y="606.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">第二层</text>
-<text x="123" y="607.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start">核心角色与专业代理 · Six-Role Pipeline &amp; Graph QA Agent</text>
-<text x="1344" y="607" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="end">短时核查、完整实验与图谱问答协同职责</text>
-<rect x="56.0" y="628" width="418.6666666666667" height="124" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.4"/>
-<rect x="56.0" y="628" width="418.6666666666667" height="46" rx="10" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
-<rect x="57.0" y="664" width="416.6666666666667" height="10" fill="#EFF6FF"/>
-<line x1="56.0" y1="674" x2="474.6666666666667" y2="674" stroke="#BFDBFE" stroke-width="1"/>
-<text x="69.0" y="648" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.2" font-weight="700" fill="#1D4ED8" text-anchor="start">LiteratureReader · 文献读取</text>
-<text x="69.0" y="665" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">paper_text.py · hosted_review.py</text>
-<text x="70.0" y="694" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 提取论文标题、摘要与图表指标</text>
-<text x="70.0" y="715" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 绑定 PDF 页码、节次与原文引文</text>
-<text x="70.0" y="736" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 只作文献证据，不替代代码实测</text>
-<rect x="490.6666666666667" y="628" width="418.6666666666667" height="124" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.4"/>
-<rect x="490.6666666666667" y="628" width="418.6666666666667" height="46" rx="10" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
-<rect x="491.6666666666667" y="664" width="416.6666666666667" height="10" fill="#EFF6FF"/>
-<line x1="490.6666666666667" y1="674" x2="909.3333333333334" y2="674" stroke="#BFDBFE" stroke-width="1"/>
-<text x="503.6666666666667" y="648" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.2" font-weight="700" fill="#1D4ED8" text-anchor="start">CodeInspector · 代码检查</text>
-<text x="503.6666666666667" y="665" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">hosted_github.py · engine.py</text>
-<text x="504.6666666666667" y="694" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 单卷 ZIP 校验与 GitHub 固定 commit 拉取</text>
-<text x="504.6666666666667" y="715" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 推理第三方依赖、构建核心源码片段</text>
-<text x="504.6666666666667" y="736" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 审阅前与执行后双阶段源码完整性审计</text>
-<rect x="925.3333333333334" y="628" width="418.6666666666667" height="124" rx="10" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
-<rect x="925.3333333333334" y="628" width="418.6666666666667" height="46" rx="10" fill="#F5F3FF" stroke="#DDD6FE" stroke-width="1"/>
-<rect x="926.3333333333334" y="664" width="416.6666666666667" height="10" fill="#F5F3FF"/>
-<line x1="925.3333333333334" y1="674" x2="1344.0" y2="674" stroke="#DDD6FE" stroke-width="1"/>
-<text x="938.3333333333334" y="648" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.2" font-weight="700" fill="#6D28D9" text-anchor="start">Planner · 规划编排</text>
-<text x="938.3333333333334" y="665" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">planner.py · kg_assistant.py</text>
-<text x="939.3333333333334" y="694" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 短时核查：依据预算决定 check / stop</text>
-<text x="939.3333333333334" y="715" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 完整实验：冻结多阶段命令与指标匹配规则</text>
-<text x="939.3333333333334" y="736" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 图谱问答：白名单工具调用决策循环</text>
-<rect x="56.0" y="766" width="418.6666666666667" height="124" rx="10" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.4"/>
-<rect x="56.0" y="766" width="418.6666666666667" height="46" rx="10" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
-<rect x="57.0" y="802" width="416.6666666666667" height="10" fill="#F0FDFA"/>
-<line x1="56.0" y1="812" x2="474.6666666666667" y2="812" stroke="#99F6E4" stroke-width="1"/>
-<text x="69.0" y="786" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.2" font-weight="700" fill="#0F766E" text-anchor="start">ExperimentRunner · 隔离执行</text>
-<text x="69.0" y="803" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">sandbox.py · hosted_sandbox.py</text>
-<text x="70.0" y="832" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 禁网容器执行（E2B CPU / Docker / GPU）</text>
-<text x="70.0" y="853" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 按仓库哈希与命令行参数缓存命中结果</text>
-<text x="70.0" y="874" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 捕获逐阶段 stdout、退出码与资源消耗</text>
-<rect x="490.6666666666667" y="766" width="418.6666666666667" height="124" rx="10" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.4"/>
-<rect x="490.6666666666667" y="766" width="418.6666666666667" height="46" rx="10" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
-<rect x="491.6666666666667" y="802" width="416.6666666666667" height="10" fill="#F0FDFA"/>
-<line x1="490.6666666666667" y1="812" x2="909.3333333333334" y2="812" stroke="#99F6E4" stroke-width="1"/>
-<text x="503.6666666666667" y="786" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.2" font-weight="700" fill="#0F766E" text-anchor="start">CrossAuditor · 交叉核查</text>
-<text x="503.6666666666667" y="803" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">hosted_audit.py · roles.py</text>
-<text x="504.6666666666667" y="832" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 核查证据真实性并撤回依据不足的问题建议</text>
-<text x="504.6666666666667" y="853" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 独立重算指标与 ±1% 印刷精度容差判定</text>
-<text x="504.6666666666667" y="874" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 校验数据划分互斥性、基线预算与配置冻结</text>
-<rect x="925.3333333333334" y="766" width="418.6666666666667" height="124" rx="10" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
-<rect x="925.3333333333334" y="766" width="418.6666666666667" height="46" rx="10" fill="#F5F3FF" stroke="#DDD6FE" stroke-width="1"/>
-<rect x="926.3333333333334" y="802" width="416.6666666666667" height="10" fill="#F5F3FF"/>
-<line x1="925.3333333333334" y1="812" x2="1344.0" y2="812" stroke="#DDD6FE" stroke-width="1"/>
-<text x="938.3333333333334" y="786" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.2" font-weight="700" fill="#6D28D9" text-anchor="start">Reporter &amp; GraphAssistant · 报告与问答</text>
-<text x="938.3333333333334" y="803" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">report-verdict.mjs · kg_assistant.py</text>
-<text x="939.3333333333334" y="832" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 自我审查：输出修改/优化/待确认清单与重叠对比</text>
-<text x="939.3333333333334" y="853" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 复现他人：输出复现程度、创新点与四层验收</text>
-<text x="939.3333333333334" y="874" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="400" fill="#475569" text-anchor="start">• 图谱问答：6 工具只读查询并强制校验原文出处</text>
-<line x1="700.0" y1="906" x2="700.0" y2="935" stroke="#64748B" stroke-width="2"/>
-<polygon points="700.0,942 694.5,933 705.5,933" fill="#64748B"/>
-<rect x="610.0" y="912.0" width="180" height="22" rx="11" fill="#FFFFFF" stroke="#DCE4EE" stroke-width="1"/>
-<text x="700.0" y="927.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#475569" text-anchor="middle">工具调用与知识图谱子系统支撑</text>
-<rect x="36" y="942" width="1328" height="388" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
-<rect x="56" y="960" width="55" height="24" rx="12" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="83.5" y="976.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">第三层</text>
-<text x="123" y="977.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start">能力工具与知识图谱子系统 · Capabilities &amp; KG Subsystem</text>
-<text x="1344" y="977" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="end">在线审查、沙箱执行路由与只读知识图谱引擎</text>
-<rect x="56.0" y="998" width="635.0" height="152" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
-<rect x="56.0" y="998" width="635.0" height="46" rx="10" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1"/>
-<rect x="57.0" y="1034" width="633.0" height="10" fill="#F1F5F9"/>
-<line x1="56.0" y1="1044" x2="691.0" y2="1044" stroke="#CBD5E1" stroke-width="1"/>
-<text x="70.0" y="1018" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F172A" text-anchor="start">Tool Registry · 统一只读与解析工具集</text>
-<text x="70.0" y="1035" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">review_api.py · kg_assistant.py</text>
-<text x="70.0" y="1066" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">PDF &amp; 代码工具：</text>
-<text x="192.0" y="1066" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">pypdf 隔离页提取 · PDF.js 6.4 浏览器解析 · ZIP / GitHub 源码快照</text>
-<text x="70.0" y="1090" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">公开检索工具：</text>
-<text x="192.0" y="1090" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">OpenAlex / arXiv / Crossref 书目检索与开放原文 PDF 获取</text>
-<text x="70.0" y="1114" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">图谱问答 6 工具：</text>
-<text x="192.0" y="1114" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">graph_search · get_paper · get_neighbors</text>
-<text x="192.0" y="1131" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">search_paper_text · read_paper_page · answer</text>
-<rect x="709.0" y="998" width="635.0" height="152" rx="10" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.4"/>
-<rect x="709.0" y="998" width="635.0" height="46" rx="10" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
-<rect x="710.0" y="1034" width="633.0" height="10" fill="#F0FDFA"/>
-<line x1="709.0" y1="1044" x2="1344.0" y2="1044" stroke="#99F6E4" stroke-width="1"/>
-<text x="723.0" y="1018" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0F766E" text-anchor="start">Verification &amp; Metrics Engine · 核查与指标比对</text>
-<text x="723.0" y="1035" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">hosted_review.py · reproduction/metrics.py</text>
-<text x="723.0" y="1066" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">逐字引文校验：</text>
-<text x="845.0" y="1066" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">compact_whitespace 忽略 PDF 换行空白，校验页码与逐字原句</text>
-<text x="723.0" y="1090" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">容差与独立重算：</text>
-<text x="845.0" y="1090" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">服务端限制容差 ≤ 报告值 1%，独立重算宏 F1 / 准确率等指标</text>
-<text x="723.0" y="1114" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">四层科学验收：</text>
-<text x="845.0" y="1114" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">按 run · environment_rebuilt · training · conclusion 分层判定</text>
-<rect x="56.0" y="1164" width="635.0" height="152" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.4"/>
-<rect x="56.0" y="1164" width="635.0" height="46" rx="10" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
-<rect x="57.0" y="1200" width="633.0" height="10" fill="#EFF6FF"/>
-<line x1="56.0" y1="1210" x2="691.0" y2="1210" stroke="#BFDBFE" stroke-width="1"/>
-<text x="70.0" y="1184" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#1D4ED8" text-anchor="start">Execution Router · CPU / GPU 隔离执行路由</text>
-<text x="70.0" y="1201" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">hosted_gpu.py · gpu_worker.py · hosted_sandbox.py</text>
-<text x="70.0" y="1232" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">CPU E2B 沙箱：</text>
-<text x="192.0" y="1232" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">常规 Python 阶段在隔离 E2B 实例运行，自动补齐纯 Python 依赖并清理</text>
-<text x="70.0" y="1256" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">自有 GPU 节点路由：</text>
-<text x="192.0" y="1256" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">AST 识别 torch / CUDA 阶段自动派发至自有 RTX 4090 Worker</text>
-<text x="70.0" y="1280" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">命名空间与禁网保护：</text>
-<text x="192.0" y="1280" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">bwrap 无特权命名空间 + 禁网执行，拦截 caffe 等不可编译框架</text>
-<rect x="709.0" y="1164" width="635.0" height="152" rx="10" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
-<rect x="709.0" y="1164" width="635.0" height="46" rx="10" fill="#F5F3FF" stroke="#DDD6FE" stroke-width="1"/>
-<rect x="710.0" y="1200" width="633.0" height="10" fill="#F5F3FF"/>
-<line x1="709.0" y1="1210" x2="1344.0" y2="1210" stroke="#DDD6FE" stroke-width="1"/>
-<text x="723.0" y="1184" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#6D28D9" text-anchor="start">Knowledge Graph Subsystem · 科学贡献知识图谱</text>
-<text x="723.0" y="1201" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">kg_service.py · kg_literature.py · kg_methods.py</text>
-<text x="723.0" y="1232" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">论文入图与文献扩展：</text>
-<text x="845.0" y="1232" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">ingest_project / 标题·DOI / 上传 PDF 入图，OpenAlex 扩展引文</text>
-<text x="723.0" y="1256" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">贡献提取与关系构建：</text>
-<text x="845.0" y="1256" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">提取主贡献与细分贡献节点、支持手动「建立联系」与同图重叠对比</text>
-<text x="723.0" y="1280" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.8" font-weight="600" fill="#0F172A" text-anchor="start">一键复现与循证问答：</text>
-<text x="845.0" y="1280" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#475569" text-anchor="start">自动匹配仓库发起「论文+代码 / 仅论文」复现；第 4 页签只读问答</text>
-<line x1="700.0" y1="1330" x2="700.0" y2="1357" stroke="#64748B" stroke-width="2"/>
-<polygon points="700.0,1364 694.5,1355 705.5,1355" fill="#64748B"/>
-<rect x="604.5" y="1335.0" width="191" height="22" rx="11" fill="#FFFFFF" stroke="#DCE4EE" stroke-width="1"/>
-<text x="700.0" y="1350.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="500" fill="#475569" text-anchor="middle">状态落盘、分片传输与基础设施层</text>
-<rect x="36" y="1364" width="1328" height="114" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
-<rect x="56" y="1378" width="55" height="24" rx="12" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="83.5" y="1394.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">第四层</text>
-<text x="123" y="1395.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start">存储与状态层 · Storage &amp; Persistence</text>
-<text x="1344" y="1395" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="end">客户端存储 + 云端 Redis 隔离键空间</text>
-<rect x="56.0" y="1412" width="311.5" height="54" rx="8" fill="#FFFFFF" stroke="#DCE4EE" stroke-width="1.2"/>
-<text x="68.0" y="1432" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="start">Browser IndexedDB</text>
-<text x="68.0" y="1448" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">articheck-projects 本地归档与 PDF/ZIP</text>
-<text x="68.0" y="1462" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">含问答断点 ask_id 恢复</text>
-<rect x="381.5" y="1412" width="311.5" height="54" rx="8" fill="#FFFFFF" stroke="#DCE4EE" stroke-width="1.2"/>
-<text x="393.5" y="1432" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="start">HostedStore (Upstash Redis)</text>
-<text x="393.5" y="1448" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">在线审查报告 · 并发锁 · 共享案例</text>
-<text x="393.5" y="1462" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">articheck:online:* (7天 TTL)</text>
-<rect x="707.0" y="1412" width="311.5" height="54" rx="8" fill="#FFFFFF" stroke="#DCE4EE" stroke-width="1.2"/>
-<text x="719.0" y="1432" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="start">KG &amp; Ask Redis Store</text>
-<text x="719.0" y="1448" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">图谱状态（30天）· 问答会话与页缓存</text>
-<text x="719.0" y="1462" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">articheck:kg:ask:* (7天 TTL)</text>
-<rect x="1032.5" y="1412" width="311.5" height="54" rx="8" fill="#FFFFFF" stroke="#DCE4EE" stroke-width="1.2"/>
-<text x="1044.5" y="1432" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="start">Chunked Material &amp; Local Runs</text>
-<text x="1044.5" y="1448" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">2 MB 分片上传 + SHA256 校验（≤100MB）</text>
-<text x="1044.5" y="1462" font-family="SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">本地 runs/ 与 roles/trace.jsonl</text>
-<rect x="36" y="1492" width="1328" height="104" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
-<rect x="56" y="1506" width="55" height="24" rx="12" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="83.5" y="1522.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">第五层</text>
-<text x="123" y="1523.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start">运行环境与部署 · Execution &amp; Deployment</text>
-<text x="1344" y="1523" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="end">云函数托管 · CPU 容器 · 自有 GPU 节点</text>
-<rect x="56.0" y="1540" width="418.6666666666667" height="44" rx="8" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.2"/>
-<text x="68.0" y="1559" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="start">EdgeOne Pages &amp; Cloud Functions</text>
-<text x="68.0" y="1576" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">esbuild 打包静态页 + Flask /v1/* Serverless 路由（build_edgeone.py）</text>
-<rect x="490.6666666666667" y="1540" width="418.6666666666667" height="44" rx="8" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.2"/>
-<text x="502.6666666666667" y="1559" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="start">E2B Sandbox &amp; Local Docker</text>
-<text x="502.6666666666667" y="1576" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">禁网、只读挂载、非 root 隔离容器执行实验阶段与探针</text>
-<rect x="925.3333333333334" y="1540" width="418.6666666666667" height="44" rx="8" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.2"/>
-<text x="937.3333333333334" y="1559" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="start">Owned RTX 4090 GPU Worker</text>
-<text x="937.3333333333334" y="1576" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">Redis 队列拉取 · bubblewrap (bwrap) 命名空间 + 只读 CUDA 运行时</text>
-<rect x="36" y="1610" width="1328" height="122" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
-<rect x="56" y="1624" width="55" height="24" rx="12" fill="#FEF3C7" stroke="#FDE68A" stroke-width="1"/>
-<text x="83.5" y="1640.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#B45309" text-anchor="middle">第六层</text>
-<text x="123" y="1641.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start">评测与 Planner 后训练 · Evaluation &amp; Post-Training</text>
-<text x="1344" y="1641" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="end">基线回归验证与预算感知规划器训练流水线</text>
-<rect x="56.0" y="1658" width="311.5" height="60" rx="8" fill="#FFFFFF" stroke="#DCE4EE" stroke-width="1.2"/>
-<text x="68.0" y="1678" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">Benchmarks &amp; CI 回归</text>
-<text x="68.0" y="1695" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">受控缺陷集 (F1=1.0) · LIBLINEAR 15 runs</text>
-<text x="68.0" y="1710" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">Python 259 项 / 前端 147 项测试</text>
-<rect x="381.5" y="1658" width="311.5" height="60" rx="8" fill="#FFFFFF" stroke="#DCE4EE" stroke-width="1.2"/>
-<text x="393.5" y="1678" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">Trajectory Export · 轨迹导出</text>
-<text x="393.5" y="1695" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">保留原生 token_ids 与 log-prob</text>
-<text x="393.5" y="1710" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">人工复核过滤导出 SFT / RL 数据</text>
-<rect x="707.0" y="1658" width="311.5" height="60" rx="8" fill="#FFFFFF" stroke="#FCD34D" stroke-width="1.2" stroke-dasharray="5,3"/>
-<text x="719.0" y="1678" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#B45309" text-anchor="start">LoRA SFT · 行为模仿 [待完成]</text>
-<text x="719.0" y="1695" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">scripts/train_sft.py · r=16/α=32 BF16</text>
-<text x="719.0" y="1710" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">Qwen2.5-7B / 1.5B / Qwen3-8B</text>
-<rect x="1032.5" y="1658" width="311.5" height="60" rx="8" fill="#FFFFFF" stroke="#FCD34D" stroke-width="1.2" stroke-dasharray="5,3"/>
-<text x="1044.5" y="1678" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#B45309" text-anchor="start">verl GRPO · 策略优化 [待完成]</text>
-<text x="1044.5" y="1695" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">scripts/train_grpo.sh · 8 轨迹组相对优势</text>
-<text x="1044.5" y="1710" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="10.5" font-weight="400" fill="#64748B" text-anchor="start">vLLM rollout · 质量与预算联合奖励</text>
-<rect x="36" y="1754" width="1328" height="266" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
-<text x="56" y="1784" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start">两条核心业务主线 · End-to-End Workflows</text>
-<text x="1344" y="1784" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#64748B" text-anchor="end">双模式协同覆盖「单篇/代码复现审查」与「跨论文知识图谱循证问答」</text>
-<rect x="56" y="1802" width="1288" height="96" rx="10" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1.2"/>
-<text x="70" y="1825" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#1D4ED8" text-anchor="start">主线 1 · 在线 / 本地论文审查与实验复现流水线</text>
-<rect x="70.0" y="1836" width="231.2" height="48" rx="7" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="80.0" y="1856" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">1. 导入材料与绑定</text>
-<text x="80.0" y="1874" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">PDF / ZIP / GitHub commit</text>
-<line x1="304.2" y1="1860" x2="319.2" y2="1860" stroke="#2563EB" stroke-width="2"/>
-<polygon points="324.2,1860 317.2,1855.5 317.2,1864.5" fill="#2563EB"/>
-<rect x="327.2" y="1836" width="231.2" height="48" rx="7" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="337.2" y="1856" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">2. 选择审查目的</text>
-<text x="337.2" y="1874" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">自我审查 / 复现他人</text>
-<line x1="561.4" y1="1860" x2="576.4" y2="1860" stroke="#2563EB" stroke-width="2"/>
-<polygon points="581.4,1860 574.4,1855.5 574.4,1864.5" fill="#2563EB"/>
-<rect x="584.4" y="1836" width="231.2" height="48" rx="7" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="594.4" y="1856" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">3. 六角色审阅核查</text>
-<text x="594.4" y="1874" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">联合审阅 + 交叉复核</text>
-<line x1="818.5999999999999" y1="1860" x2="833.5999999999999" y2="1860" stroke="#2563EB" stroke-width="2"/>
-<polygon points="838.5999999999999,1860 831.5999999999999,1855.5 831.5999999999999,1864.5" fill="#2563EB"/>
-<rect x="841.5999999999999" y="1836" width="231.2" height="48" rx="7" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="851.5999999999999" y="1856" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">4. 隔离执行与比对</text>
-<text x="851.5999999999999" y="1874" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">E2B CPU / RTX 4090 GPU</text>
-<line x1="1075.8" y1="1860" x2="1090.8" y2="1860" stroke="#2563EB" stroke-width="2"/>
-<polygon points="1095.8,1860 1088.8,1855.5 1088.8,1864.5" fill="#2563EB"/>
-<rect x="1098.8" y="1836" width="231.2" height="48" rx="7" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1"/>
-<text x="1108.8" y="1856" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">5. 最终报告与归档</text>
-<text x="1108.8" y="1874" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">分级建议 / 复现结论 / 共享</text>
-<rect x="56" y="1910" width="1288" height="96" rx="10" fill="#F5F3FF" stroke="#DDD6FE" stroke-width="1.2"/>
-<text x="70" y="1933" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#6D28D9" text-anchor="start">主线 2 · 科学贡献知识图谱构建与循证问答流水线</text>
-<rect x="70.0" y="1944" width="231.2" height="48" rx="7" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1"/>
-<text x="80.0" y="1964" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">1. 论文入图</text>
-<text x="80.0" y="1982" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">报告导入 / arXiv / PDF</text>
-<line x1="304.2" y1="1968" x2="319.2" y2="1968" stroke="#6D28D9" stroke-width="2"/>
-<polygon points="324.2,1968 317.2,1963.5 317.2,1972.5" fill="#6D28D9"/>
-<rect x="327.2" y="1944" width="231.2" height="48" rx="7" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1"/>
-<text x="337.2" y="1964" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">2. 脉络与贡献抽取</text>
-<text x="337.2" y="1982" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">OpenAlex + 主/细分节点</text>
-<line x1="561.4" y1="1968" x2="576.4" y2="1968" stroke="#6D28D9" stroke-width="2"/>
-<polygon points="581.4,1968 574.4,1963.5 574.4,1972.5" fill="#6D28D9"/>
-<rect x="584.4" y="1944" width="231.2" height="48" rx="7" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1"/>
-<text x="594.4" y="1964" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">3. 关系与一键复现</text>
-<text x="594.4" y="1982" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">手动联系 / 自动找仓复现</text>
-<line x1="818.5999999999999" y1="1968" x2="833.5999999999999" y2="1968" stroke="#6D28D9" stroke-width="2"/>
-<polygon points="838.5999999999999,1968 831.5999999999999,1963.5 831.5999999999999,1972.5" fill="#6D28D9"/>
-<rect x="841.5999999999999" y="1944" width="231.2" height="48" rx="7" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1"/>
-<text x="851.5999999999999" y="1964" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">4. 只读图谱问答</text>
-<text x="851.5999999999999" y="1982" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">6 工具循环 + Redis 分步</text>
-<line x1="1075.8" y1="1968" x2="1090.8" y2="1968" stroke="#6D28D9" stroke-width="2"/>
-<polygon points="1095.8,1968 1088.8,1963.5 1088.8,1972.5" fill="#6D28D9"/>
-<rect x="1098.8" y="1944" width="231.2" height="48" rx="7" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1"/>
-<text x="1108.8" y="1964" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0F172A" text-anchor="start">5. 循证答案与跳转</text>
-<text x="1108.8" y="1982" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#475569" text-anchor="start">空白归一化校验 + 页码直跳</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1034" viewBox="0 0 1440 1034">
+<rect width="1440" height="1034" fill="#FFFFFF"/>
+<text x="700.0" y="52.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#0F172A" text-anchor="middle">ArtiCheck 系统架构</text>
+<text x="700.0" y="80.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#64748B" text-anchor="middle">材料审查 · 实验复现 · 科学贡献知识图谱与图谱问答</text>
+<rect x="36.0" y="108.0" width="1328.0" height="104.0" rx="14" fill="#F8FAFC" stroke="#DCE4EE" stroke-width="1.5"/>
+<rect x="36.0" y="108.0" width="112.0" height="104.0" rx="14" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5"/>
+<rect x="134" y="109" width="14" height="102" fill="#F1F5F9"/>
+<line x1="148" y1="108" x2="148" y2="212" stroke="#CBD5E1" stroke-width="1.5"/>
+<text x="92.0" y="158.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155" text-anchor="middle">入口</text>
+<text x="92.0" y="178.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#64748B" text-anchor="middle">Entry</text>
+<rect x="356.0" y="126.0" width="340.0" height="68.0" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="357.0" y="136" width="4" height="48" rx="2" fill="#1D4ED8" opacity="0.85"/>
+<text x="526.0" y="157.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">Web 工作台</text>
+<text x="526.0" y="178.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">articheck-workbench.edgeone.dev</text>
+<rect x="816.0" y="126.0" width="340.0" height="68.0" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+<rect x="817.0" y="136" width="4" height="48" rx="2" fill="#334155" opacity="0.85"/>
+<text x="986.0" y="157.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">CLI / 本地工作台</text>
+<text x="986.0" y="178.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">python -m articheck</text>
+<line x1="756.0" y1="216" x2="756.0" y2="240" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="756.0,248 750.5,239 761.5,239" fill="#94A3B8"/>
+<rect x="36.0" y="252.0" width="1328.0" height="110.0" rx="14" fill="#F8FAFC" stroke="#DCE4EE" stroke-width="1.5"/>
+<rect x="36.0" y="252.0" width="112.0" height="110.0" rx="14" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="134" y="253" width="14" height="108" fill="#EFF6FF"/>
+<line x1="148" y1="252" x2="148" y2="362" stroke="#BFDBFE" stroke-width="1.5"/>
+<text x="92.0" y="305.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#1D4ED8" text-anchor="middle">编排</text>
+<text x="92.0" y="325.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#64748B" text-anchor="middle">Orchestration</text>
+<rect x="188.0" y="270.0" width="346.7" height="74.0" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="189.0" y="280" width="4" height="54" rx="2" fill="#1D4ED8" opacity="0.85"/>
+<text x="361.3" y="304.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">确定性护栏</text>
+<text x="361.3" y="325.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">指纹 · 鉴权 · 出处校验</text>
+<rect x="582.7" y="270.0" width="346.7" height="74.0" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="583.6666666666667" y="280" width="4" height="54" rx="2" fill="#1D4ED8" opacity="0.85"/>
+<text x="756.0" y="304.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">分步执行引擎</text>
+<text x="756.0" y="325.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">暂停 / 继续 · 断点续跑</text>
+<rect x="977.3" y="270.0" width="346.7" height="74.0" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="978.3333333333334" y="280" width="4" height="54" rx="2" fill="#1D4ED8" opacity="0.85"/>
+<text x="1150.7" y="304.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">Planner</text>
+<text x="1150.7" y="325.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">check / stop 决策</text>
+<line x1="756.0" y1="366" x2="756.0" y2="390" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="756.0,398 750.5,389 761.5,389" fill="#94A3B8"/>
+<rect x="36.0" y="402.0" width="1328.0" height="140.0" rx="14" fill="#F8FAFC" stroke="#DCE4EE" stroke-width="1.5"/>
+<rect x="36.0" y="402.0" width="112.0" height="140.0" rx="14" fill="#F5F3FF" stroke="#DDD6FE" stroke-width="1.5"/>
+<rect x="134" y="403" width="14" height="138" fill="#F5F3FF"/>
+<line x1="148" y1="402" x2="148" y2="542" stroke="#DDD6FE" stroke-width="1.5"/>
+<text x="92.0" y="470.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#6D28D9" text-anchor="middle">六角色</text>
+<text x="92.0" y="490.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#64748B" text-anchor="middle">Six Roles</text>
+<rect x="188.0" y="420.0" width="166.0" height="104.0" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="189.0" y="430" width="4" height="84" rx="2" fill="#1D4ED8" opacity="0.85"/>
+<circle cx="271.0" cy="446" r="14" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1.2"/>
+<text x="271.0" y="451.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1D4ED8" text-anchor="middle">1</text>
+<text x="271.0" y="484.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#0F172A" text-anchor="middle">LiteratureReader</text>
+<text x="271.0" y="505.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">文献读取</text>
+<line x1="358.0" y1="472.0" x2="370.0" y2="472.0" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="378.0,472.0 369.0,466.5 369.0,477.5" fill="#94A3B8"/>
+<rect x="382.0" y="420.0" width="166.0" height="104.0" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="383.0" y="430" width="4" height="84" rx="2" fill="#1D4ED8" opacity="0.85"/>
+<circle cx="465.0" cy="446" r="14" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1.2"/>
+<text x="465.0" y="451.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1D4ED8" text-anchor="middle">2</text>
+<text x="465.0" y="484.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#0F172A" text-anchor="middle">CodeInspector</text>
+<text x="465.0" y="505.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">代码检查</text>
+<line x1="552.0" y1="472.0" x2="564.0" y2="472.0" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="572.0,472.0 563.0,466.5 563.0,477.5" fill="#94A3B8"/>
+<rect x="576.0" y="420.0" width="166.0" height="104.0" rx="10" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.5"/>
+<rect x="577.0" y="430" width="4" height="84" rx="2" fill="#6D28D9" opacity="0.85"/>
+<circle cx="659.0" cy="446" r="14" fill="#F5F3FF" stroke="#DDD6FE" stroke-width="1.2"/>
+<text x="659.0" y="451.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#6D28D9" text-anchor="middle">3</text>
+<text x="659.0" y="484.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#0F172A" text-anchor="middle">Planner</text>
+<text x="659.0" y="505.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">规划编排</text>
+<line x1="746.0" y1="472.0" x2="758.0" y2="472.0" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="766.0,472.0 757.0,466.5 757.0,477.5" fill="#94A3B8"/>
+<rect x="770.0" y="420.0" width="166.0" height="104.0" rx="10" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.5"/>
+<rect x="771.0" y="430" width="4" height="84" rx="2" fill="#0F766E" opacity="0.85"/>
+<circle cx="853.0" cy="446" r="14" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.2"/>
+<text x="853.0" y="451.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#0F766E" text-anchor="middle">4</text>
+<text x="853.0" y="484.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#0F172A" text-anchor="middle">ExperimentRunner</text>
+<text x="853.0" y="505.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">隔离执行</text>
+<line x1="940.0" y1="472.0" x2="952.0" y2="472.0" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="960.0,472.0 951.0,466.5 951.0,477.5" fill="#94A3B8"/>
+<rect x="964.0" y="420.0" width="166.0" height="104.0" rx="10" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.5"/>
+<rect x="965.0" y="430" width="4" height="84" rx="2" fill="#0F766E" opacity="0.85"/>
+<circle cx="1047.0" cy="446" r="14" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.2"/>
+<text x="1047.0" y="451.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#0F766E" text-anchor="middle">5</text>
+<text x="1047.0" y="484.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#0F172A" text-anchor="middle">CrossAuditor</text>
+<text x="1047.0" y="505.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">交叉核查</text>
+<line x1="1134.0" y1="472.0" x2="1146.0" y2="472.0" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="1154.0,472.0 1145.0,466.5 1145.0,477.5" fill="#94A3B8"/>
+<rect x="1158.0" y="420.0" width="166.0" height="104.0" rx="10" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.5"/>
+<rect x="1159.0" y="430" width="4" height="84" rx="2" fill="#6D28D9" opacity="0.85"/>
+<circle cx="1241.0" cy="446" r="14" fill="#F5F3FF" stroke="#DDD6FE" stroke-width="1.2"/>
+<text x="1241.0" y="451.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#6D28D9" text-anchor="middle">6</text>
+<text x="1241.0" y="484.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" font-weight="700" fill="#0F172A" text-anchor="middle">Reporter</text>
+<text x="1241.0" y="505.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">报告生成</text>
+<line x1="756.0" y1="546" x2="756.0" y2="570" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="756.0,578 750.5,569 761.5,569" fill="#94A3B8"/>
+<rect x="36.0" y="582.0" width="1328.0" height="112.0" rx="14" fill="#F8FAFC" stroke="#DCE4EE" stroke-width="1.5"/>
+<rect x="36.0" y="582.0" width="112.0" height="112.0" rx="14" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1.5"/>
+<rect x="134" y="583" width="14" height="110" fill="#F0FDFA"/>
+<line x1="148" y1="582" x2="148" y2="694" stroke="#99F6E4" stroke-width="1.5"/>
+<text x="92.0" y="636.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0F766E" text-anchor="middle">能力</text>
+<text x="92.0" y="656.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#64748B" text-anchor="middle">Capabilities</text>
+<rect x="188.0" y="600.0" width="257.0" height="76.0" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+<rect x="189.0" y="610" width="4" height="56" rx="2" fill="#334155" opacity="0.85"/>
+<text x="316.5" y="635.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">工具集</text>
+<text x="316.5" y="656.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">PDF · 代码 · 文献检索</text>
+<rect x="481.0" y="600.0" width="257.0" height="76.0" rx="10" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.5"/>
+<rect x="482.0" y="610" width="4" height="56" rx="2" fill="#0F766E" opacity="0.85"/>
+<text x="609.5" y="635.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">核查引擎</text>
+<text x="609.5" y="656.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">逐字引文 · 指标重算</text>
+<rect x="774.0" y="600.0" width="257.0" height="76.0" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="775.0" y="610" width="4" height="56" rx="2" fill="#1D4ED8" opacity="0.85"/>
+<text x="902.5" y="635.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">执行路由</text>
+<text x="902.5" y="656.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">CPU / GPU 自动分派</text>
+<rect x="1067.0" y="600.0" width="257.0" height="76.0" rx="10" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.5"/>
+<rect x="1068.0" y="610" width="4" height="56" rx="2" fill="#6D28D9" opacity="0.85"/>
+<text x="1195.5" y="635.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">知识图谱 + 图谱问答</text>
+<text x="1195.5" y="656.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">贡献图谱 · 循证回答</text>
+<line x1="756.0" y1="698" x2="756.0" y2="722" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="756.0,730 750.5,721 761.5,721" fill="#94A3B8"/>
+<rect x="36.0" y="734.0" width="1328.0" height="112.0" rx="14" fill="#F8FAFC" stroke="#DCE4EE" stroke-width="1.5"/>
+<rect x="36.0" y="734.0" width="112.0" height="112.0" rx="14" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5"/>
+<rect x="134" y="735" width="14" height="110" fill="#F1F5F9"/>
+<line x1="148" y1="734" x2="148" y2="846" stroke="#CBD5E1" stroke-width="1.5"/>
+<text x="92.0" y="788.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155" text-anchor="middle">运行与存储</text>
+<text x="92.0" y="808.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#64748B" text-anchor="middle">Runtime &amp; Storage</text>
+<rect x="188.0" y="752.0" width="204.8" height="76.0" rx="10" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.5"/>
+<rect x="189.0" y="762" width="4" height="56" rx="2" fill="#1D4ED8" opacity="0.85"/>
+<text x="290.4" y="787.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">EdgeOne 云函数</text>
+<text x="290.4" y="808.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">静态页 + /v1 API</text>
+<rect x="420.8" y="752.0" width="204.8" height="76.0" rx="10" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.5"/>
+<rect x="421.8" y="762" width="4" height="56" rx="2" fill="#0F766E" opacity="0.85"/>
+<text x="523.2" y="787.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">E2B 沙箱</text>
+<text x="523.2" y="808.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">禁网 CPU 执行</text>
+<rect x="653.6" y="752.0" width="204.8" height="76.0" rx="10" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.5"/>
+<rect x="654.6" y="762" width="4" height="56" rx="2" fill="#0F766E" opacity="0.85"/>
+<text x="756.0" y="787.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">RTX 4090 Worker</text>
+<text x="756.0" y="808.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">自有 GPU · bwrap</text>
+<rect x="886.4" y="752.0" width="204.8" height="76.0" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+<rect x="887.4000000000001" y="762" width="4" height="56" rx="2" fill="#334155" opacity="0.85"/>
+<text x="988.8" y="787.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">Upstash Redis</text>
+<text x="988.8" y="808.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">审查 · 图谱 · 问答</text>
+<rect x="1119.2" y="752.0" width="204.8" height="76.0" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+<rect x="1120.2" y="762" width="4" height="56" rx="2" fill="#334155" opacity="0.85"/>
+<text x="1221.6" y="787.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">IndexedDB</text>
+<text x="1221.6" y="808.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">浏览器本地归档</text>
+<line x1="756.0" y1="850" x2="756.0" y2="874" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="756.0,882 750.5,873 761.5,873" fill="#94A3B8"/>
+<rect x="36.0" y="886.0" width="1328.0" height="112.0" rx="14" fill="#F8FAFC" stroke="#DCE4EE" stroke-width="1.5"/>
+<rect x="36.0" y="886.0" width="112.0" height="112.0" rx="14" fill="#FFFBEB" stroke="#FCD34D" stroke-width="1.5"/>
+<rect x="134" y="887" width="14" height="110" fill="#FFFBEB"/>
+<line x1="148" y1="886" x2="148" y2="998" stroke="#FCD34D" stroke-width="1.5"/>
+<text x="92.0" y="940.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#B45309" text-anchor="middle">评测训练</text>
+<text x="92.0" y="960.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#64748B" text-anchor="middle">Eval &amp; Training</text>
+<rect x="188.0" y="904.0" width="248.0" height="76.0" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+<rect x="189.0" y="914" width="4" height="56" rx="2" fill="#334155" opacity="0.85"/>
+<text x="312.0" y="939.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">基准与 CI</text>
+<text x="312.0" y="960.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">受控缺陷集 · LIBLINEAR</text>
+<line x1="440.0" y1="942.0" x2="472.0" y2="942.0" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="480.0,942.0 471.0,936.5 471.0,947.5" fill="#94A3B8"/>
+<rect x="484.0" y="904.0" width="248.0" height="76.0" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+<rect x="485.0" y="914" width="4" height="56" rx="2" fill="#334155" opacity="0.85"/>
+<text x="608.0" y="939.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">轨迹导出</text>
+<text x="608.0" y="960.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">SFT / RL 数据</text>
+<line x1="736.0" y1="942.0" x2="768.0" y2="942.0" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="776.0,942.0 767.0,936.5 767.0,947.5" fill="#94A3B8"/>
+<rect x="780.0" y="904.0" width="248.0" height="76.0" rx="10" fill="#FFFFFF" stroke="#FCD34D" stroke-width="1.5" stroke-dasharray="6,4"/>
+<rect x="781.0" y="914" width="4" height="56" rx="2" fill="#B45309" opacity="0.85"/>
+<text x="904.0" y="939.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">LoRA SFT</text>
+<text x="904.0" y="960.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">[待完成]</text>
+<line x1="1032.0" y1="942.0" x2="1064.0" y2="942.0" stroke="#94A3B8" stroke-width="2"/>
+<polygon points="1072.0,942.0 1063.0,936.5 1063.0,947.5" fill="#94A3B8"/>
+<rect x="1076.0" y="904.0" width="248.0" height="76.0" rx="10" fill="#FFFFFF" stroke="#FCD34D" stroke-width="1.5" stroke-dasharray="6,4"/>
+<rect x="1077.0" y="914" width="4" height="56" rx="2" fill="#B45309" opacity="0.85"/>
+<text x="1200.0" y="939.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A" text-anchor="middle">verl GRPO</text>
+<text x="1200.0" y="960.0" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">[待完成]</text>
+<polyline points="1324.0,942 1388,942 1388,307 1334.0,307" fill="none" stroke="#D97706" stroke-width="2" stroke-dasharray="6,5"/>
+<polygon points="1326.0,307 1335.0,301.5 1335.0,312.5" fill="#D97706"/>
+<text x="1402" y="624.5" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#B45309" text-anchor="middle" transform="rotate(90 1402 624.5)">训练后的 Planner 回接编排层</text>
 </svg>
