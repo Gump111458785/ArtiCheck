@@ -241,13 +241,26 @@ flowchart LR
 
 ![ArtiCheck 系统架构：在线工作台与云端服务、科学贡献知识图谱与图谱问答、本地核查与完整实验、核心 Agent 及 Planner 后训练](docs/assets/architecture.svg)
 
-[打开 SVG 原图](docs/assets/architecture.svg)。图中区分在线工作台与云端服务（含 `Review Agent`、`Audit Agent`、`Contribution`、`GraphAssistant`、E2B CPU 与自有 RTX 4090 GPU 隔离执行）以及本地核查与完整实验引擎；仅本地短时核查的 `Planner Agent` 对接轨迹导出、LoRA SFT 与 verl GRPO 后训练，GPU 训练及集成评测 [待完成]。本地完整实验需要明确配置并确认执行入口；在线流程由模型生成计划并冻结后执行，不使用后训练权重。
+[打开 SVG 原图](docs/assets/architecture.svg)。系统按运行域拆分为**在线工作台与云端服务**（EdgeOne Pages + Flask `/v1`）和**本地核查引擎与完整实验**（CLI / Local Workbench）两条路径：
 
-短时核查通过 asyncio DAG 并发读取文献主张、检查代码，再由 Planner 决定继续检查或停止；默认使用固定 Planner。完整实验按冻结计划执行，执行器为各阶段记录负责角色，并将事件写入 `roles.jsonl`。界面按角色读取实际事件，不补造角色活动。[执行中心的数据与模块对应](docs/EXECUTION_CENTER.md)。
+- **在线审查、云端执行与知识图谱**：材料经确定性解析（PDF 布局文字/原页图、代码 ZIP / GitHub 固定提交与 `SHA256` 指纹）进入 `Review Agent` 联合审阅与 `Audit Agent` 保守交叉复核；冻结执行计划（`plan_sha256`）按需路由至 **E2B CPU 沙箱**（独立实例、允许配置公开依赖源并自动补齐纯 Python 依赖）或 **自有 RTX 4090 GPU Worker**（Redis 私有队列拉取、`bwrap` 命名空间与禁网执行），实测日志与指标汇入四段最终报告。最终报告可**报告入图**进入科学贡献知识图谱（OpenAlex 2–3 级扩展、`Contribution` 抽取、`GraphAssistant` 只读问答与 `compact_whitespace` 出处校验），图谱节点亦可通过**一键复现**回流在线审查。状态分存于浏览器 IndexedDB、Upstash Redis（审查/问答 7 天、图谱 30 天、公共案例与 GPU 队列）及 15 分钟自动回收的临时签名直传通道；**在线流程不使用后训练权重**。
+- **本地核查、完整实验与 Planner 后训练**：短时主张核查通过 asyncio DAG 并发读取确认主张与仓库目录，再由 `Planner Agent` 循环决定 `check(cᵢ)` 或 `stop`（默认使用 `FixedPlanner`）；完整实验执行器（`reproduction/engine.py`）按冻结计划（`policy: frozen_plan`）在禁网 Docker 中运行阶段与种子矩阵并输出四层验收与 `roles.jsonl`（界面按角色读取实际事件，不补造活动，见 [执行中心的数据与模块对应](docs/EXECUTION_CENTER.md)）。本地 `runs/ · trace.jsonl` 经受控缺陷基准与轨迹过滤后仅对接本地短时核查的 `Planner Agent` 后训练（LoRA SFT / verl GRPO 与 GPU 集成评测 [待完成]）。
+
+### 6.1 核心 Agent 与确定性边界
+
+图中蓝框标注的 5 个核心 Agent 负责模型审阅、贡献抽取、工具调用或策略决策，其余解析、指纹校验、容差限幅、沙箱隔离与出处核验均由确定性程序执行：
+
+| Agent | 所在运行域 | 核心职责 | 对应实现 | 确定性约束 |
+|---|---|---|---|---|
+| **Review Agent** 联合审阅 | 在线工作台 | 读取 PDF 布局文字/原页图与源码节选，结合 arXiv/DOI 公开检索产出建议、图表指标与冻结执行计划 | [`hosted_review.py`](articheck/hosted_review.py) | 材料与计划 `SHA256` 校验；仅审阅建计划，不直接执行代码 |
+| **Audit Agent** 交叉复核 | 在线工作台 | 针对初审疑点与图表指标独立复核，撤回证据不足的指控并补读遗漏列 | [`hosted_audit.py`](articheck/hosted_audit.py) | 服务端限定指标容差 `≤ 报告值 1%`；失败时保留初审结果 |
+| **Contribution** 贡献抽取 | 在线知识图谱 | 读取方法正文与 Related Work 线索，抽取带逐字出处的主/细分贡献并构建跨论文方法关系 | [`kg_methods.py`](articheck/kg_methods.py) | 引用对照原文片段逐字核验；单账号并发限流（1 重型 / 全局 3） |
+| **GraphAssistant** 图谱问答 | 在线知识图谱 | 基于 6 个只读工具分步推进查询循环，综合个人图谱与已保存原文生成带引文回答 | [`kg_assistant.py`](articheck/kg_assistant.py) | 只读不写图谱；`compact_whitespace` 程序校验出处与页码；`<untrusted_data>` 隔离与防死循环熔断 |
+| **Planner Agent** 规划决策 | 本地短时核查 | 观测主张清单、已查集合与剩余工具预算，循环决策 `check(cᵢ)` 或 `stop` | [`planner.py`](articheck/planner.py) | 默认 `FixedPlanner`；仅此代理支持接入 `ModelPlanner` 及第 9 节后训练（[待完成]） |
 
 <a id="roles"></a>
 
-### 6.1 六角色：职责与分工
+### 6.2 本地六角色：职责与分工
 
 六角色用于两条执行路径：**短时主张核查**（[`articheck/roles.py`](articheck/roles.py) + [`pipeline.py`](articheck/pipeline.py)）和**完整实验复现**（[`articheck/reproduction/roles.py`](articheck/reproduction/roles.py) 为 [`engine.py`](articheck/reproduction/engine.py) 的各阶段标注角色）。各角色的输入、动作和输出随任务记录。
 
