@@ -239,9 +239,9 @@ flowchart LR
 
 ## 6. 系统架构
 
-![ArtiCheck 系统架构：入口、编排、六角色、能力、运行与存储、评测训练](docs/assets/architecture.svg)
+![ArtiCheck 系统架构：核心核查、评测与数据、Planner 训练](docs/assets/architecture.svg)
 
-[打开 SVG 原图](docs/assets/architecture.svg)。自上而下分为入口、编排、六角色、能力、运行与存储、评测训练六层；虚线表示训练后的 Planner 回接编排层，LoRA SFT / GRPO 训练与集成评测 [待完成]。本地完整实验需要明确配置并确认执行入口；在线 CPU 流程由模型生成计划并冻结后执行。
+[打开 SVG 原图](docs/assets/architecture.svg)。训练层覆盖轨迹导出、LoRA SFT 与 GRPO Planner；GPU 训练及集成评测 [待完成]。本地完整实验需要明确配置并确认执行入口；在线 CPU 流程由模型生成计划并冻结后执行。
 
 短时核查通过 asyncio DAG 并发读取文献主张、检查代码，再由 Planner 决定继续检查或停止；默认使用固定 Planner。完整实验按冻结计划执行，执行器为各阶段记录负责角色，并将事件写入 `roles.jsonl`。界面按角色读取实际事件，不补造角色活动。[执行中心的数据与模块对应](docs/EXECUTION_CENTER.md)。
 
