@@ -239,9 +239,9 @@ flowchart LR
 
 ## 6. 系统架构
 
-![ArtiCheck 系统架构：核心核查、评测与数据、Planner 训练](docs/assets/architecture.svg)
+![ArtiCheck 系统架构：在线工作台与云端服务、科学贡献知识图谱与图谱问答、本地核查与完整实验、核心 Agent 及 Planner 后训练](docs/assets/architecture.svg)
 
-[打开 SVG 原图](docs/assets/architecture.svg)。训练层覆盖轨迹导出、LoRA SFT 与 GRPO Planner；GPU 训练及集成评测 [待完成]。本地完整实验需要明确配置并确认执行入口；在线 CPU 流程由模型生成计划并冻结后执行。
+[打开 SVG 原图](docs/assets/architecture.svg)。图中区分在线工作台与云端服务（含 `Review Agent`、`Audit Agent`、`Contribution`、`GraphAssistant`、E2B CPU 与自有 RTX 4090 GPU 隔离执行）以及本地核查与完整实验引擎；仅本地短时核查的 `Planner Agent` 对接轨迹导出、LoRA SFT 与 verl GRPO 后训练，GPU 训练及集成评测 [待完成]。本地完整实验需要明确配置并确认执行入口；在线流程由模型生成计划并冻结后执行，不使用后训练权重。
 
 短时核查通过 asyncio DAG 并发读取文献主张、检查代码，再由 Planner 决定继续检查或停止；默认使用固定 Planner。完整实验按冻结计划执行，执行器为各阶段记录负责角色，并将事件写入 `roles.jsonl`。界面按角色读取实际事件，不补造角色活动。[执行中心的数据与模块对应](docs/EXECUTION_CENTER.md)。
 
