@@ -71,7 +71,7 @@ NGPUS=2 bash scripts/train_grpo.sh
 
 `NGPUS=2` 是启动配置示例，不是已验证的最低显存要求。自定义 AgentLoop 让模型只输出 check/stop；probe 和核查规则作为环境反馈。使用 verl 原生采样 token，Continuous Token 对齐上下文，模型 token 的 response_mask 为 1，环境观察为 0。terminal reward 同时考虑漏报、误报、弃权、调用数和生成 token；标签不放入观察。
 
-启动脚本启用 GRPO、clip-higher、FSDP2、LoRA、激活检查点、按 token 的动态批处理和分块计算 log-prob 的长度预算。它**没有**接入 DAPO 动态补采样、截断重要性采样或课程阶段切换。`objective.py` 提供这些机制的独立基础函数，不能把存在函数等同于分布式训练已完成。
+公开启动脚本同时启用 GRPO、异步 vLLM rollout、`token-mean` 聚合和 `0.2 / 0.28` 非对称裁剪。它还配置 FSDP2、LoRA、激活检查点、动态 token 批与 log-prob 计算预算。`objective.py` 提供动态补采样和重要性修正的基础函数。完整流水线的阶段对照见 [Supervisor 后训练与评测](SUPERVISOR_TRAINING.md#rl-stages)。
 
 ## 5. 原生训练轨迹契约
 

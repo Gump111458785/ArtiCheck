@@ -15,7 +15,7 @@ from .schema import Task, dump
 
 
 def main():
-    parser = argparse.ArgumentParser(description="ArtiCheck artifact pre-review MVP")
+    parser = argparse.ArgumentParser(description="ArtiCheck: evidence-grounded artifact evaluation and paper reproduction")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="Review a manifest and local artifact snapshot")
     run.add_argument("--task", type=Path, required=True)

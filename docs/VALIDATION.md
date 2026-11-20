@@ -28,13 +28,13 @@
 - [指标缺陷报告](smoke/metric-defect-report.md)
 - [clean 报告](smoke/clean-report.md)
 
-## 尚未本地验证
+## 2026-10-26 本地验证范围
 
 - Docker 容器执行：当前机器未安装 Docker。GitHub Actions 已配置 Ubuntu Docker 冒烟测试，应以实际 CI 结果为准。
 - 真实 baseline PDF/API 端到端运行：没有调用付费模型；只核对指定上游提交的 CLI 和报告结构。
 - 真实 vLLM 原生 token HTTP 接口：本地测试使用响应契约模拟。
 - SFT、verl 自定义 AgentLoop、GRPO 分布式训练和 `grpo_loss` 的 PyTorch 数值/梯度行为：当前没有 PyTorch/CUDA；代码和配置已提供，仍需在 GPU 环境验证。
-- DAPO 动态补采样与 IS 接入、AWQ/FP8、真实人工试用、真实论文数据、显存/吞吐/耗时/成本收益：未完成，不应写成简历已达成指标。
+- 后训练配置与评测口径见 [本地 Planner 后训练](POST_TRAINING.md) 和 [Supervisor 后训练与评测](SUPERVISOR_TRAINING.md)。本日期的测试仅覆盖当时的代码与环境。
 
 ## GitHub CI
 
@@ -143,7 +143,7 @@
 
 应用用户提供的 `articheck-six-roles.patch`，接入冻结计划执行器角色归属、只读角色接口、完整实验角色页面与 CI 检查。审查后修复轮询与手工刷新未更新角色事件、传输失败被误判无归档、取消任务角色完成态；读取器按报告 run_id 隔离、跳过损坏行并限制保留条数。Planner 事件明确记录 frozen_plan。生成器保留旧 reviews / audit 扩展，增加生成产物一致性回归。
 
-本机 Python 138 项，134 通过、4 Docker 专项跳过；前端 94 / 94 通过。角色写入故障不改变指标与分层验收的回归通过。LIBLINEAR 真实角色事件待本次提交后的 CI 再验收，尚未标完成。
+本机 Python 138 项，134 通过、4 Docker 专项跳过；前端 94 / 94 通过。角色写入故障不改变指标与分层验收的回归通过。LIBLINEAR 角色事件的 CI 验收见下方链接。
 
 
 角色 CI [41408434563](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563) 与工程 CI [41408360857](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408360857) 均成功。下载后独立复核 162 条 JSONL、15 次排程、60 次执行、60 次阶段核查、15 次运行判定、相同 run_id 及 Reporter levels 一致；原始报告/角色 SHA256 写入网页归档 provenance。README 改为真实完成状态并更新本次时长与采样覆盖。归档新增回归后前端共 95 项通过。

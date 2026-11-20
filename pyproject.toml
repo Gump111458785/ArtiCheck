@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "articheck"
 version = "0.1.0"
-description = "Evidence-grounded artifact pre-review and planner training scaffold"
+description = "Multi-agent artifact evaluation and paper reproduction with sandboxed experiments and auditable evidence"
 requires-python = ">=3.10"
 dependencies = ["pypdf==6.10.0"]
 

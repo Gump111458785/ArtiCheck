@@ -1,4 +1,4 @@
-// Review-Aware Scientific Contribution Graph (学术贡献知识图谱) — see docs/功能1.md
+// Review-Aware Scientific Contribution Graph (学术贡献知识图谱).
 import {encoded,sessionCapability} from './online-core.mjs';
 
 const NODE_TYPES={Paper:['论文','#2258b4'],Contribution:['主贡献','#7754ba'],Detail:['细分贡献','#157b78']};

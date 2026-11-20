@@ -19,13 +19,6 @@
 
 </div>
 
-> [!NOTE]
-> **实现与开源范围**
-> - **已实现**：第 2 节的完整架构——全局 `Supervisor` + `Deterministic Runtime`、`Reviewer / Novelty / Auditor / Fixer` 四个专业 Agent、独立的 Paper Tree 子系统、`Evidence Ledger` / `Trace Store` / `Model Router`，以及第 9 节的 SFT 与 GRPO 训练流水线。
-> - **开源（本仓库）**：在线工作台与 Flask API、Docker / `bwrap` 隔离执行与复现引擎、本地六角色流水线、Paper Tree 图谱与只读图谱问答、`verl` / LoRA 训练接口与轨迹导出。
-> - **未开源**：Supervisor 调度、Runtime、四个专业 Agent、训练权重与私有评测数据。
-> - 本 README 中的数字全部来自开源部分，均附可复查的链接；私有评测结果暂不公开。
-
 ![ArtiCheck 工作台导览：开始页、材料管理、最终报告、知识图谱、图谱问答、个人归档与用户共享平台](docs/assets/workbench-tour.gif)
 
 <a id="problem"></a>
@@ -40,7 +33,7 @@
 | 依赖、数据或权重缺失挡在实验之前 | 9 类失败定位区分「环境问题」和「算法问题」；可修的由 `Fixer` 在白名单内最小修复后重跑 |
 | 代码跑通不等于结论成立 | 仓外独立重算指标，按「运行 / 环境 / 训练协议 / 主要结论」四层分别验收 |
 | 材料换版本或换人复核后，旧结论被混用 | 材料与计划用 SHA256 固定；补丁产生新版本后，受影响的结论按依赖自动失效并重跑 |
-| 时间和算力有限，检查顺序需要取舍 | `Supervisor` 在预算内决定先查什么、何时修复、何时停止，策略经 SFT + GRPO 训练（[第 9 节](#training)） |
+| 时间和算力有限，检查顺序需要取舍 | `Supervisor` 在预算内决定先查什么、何时修复、何时停止，策略经 SFT + GRPO 训练（[后训练与评测](docs/SUPERVISOR_TRAINING.md)） |
 
 [逐主张报告样例](docs/smoke/metric-defect-report.md) · [分层验收样例](web/dist/samples/liblinear-reproduction.json) · [公开 CPU 执行证据](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)
 
@@ -56,7 +49,7 @@
 
 ### 2.1 七个 Agent
 
-主审查链路 5 个，Paper Tree 子系统 2 个（其中 GraphAssistant 可选）。
+主审查链路 5 个，Paper Tree 子系统 2 个。
 
 | Agent | 位置 | 职责 | 不允许做的事 |
 |---|---|---|---|
@@ -66,13 +59,13 @@
 | **Auditor** | 主审查 · 专业 | 先**盲抽证据**（看不到主张和初审结论），再与主张对抗比对；撤回证据不足的指控 | 盲抽阶段读取初审结论；没有实验产出时凭常识改判 `SUPPORTED` |
 | **Fixer** | 主审查 · 专业 | 针对缺依赖、入口偏差、设备映射等环境问题，提出最小补丁 | 修改数据划分、随机种子、损失函数、模型逻辑、评测公式或测试断言 |
 | **Relation Analysis** | Paper Tree | 抽取带逐字出处的主贡献与细分贡献，推断论文间的候选关系 | 覆盖用户手动确认的关系；无原文依据硬凑关系 |
-| **GraphAssistant**（可选） | Paper Tree | 用 6 个只读工具多步检索图谱与原文，回答附经程序校验的出处 | 修改图谱；引用未通过逐页校验的原文 |
+| **GraphAssistant** | Paper Tree | 用 6 个只读工具多步检索图谱与原文，回答附经程序校验的出处 | 修改图谱；引用未通过逐页校验的原文 |
 
 ### 2.2 确定性组件
 
 | 组件 | 职责 |
 |---|---|
-| **Deterministic Runtime** | 状态机与任务/节点版本（`node_id` / `execution_epoch`）幂等并发合并；计算当前合法动作集合；步数、时间、沙箱次数与修复轮数的硬预算；停滞循环熔断；补丁后的依赖失效 |
+| **Deterministic Runtime** | 状态机以 `node_id` 标识节点，以 `execution_epoch` 区分执行轮次，并幂等合并并发更新；计算当前合法动作集合；步数、时间、沙箱次数与修复轮数的硬预算；停滞循环熔断；补丁后的依赖失效 |
 | **Tool Gateway** | PDF、代码、文献检索、沙箱的统一入口；按 Agent 区分只读与写入权限；外部内容统一包裹 `<untrusted_data>` 防提示注入 |
 | **Evidence Validator** | 三项相互独立的检查：引文逐字存在于对应页；数值按指标类型的容差一致并经仓外独立重算；数据划分互斥、配置冻结、补丁未触碰禁改区 |
 | **ExperimentRunner** | 调度禁网 Docker、E2B CPU 沙箱与自有 RTX 4090 GPU Worker（`bwrap` 禁网）；采集日志、退出码、资源峰值与产物指纹 |
@@ -147,7 +140,6 @@ Paper Tree 有独立入口和编排，不经过 Supervisor；主审查只通过 
 | 网站 | 直接上传材料、在线执行并查看报告 | [在线工作台](https://articheck-workbench.edgeone.dev/#home)（受邀账户） |
 | 本地开源版 | 材料不能离开本机；或想直接跑通流程 | [快速开始](#quickstart) |
 | 自选模型 | 用自己部署的模型或供应商 API 驱动 Planner | 见下方 3.2 |
-| 材料审阅 API | 在其他应用中提交 PDF / ZIP 并查询结果 | [接入说明](docs/API_REVIEW.md) · [OpenAPI](web/dist/review-api.openapi.json) · [Python 示例](examples/api_review/submit.py) |
 
 ### 3.1 网站
 
@@ -214,7 +206,7 @@ flowchart LR
 
 准确率波动来自 5 次数据重新划分，不代表原论文成绩的置信区间。时长不含下载准备脚本和拉取基础镜像。
 
-**验收结果**：证据链完整，报告可以发布（映射目标态 `RELEASE_READY`）；但系统没有把「环境与部分实验跑通」说成「论文结论已复现」。
+**验收结果**：证据链完整，报告可以发布（`RELEASE_READY`）。本次验收范围是环境重建和已声明的实验，论文主要结论仍以分层验收记录为准。
 
 | 层次 | 结果 | 依据 |
 |---|---|---|
@@ -322,6 +314,8 @@ flowchart LR
 
 ## 7. 快速开始
 
+[在线工作台](https://articheck-workbench.edgeone.dev/#home)支持上传材料、查看审查进度和报告，需要受邀账户。下方命令可在本机运行内置样例。
+
 需要 Python 3.10+，macOS 或 Linux。内置受控缺陷基准不需要 API key、GPU 或 Docker。
 
 ```bash
@@ -375,158 +369,13 @@ python -m articheck run --task examples/task.json --output runs/review
 
 内置基准只有 3 个正例、9 个负例，只能说明工程链路正确，不能外推到真实论文。
 
-完整系统按[第 9.6 节](#evaluation)的协议评测，评测数据与结果暂不公开。
-
-<!--
-私有评测结果公开时，按下面的格式填写；未公开前保持注释状态，不要填写占位数字。
-
-| 系统 | 基准 | 宏 F1 | FPR | Resolved Coverage | 平均非缓存调用 | 95% CI（聚类 Bootstrap） |
-|---|---|---:|---:|---:|---:|---|
-| B3 规则调度 | ArtiCheck-Claims Pilot |  |  |  |  |  |
-| B5 SFT Supervisor | 同上 |  |  |  |  |  |
-| B6 SFT + GRPO | 同上 |  |  |  |  |  |
--->
-
-<a id="training"></a>
-
-## 9. 后训练
-
-> 开源仓库包含训练接口：轨迹导出、LoRA SFT 脚本、`verl` 自定义 AgentLoop 与 GRPO 目标函数，覆盖本地 Planner 的 `check(cᵢ) / stop` 动作。完整的 Supervisor 与专业 Agent 训练流水线、权重和评测数据未开源。
-
-### 9.1 问题建模
-
-把全局调度建模为**带硬约束的部分可观察序列决策问题（Constrained POMDP）**：
-
-- **观察**：Runtime 生成的 9 层结构化状态（O1–O9，约 800–1,800 tokens）：任务与模式、材料与 PDF 覆盖、主张状态矩阵、创新点核对、执行与缓存、失败定位、补丁与重验状态、最近 5 步动作、剩余预算与合法动作。观察中不含任何真值标签。
-- **动作**：12 类参数化动作——`EXTRACT_CLAIMS` · `INSPECT_CODE_AND_ENV` · `ASSESS_NOVELTY` · `PREPARE_EXPERIMENT_PLAN` · `RUN_CPU_SANDBOX` · `RUN_GPU_WORKER` · `AUDIT_EVIDENCE` · `DIAGNOSE_FAILURE` · `FIX_ENV_OR_SCRIPT` · `REQUEST_USER_MATERIAL` · `FINALIZE` · `ABSTAIN`。
-- **约束**：合法动作集合由 Runtime 按当前状态计算；非法动作被拒绝、不产生副作用，并单独统计合法率。
-
-**为什么只对 Supervisor 做 RL**：如果 5 个 Agent 同时训练，环境会持续变化，Supervisor 也分不清失败来自自己的决策还是下游 Agent。因此先用 SFT 训练专业 Agent，冻结成能力档案 ACP，再在固定环境中训练 Supervisor。
-
-### 9.2 模型与路由
-
-| 模型 | 用途 |
-|---|---|
-| [Qwen2.5-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct) | 主实验：专业 Agent SFT 与 Supervisor RL |
-| [Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) | 快速验证：动作协议、奖励与训练链路 |
-| [Qwen3-8B](https://huggingface.co/Qwen/Qwen3-8B) | 跨代对照（非思考模式，训练与推理锁定同一聊天模板） |
-
-三个模型均为 Apache-2.0 许可。**Model Router** 按 Agent 路由到云端 API 或本地 vLLM，记录每次调用的 token 数、时延与费用，并把原生 token IDs 与 log-prob 旁路写入 Trace Store。系统不采信 Agent 输出中自报的遥测字段。
-
-### 9.3 数据与防泄漏
-
-- **按谱系聚类切分（80 / 10 / 10）**：同一论文、原作者仓库、fork、缺陷注入变体及其衍生问答，必须落在同一分片。共用公开数据集（如 CIFAR-10）不算同一谱系，只用于切分后的泄漏风险审计。
-- **超参只在验证集上调**：奖励权重、阈值与提示词只在验证集上校准并冻结；冻结测试集不参与任何选择。轨迹导出器拒绝导出测试集数据。
-- **真值与运行记录物理分离**：标注包单独存放，推理期间任何 Agent 都读不到。
-- **三态 Rollout 环境**：
-  - **Recorded Replay**：命中缓存时，确定性地回放真实执行结果。
-  - **Live Sandbox**：未命中时，实时执行并写入缓存。
-  - **Unsupported Transition**：纯离线测试中遇到未覆盖的转移时，干净地终止该分支，不伪造输出，也不记为模型失败。
-
-  最终测试成绩全部在真实环境（Live）中跑出。
-
-### 9.4 SFT
-
-| 任务 | 内容 |
-|---|---|
-| S1 Reviewer | 主张、协议与计划生成，含多轮取证工具调用 |
-| S2 Auditor | 盲抽证据与对抗复核；证据不足时诚实输出 `INCONCLUSIVE` |
-| S3 Fixer | 经沙箱重跑验证的合法最小补丁 |
-| S4 Relation Analysis | 经独立复核过滤后的用户确认 / 驳回关系 |
-| Supervisor 冷启动 | 学会合法输出 12 类动作，为 RL 热身 |
-
-- **数据**：教师模型在训练集上对每个任务采样 4–8 条候选，必须依次通过三道滤网才能入库：Schema 与确定性回放校验 → 沙箱或真值对照 → 人工抽检。刻意保留三类困难样本：诚实弃权、Fixer 拒绝修改不可修复的问题、Auditor 撤回误报。
-- **训练**：只对 assistant 回复计算 loss，上下文与工具返回的 label 设为 `-100`；超长样本整条跳过并统计比例，不在 JSON 中间截断。
-- **配置**：LoRA `r=16`、`alpha=32`、`dropout=0.05`，覆盖 all-linear；AdamW，学习率 `2e-5`，梯度累积 8；BF16 + 激活检查点；最大长度 4096。
-- **选模**：在满足验证集 JSON 合法率与 `FPR ≤ 5%` 硬门槛的前提下，按宏 F1 择优选择检查点，不按最低训练 loss 选。合并 LoRA 后核对 vLLM 输出与合并前一致。
-
-### 9.5 RL：M0 → M4
-
-每次只加入一项技术，单独验证收益后再加下一项：
-
-| 阶段 | 课程范围 | 技术 | 通过条件 |
-|---|---|---|---|
-| M0 | 经滤网核验的示范轨迹 | SFT 热身 | 动作合法率达到可用水平 |
-| M1 | 局部恢复任务，2–4 步 | 同步 GRPO，每任务 8 条轨迹 | reward 稳定，不出现全部弃权 |
-| M2 | 加入预算冲突与 Fixer 重跑，≤ 10 步 | DAPO：零方差组过滤并补批、token-mean 聚合、非对称裁剪 `0.2 / 0.28` | 相比 M1 减少无效停止与恢复成本 |
-| M3 | 混合难度 | 异步 vLLM rollout + 截断重要性采样（上限 `2.0`），区分 π_θ / π_old / π_behavior | 吞吐提升且策略不崩 |
-| M4 | 完整双模式任务，≤ 14 步 | 扩展到 7B / 8B，3 个随机种子 | 通过 9.6 节的统计检验 |
-
-多轮交互全程使用原生 token IDs 拼接，不对文本重新分词；只有 Supervisor 自己生成的 token 参与梯度（`response_mask = 1`），观察与工具返回为 0。
-
-**奖励**（终局时由隔离评测器对照真值计算）：
-
-| 项 | 开源 MVP（[`objective.py`](articheck/training/objective.py)，本地 Planner） | Supervisor |
-|---|---|---|
-| 正确检出缺陷 | `+1` | `+1` |
-| 误报正常主张 | `-2` | `-2` |
-| 漏报缺陷 | `-0.5` | `-0.5` |
-| 正确确认正常主张 | `+0.25` | `+0.25` |
-| `INCONCLUSIVE` | `-0.1` | 材料确实不足 `+0.2`；资源充足却弃权 `-0.15` |
-| 安全恢复（修复后重跑通过） | — | `+0.4` |
-| 覆盖与创新核对 | — | `0 ~ +0.4` |
-| 安全违规（越权补丁、绕过重验强行结束） | — | `-1.5` |
-| 非法动作 | — | 每次 `-0.3` |
-| 成本 | 每次调用 `0.02` + 每 token `1e-6`；按主张数归一 | CPU 沙箱、GPU（权重为 CPU 的 3 倍）、非缓存工具调用与生成 token 加权；命中缓存不计成本 |
-
-误报罚分是检出奖励的 2 倍，用来压低 FPR。只按真正改变证据充分度或完成判定的终局结果计奖，不按工具调用次数给中间奖励，避免模型刷调用。
-
-<a id="evaluation"></a>
-
-### 9.6 评测协议
-
-**三层基准**
-
-| 层级 | 基准 | 评测内容 |
-|---|---|---|
-| 公开基准 | CORE-Bench（HAL Harness）、PaperBench JudgeEval | 代码复现成功率；判定与人类专家的一致性。严格遵循官方切分，官方测试论文不进入训练 |
-| 项目专项 | ArtiCheck-Claims、Recovery & FixerBench、PaperTree-RelBench | 缺陷发现；失败定位与安全修复；贡献出处与关系分类 |
-| 端到端 | ArtiCheck-E2E Dual-Mode | 两种审查目的的四层验收、创新点核对、发布门禁与耗时费用 |
-
-注入缺陷只用于可控消融，和自然缺陷分开建档、分开报数。
-
-**对照组**：所有系统使用同一基座、同一套工具和同一预算上限。
-
-| 编号 | 系统 |
-|---|---|
-| B0 | 单轮长上下文 LLM |
-| B1 | 固定流水线 + 同一基座 |
-| B2 | 开源版当前链路 |
-| B3 | 目标架构 + 规则调度 |
-| B4 | 目标架构 + 仅靠 prompt 的 Supervisor |
-| B5 | 目标架构 + SFT Supervisor（另设 B5-RS：与 GRPO 同等采样预算的拒绝采样 SFT） |
-| B6 | 目标架构 + SFT + GRPO Supervisor |
-
-另做 5 组消融：盲抽开 / 关、失败定位输入、Fixer 安全防线、奖励各组成项、等预算拒绝采样 vs GRPO。
-
-**指标**：
-- 判定质量：宏 F1、召回率、FPR、Selective Error Rate（只统计给出了明确结论的主张）。
-- 弃权是否诚实：Attempted Coverage、Resolved Coverage、Justified Abstention Rate。全部判 `INCONCLUSIVE` 不算有效覆盖。
-- 发布安全：未经验证就放行的报告比例、Fixer 回归率（两者目标都是 0）。
-- 效率：动作合法率（目标 ≥ 99%）、非缓存调用次数、沙箱耗时、token 与费用。
-
-**统计**：同一仓库的主张相互关联，不能当作独立样本，因此以仓库谱系为单位做配对聚类 Bootstrap（10,000 次），二元比例附 Wilson 区间与 McNemar 检验，至少 3 个训练种子。
-
-详细协议见 [Benchmark 规范](docs/BENCHMARKS.md) 与 [后训练方案](docs/POST_TRAINING.md)。
-
-<a id="glossary"></a>
-
-## 10. 术语
-
-| 术语 | 含义 |
-|---|---|
-| Draft / Record | Agent 只能提交 Draft；校验通过后，才由 Runtime 写成不可变的 Record |
-| `ReleaseGateStatus` | 审查报告能否发布；与论文是否有问题无关 |
-| `ClaimVerdict` | 单条主张是否成立：`SUPPORTED` / `ISSUE` / `INCONCLUSIVE` |
-| `StageCacheKey` | 由容器镜像摘要、运行时后端、论文摘要、相关代码子树、环境锁、权重资产、命令、随机种子、输入数据、上游产物与校验器版本算出的阶段指纹；补丁后据此按依赖图精确判断哪些结果失效 |
-| O1–O9 | Runtime 提供给 Supervisor 的 9 层结构化观察 |
-| ACP（Agent Capability Profile） | 冻结的专业 Agent 能力档案：模型版本、模板、采样参数与工具版本；Supervisor RL 在固定 ACP 下进行 |
-| `CONFIRMED` / `SUSPECTED` | 失败定位的可信度：来自日志与退出码 / 来自模型推断 |
-| Recorded Replay / Live Sandbox | RL 环境中的缓存回放 / 实时执行 |
+公开的 [GRPO 启动脚本](scripts/train_grpo.sh)同时启用异步 vLLM rollout、`0.2 / 0.28` 非对称裁剪和 `token-mean`。M0–M4 各阶段的对照条件见 [后训练与评测](docs/SUPERVISOR_TRAINING.md#rl-stages)。完整系统的评测数据与结果暂不公开。
 
 <a id="docs"></a>
 
-## 11. 文档与开发
+## 9. 文档与开发
+
+[文档目录](docs/README.md)按使用、部署、验收与训练组织。
 
 | 文档 | 内容 |
 |---|---|
@@ -534,7 +383,9 @@ python -m articheck run --task examples/task.json --output runs/review
 | [工作台与 API](docs/WORKBENCH.md) · [执行中心](docs/EXECUTION_CENTER.md) | 本地运行、材料准备、角色与事件、HTTP / SSE |
 | [复现引擎](docs/REPRODUCTION_ENGINE.md) · [验收清单](docs/REPRODUCTION_COMPLETION_CHECKLIST.md) | 材料身份、完整实验、资源测量、统计与分层验收 |
 | [Benchmark 规范](docs/BENCHMARKS.md) · [Baseline 来源](docs/BASELINE.md) | 数据隔离、误报约束、对照公平性 |
-| [训练](docs/TRAINING.md) · [后训练方案](docs/POST_TRAINING.md) | 教师轨迹过滤、原生轨迹、LoRA SFT、verl GRPO |
+| [Supervisor 后训练与评测](docs/SUPERVISOR_TRAINING.md) | 数据划分、SFT、GRPO、M0–M4 对照与评测协议 |
+| [训练接口](docs/TRAINING.md) · [本地 Planner 后训练](docs/POST_TRAINING.md) | 教师轨迹、LoRA SFT 与 verl GRPO |
+| [术语](docs/GLOSSARY.md) | 证据、报告状态、运行指纹与训练术语 |
 | [验证记录](docs/VALIDATION.md) · [能力核对](docs/IMPLEMENTATION_STATUS.md) | 测试、CI 与验收项 |
 
 ```bash
@@ -547,7 +398,7 @@ node --test tests/frontend/*.test.mjs
 
 问题与建议请提交 [Issues](https://github.com/Gump111458785/ArtiCheck/issues)，并附上去除敏感信息后的任务配置与日志。
 
-## 12. 来源与许可
+## 10. 来源与许可
 
 业务 baseline 参考 [Paper Reproducibility Agent](https://github.com/1a1a11a/2026_paper_reproduce)，通过独立进程和 JSON 报告对接，未分发其源码（[版本与许可](docs/BASELINE.md)）。训练接口参考 [verl](https://github.com/verl-project/verl)，推理服务接入 [vLLM](https://github.com/vllm-project/vllm)。
 

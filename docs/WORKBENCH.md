@@ -13,7 +13,7 @@ python -m articheck.workbench --port 8787 --workspace . --storage runs/workbench
 
 打开 `http://127.0.0.1:8787`。新建任务、执行核查、读取报告和提交人工反馈均通过本地 HTTP API 调用现有 Python 实现。首页从「开始」进入；新建论文评估打开 PDF / 代码导入表单，已有个人项目可续接材料、条件或结果阶段。公开 CPU 案例与内置样例有独立入口，任务操作位于「执行中心」。[开始页与路由说明](HOME_SCREEN.md)。
 
-也可以打开 [私有托管预览](https://articheck-workbench.onatanolf8074.chatgpt.site)。它支持在浏览器准备 PDF、代码目录与主张，也使用 `scripts/build_workbench.py` 从真实教学 fixture 生成的归档证据回放交互。预览不执行外部仓库、不访问本机文件系统，反馈仅保存在该浏览器。导出的回放报告带 `data_source=archived_sample_replay`，不能作为新的真实执行记录。
+正式 [在线工作台](https://articheck-workbench.edgeone.dev/#home)使用受邀账户，支持提交论文和代码、在线审查、隔离执行与归档。内置教学样例可回放已归档证据，导出的回放报告带 `data_source=archived_sample_replay`。本地与在线入口的操作说明见 [在线工作台指南](ONLINE_WORKBENCH.md)。
 
 本地页面可使用 `?mode=demo` 检查回放模式。更新归档样例或契约后执行：
 
@@ -64,7 +64,7 @@ stateDiagram-v2
     running --> cancelled
 ```
 
-HTTP 202 表示已接收，不表示核查完成。接口关闭后重启时，未完成运行恢复为 failed 并记录原因；不将中断的任务标成成功。预算耗尽但已生成报告的运行仍保留报告与 inconclusive 判定，详细原因见 report.stop_reason。
+HTTP 202 表示已接收，不表示核查完成。接口关闭后重启时，尚在执行的任务恢复为 failed 并记录原因；不将中断的任务标成成功。预算耗尽但已生成报告的运行仍保留报告与 inconclusive 判定，详细原因见 report.stop_reason。
 
 ### 证据不可变、反馈可追加
 

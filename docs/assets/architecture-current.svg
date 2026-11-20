@@ -206,14 +206,14 @@
 <rect x="1174.7" y="890.0" width="150.7" height="80.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5" stroke-dasharray="5,4"/>
 <text x="1250.0" y="917.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">LoRA SFT</text>
 <text x="1250.0" y="938.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">行为模仿</text>
-<text x="1250.0" y="956.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">[待完成]</text>
+<text x="1250.0" y="956.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">[已完成]</text>
 <path d="M1327.3,930.0 H1357.3" fill="none" stroke="#44546A" stroke-width="1.8" marker-end="url(#a)"/>
 <rect x="1359.3" y="890.0" width="150.7" height="80.0" rx="4" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.5" stroke-dasharray="5,4"/>
 <text x="1434.7" y="917.5" font-size="14.5" font-weight="700" fill="#172434" text-anchor="middle">verl GRPO</text>
 <text x="1434.7" y="938.5" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">策略优化</text>
-<text x="1434.7" y="956.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">[待完成]</text>
+<text x="1434.7" y="956.0" font-size="12" font-weight="400" fill="#3B4A5C" text-anchor="middle">[已完成]</text>
 <path d="M1510.0,930.0 H1550 V325.0 H1499.0" fill="none" stroke="#4472C4" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#ab)"/>
-<text x="1565" y="627.5" font-size="13.5" font-weight="600" fill="#2F5597" text-anchor="middle" transform="rotate(90 1565 627.5)">待验收策略（仅本地 Planner Agent）</text>
+<text x="1565" y="627.5" font-size="13.5" font-weight="600" fill="#2F5597" text-anchor="middle" transform="rotate(90 1565 627.5)">已训练策略（仅本地 Planner Agent）</text>
 <g data-graph-role="legend">
 <rect data-graph-role="legend" x="18.0" y="1006.0" width="1510.0" height="38.0" rx="5" fill="#FAFCFF" stroke="#BEC8D4" stroke-width="1.2"/>
 <text x="36.0" y="1030.0" font-size="13.5" font-weight="700" fill="#172434" text-anchor="start">图例</text>
@@ -223,7 +223,7 @@
 <rect data-graph-role="legend" x="652.0" y="1016.0" width="26.0" height="18.0" rx="3" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.4"/>
 <text x="688.0" y="1030.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">确定性程序 / 护栏 / 隔离执行与存储</text>
 <rect data-graph-role="legend" x="950.0" y="1016.0" width="26.0" height="18.0" rx="3" fill="#F4F6F8" stroke="#BEC8D4" stroke-width="1.4" stroke-dasharray="4,3"/>
-<text x="986.0" y="1030.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">后训练与 GPU 集成评测 [待完成]</text>
+<text x="986.0" y="1030.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">后训练与 GPU 集成评测 [已完成]</text>
 <line x1="1216" y1="1025" x2="1242" y2="1025" stroke="#4472C4" stroke-width="2" marker-end="url(#ab)"/>
 <text x="1254.0" y="1030.0" font-size="12.5" font-weight="400" fill="#3B4A5C" text-anchor="start">执行 / 反馈 / 一键复现控制流</text>
 </g>

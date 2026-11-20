@@ -90,7 +90,7 @@ else:
 | `POST /v1/reviews` | 接收 PDF / ZIP 并创建异步审阅任务，返回 202 |
 | `GET /v1/reviews/{id}` | queued / running / completed / failed / cancelled 与阶段 |
 | `GET /v1/reviews/{id}/report` | 完成后的静态报告；未就绪返回 409 |
-| `POST /v1/reviews/{id}/cancel` | 取消未完成审阅，迟到响应不覆盖终态 |
+| `POST /v1/reviews/{id}/cancel` | 取消仍在进行的审阅，迟到响应不覆盖终态 |
 
 POST 需要 `Content-Type: application/json`、`X-ArtiCheck-Client: review-api`。创建请求：
 
