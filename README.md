@@ -111,14 +111,15 @@ python -m articheck run --task examples/task.json --output runs/provider-api \
 
 使用 **LIBLINEAR（JMLR 2008）作者代码和公开 news20 数据**，完成 CPU 环境重建、数据准备、训练、预测和独立指标重算。三种方法设置各运行五个划分种子，共记录 **15 次运行与 60 个阶段证据**。
 
+> **开源实测与框架映射说明**：本案例全部实测指标与 `162` 条角色事件均由本仓库**开源可运行底座（`reproduction/engine.py` + 六角色流水线）**在 GitHub Actions 实际跑通并归档（底层 JSON/JSONL 证据保持原貌）；同时按第 6 节重构后的目标架构语义对照展示**编排、缓存闭包、独立校对与门禁解耦**全链路。
+
 ```mermaid
 flowchart LR
-    A["作者代码与公开数据<br>固定提交 / 下载来源"] --> B["材料校验<br>SHA256 / 来源清单"]
-    B --> C["禁网 Docker 构建<br>镜像与安装证据"]
-    C --> D["训练<br>配置 / 种子 / 模型产物"]
-    D --> E["预测<br>逐样本输出"]
-    E --> F["独立重算<br>指标与原始计数"]
-    F --> G["统计验收<br>多次运行 / 分层报告"]
+    A["材料与方案冻结<br>作者代码 · news20 · 5 种子矩阵<br>(目标态：Reviewer / TaskNode DAG)"] --> B["确定性边界校验<br>SHA256 指纹 · 镜像与阶段闭包<br>(目标态：Deterministic Runtime / StageCacheKey)"]
+    B --> C["隔离执行与采集<br>禁网 Docker · 15 runs / 60 阶段<br>(目标态：Tool Gateway + ExperimentRunner)"]
+    C --> D["训练与逐样本预测<br>配置冻结 · 模型与输出产物"]
+    D --> E["库外独立核验<br>指标独立重算 · 控制消融公平性检查<br>(目标态：Evidence Validator + Auditor)"]
+    E --> F["证据账本与解耦裁决<br>报告可信放行 (RELEASE_READY)<br>分层保留 training=false / conclusion=false"]
 ```
 
 | 实测项目 | 结果 | 证据 |
@@ -133,19 +134,22 @@ flowchart LR
 
 准确率的波动来自本案例的五次数据重新划分，不代表原论文成绩的置信区间。时长不含准备脚本下载和基础镜像拉取；GPU 峰值与费用测量 [待完成]。
 
-### 3.1 案例验收
+### 3.1 案例验收（分层科学判定与发布门禁解耦示例）
 
-| 核对项 | 本案例结果 | 判定依据 |
+该案例直观体现了 ArtiCheck 目标架构中的**双层裁决解耦**：由于 15 次运行均具备完整的禁网执行日志、产物指纹与库外独立重算证据，本审查报告满足可信发布条件（目标态对应 `ReleaseGateStatus = RELEASE_READY`）；但系统同时严守证据边界，在科学验收层明确标出历史协议与未覆盖实验为 `false`，不会将“环境与部分实验跑通”包装成“论文全部结论已复现”。
+
+| 验收层次（对应目标态语义） | 本案例结果 | 判定依据 |
 |---|---|---|
-| 执行完成 · `run` | `true` | 15 次运行完成，保留 60 阶段证据 |
-| 环境重建 · `environment_rebuilt` | `true` | 固定基础镜像，记录构建与环境检查 |
-| 独立指标与控制核对 | 预测独立重算、控制配置与公平性核对 | 预测结果独立重算；新增 LR 控制与正则化消融有实际配置与公平性检查 |
-| 论文训练协议 · `training` | `false` | 对齐历史作者代码、原始划分 ID 与训练协议 [待完成]；本次使用现代作者代码与 80/20 seeded split |
-| 论文主要结论 · `conclusion` | `false` | 覆盖 Figure 1、rcv1、Pegasos/SVMperf 及论文调参与计时曲线 [待完成] |
+| 报告可发布门禁 · `ReleaseGateStatus` | 满足可信归档条件（映射 `RELEASE_READY`） | 15 次运行与 60 阶段证据链闭合，指标独立重算且控制核对完成 |
+| 执行完成 · `run` | `true` | 15 次运行完成，保留 60 阶段证据与容器外内存采样 |
+| 环境重建 · `environment_rebuilt` | `true` | 固定基础镜像，记录禁网 Docker 构建与环境检查 |
+| 独立指标与控制核对 · `Evidence Validator` | 预测独立重算、控制配置与公平性核对 | 预测结果库外独立重算；新增 LR 控制与正则化消融有实际配置与公平性检查 |
+| 论文训练协议 · `training` | `false` | 历史作者代码、原始划分 ID 与完整训练协议对齐 [待扩展]；本实测使用现代代码与 80/20 seeded split |
+| 论文主要结论 · `conclusion` | `false` | Figure 1、rcv1、Pegasos/SVMperf 及论文调参与计时曲线尚未纳入本轮 CPU 案例 |
 
 报告按运行、环境、训练协议与主要结论分别记录验收值。新增控制项只用于本案例核对，不替代原论文基线；本案例的证据范围为 news20 CPU 实验。
 
-> **六角色记录**：本次 CI 保留 162 条角色事件，包含 15 次排程、60 个阶段执行、60 次阶段核查及最终分层结论。[查看角色事件](web/dist/samples/liblinear-roles.jsonl) · [打开角色视图](https://articheck-workbench.edgeone.dev/?mode=demo&example=reproduction&case=liblinear&view=roles)
+> **开源底座实测轨迹（六角色事件）**：本次 CI 实际记录了 `162` 条[开源六角色](#roles)事件（15 次排程、60 个阶段执行、60 次阶段核查及最终分层结论），在目标架构中对应持久化存入 `Trace Store` 与 `Evidence Ledger` 的执行审计流。[查看角色事件](web/dist/samples/liblinear-roles.jsonl) · [打开角色视图](https://articheck-workbench.edgeone.dev/?mode=demo&example=reproduction&case=liblinear&view=roles)
 
 [案例来源与完整运行命令](examples/liblinear_case/README.md) · [证据归档](web/dist/samples/liblinear-reproduction.json) · [执行 CI](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)
 
