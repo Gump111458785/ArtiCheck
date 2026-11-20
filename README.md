@@ -15,9 +15,14 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CPU case](https://img.shields.io/badge/LIBLINEAR-15_runs-227755)](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)
 
-[打开在线工作台](https://articheck-workbench.edgeone.dev) · [快速开始](#quickstart) · [查看界面展示](#showcase) · [旗舰复现案例](#case)
+[打开在线工作台](https://articheck-workbench.edgeone.dev) · [快速开始](#quickstart) · [查看界面展示](#showcase) · [总体架构](#architecture) · [后训练体系](#training) · [旗舰复现案例](#case)
 
 </div>
+
+> [!NOTE]
+> **开源底座与目标架构边界说明（Open-Core vs. Architecture & Private Extensions）**
+> - **本仓库公开可运行底座（Open Core）**：提供在线工作台与 Flask API、Docker / `bwrap` 隔离执行与 LIBLINEAR 复现引擎、Paper Tree 科学贡献图谱与只读图谱问答 `GraphAssistant`，以及 `verl` / LoRA SFT / GRPO 训练与轨迹导出 MVP 骨架。
+> - **目标总体架构与私有演进能力**：[第 6 节](#architecture)与[第 9 节](#training)同时完整阐述了重构后的目标多 Agent 编排（全局 `Supervisor` + `Deterministic Runtime` DAG + `Fixer` / `Novelty` / 盲抽 `Auditor` + `Evidence Ledger`）与完整多阶段后训练体系；相关商业化核心调度与私有训练权重未纳入开源代码仓，公开榜单之外的私有实测数值亦不在此提前声称。
 
 ![ArtiCheck 工作台导览：开始页、材料管理、最终报告、知识图谱、图谱问答、个人归档与用户共享平台](docs/assets/workbench-tour.gif)
 
@@ -155,7 +160,7 @@ flowchart LR
 | 可审计执行器 | 不可变材料工作区、PDF / ZIP / 计划指纹、阶段与种子矩阵、断网续传状态同步与产物清理 | [执行引擎](docs/REPRODUCTION_ENGINE.md) · [实现](articheck/reproduction/) |
 | 知识图谱与一键复现 | 接入 OpenAlex 构建论文脉络与贡献节点；选定论文支持自动检索关联 PDF 与 GitHub 源码、一键发起「论文+代码」或「仅论文」复现；「图谱问答」只读查询自己的图谱与已保存原文，回答附程序校验过的出处 | [图谱服务](articheck/kg_service.py) · [前端图谱](web/dist/knowledge-graph.mjs) |
 | 归档与用户共享 | 个人归档支持 7 维条件组合检索；用户共享平台支持发布/撤回已完成复现案例及原始材料，并与系统内置基线档案对照 | [执行与归档中心](web/dist/execution-center.mjs) · [OpenAPI](web/dist/openapi.json) |
-| 训练轨迹契约 | 保留采样器提供的 token IDs、行为 log-prob 与策略版本；外部接受后的教师轨迹可导出 SFT，缺失原生 token 时拒绝 RL 导出 | [轨迹契约与测试范围](docs/TRAINING.md#5-原生训练轨迹契约) · [导出实现](articheck/training/export.py) |
+| 训练轨迹契约 | 由路由器与采样器旁路保留原生 token IDs、行为 log-prob 与策略版本；外部接受后的教师轨迹可导出 SFT，缺失原生 token 时拒绝 RL 导出 | [轨迹契约与测试范围](docs/TRAINING.md#5-原生训练轨迹契约) · [导出实现](articheck/training/export.py) |
 
 <a id="showcase"></a>
 
@@ -241,18 +246,22 @@ flowchart LR
 
 ![ArtiCheck 目标总体架构：统一入口、Supervisor + Deterministic Runtime、四大专业科研 Agent、独立 Paper Tree 子系统、共享证据底座与训练评估体系](docs/assets/architecture.svg)
 
-[打开 SVG 原图](docs/assets/architecture.svg) · [查看当前实现架构图（Current Architecture）](docs/assets/architecture-current.svg)。
+[打开 SVG 原图](docs/assets/architecture.svg) · [查看开源底座实现架构图（Current Open-Core Architecture）](docs/assets/architecture-current.svg)。
 
-上图展示 **ArtiCheck 目标总体架构（Target Architecture）**，将系统重构为**证据驱动、可验证、可训练的多 Agent 科研系统**，并与[当前已实现架构](docs/assets/architecture-current.svg)严格区分现状与演进目标：
+上图展示 **ArtiCheck 目标总体架构（Target Architecture）**，将系统规范化为**证据驱动、可验证、可训练的多 Agent 科研系统**，并与[本仓库已开源底座架构](docs/assets/architecture-current.svg)严格区分公开实现与架构演进边界：
 
-- **主科研审查链路（Supervisor + Deterministic Runtime）**：**Supervisor Agent（LLM）** 负责任务拆解、动态调度与异常重规划，并通过 **Deterministic Runtime（Python）** 执行合法性校验、权限边界、统一状态机、预算熔断与恢复，受控调度四大专业科研 Agent（**Reviewer Agent**、**Novelty Agent**、**Auditor Agent**、**Fixer Agent**），经 **Tool Gateway**、**Evidence Validator** 与 **ExperimentRunner**（CPU / GPU / Docker）完成取证与复现。
-- **Paper Tree 子系统（独立 Workflow）**：保持独立入口与工作流编排，涵盖论文入库（PDF / arXiv / DOI）、OpenAlex 脉络扩展、**Relation Analysis Agent**（贡献抽取与演化关系分析）、人工确认及可选 **GraphAssistant**（只读图谱问答与页码跳转）；不绕经主审查 Supervisor，仅通过数据流共享脉络与证据。
-- **共享证据底座与训练评估闭环**：统一汇聚至 **Evidence Ledger**（不可变证据账本）、**Trace Store**（全链路 Agent 轨迹）、**Task & Material Store** 与 **Model Router**，底层由 EdgeOne / Flask、Redis / Worker、E2B / Docker 与 GPU 节点支撑；离线基于 Benchmark、SFT / LoRA、GRPO / RL 与模型对照验收持续迭代，验收通过后的策略经 **Model Router** 灰度发布。
-- **现状与规划边界**：当前线上与本地仓库已落地能力见[当前实现架构图](docs/assets/architecture-current.svg)及下方 `6.1 / 6.2` 节（含 EdgeOne + Flask `/v1`、`Review / Audit / Contribution / GraphAssistant`、E2B CPU / 自有 RTX 4090 Worker、IndexedDB / Upstash Redis、本地 `FixedPlanner / ModelPlanner` 与 `reproduction/engine.py`）；目标态中的全局 `Supervisor Agent`、统一 `Deterministic Runtime`、`Novelty / Fixer Agent`、`Evidence Ledger`、`Trace Store` 及离线 `SFT / GRPO` 训练集成 **[规划待实现]**。
+- **主科研审查链路（Supervisor + Deterministic Runtime）**：**Supervisor Agent（LLM）** 基于 `12` 类受约束调度动作进行任务拆解、故障定位与动态重规划；**Deterministic Runtime（Python）** 负责能力授权（ACP）、权限边界、预算熔断与恢复，调度 **Reviewer Agent**（内部多轮工具闭环抽取主张与计划）、**Novelty Agent**、**Auditor Agent**（盲抽证据核验）与 **Fixer Agent**（五重纵深隔离修复：`只读 /artifact_ro` + `/work_patch` 白名单 + 库外确定性 `recompute_metric` + AST / Diff 守卫 + 审计阻断），经 **Tool Gateway**、**Evidence Validator**（指标分级容差校验）与 **ExperimentRunner**（CPU / GPU / Docker）完成取证与复现。
+- **核心运行时不变量（Runtime Invariants）**：
+  - **发布门禁与科学裁决解耦**：将 `ReleaseGateStatus`（报告可发布门禁：`RELEASE_READY / BLOCKED`）与 `ClaimVerdict`（单条主张裁决：`SUPPORTED / ISSUE / INCONCLUSIVE`）及分层科学验收 `ScientificAcceptanceLayers` 严格分离——即使论文确实存在缺陷，只要证据完整且独立复核通过，仍允许签发 `RELEASE_READY` 审查报告，同时精准标记 `ISSUE`。
+  - **动态 TaskNode DAG 与无冲突并发合并**：以依赖约束的有向无环子任务图替代刚性单向阶段，并行分支提交采用 `(task_state_version + node_id + node_version + execution_epoch + idempotency_key)` 幂等检验与按节点无冲突归并，精确拒绝过期 epoch / revision 的迟到写入。
+  - **完整复现缓存闭包（`StageCacheKey`）**：将容器镜像 `image_sha256`、运行时后端、论文/代码子树摘要、环境锁、权重与数据资产哈希、执行命令、随机种子、上游产物及校验器版本纳入统一摘要，按依赖图精准失效而非全量作废。
+  - **可信旁路训练遥测（`RouterTelemetryRecord`）**：不采信 Agent 输出载荷中的自报遥测；`native_token_ids`、`behavior_logprobs`、`model_route_id` 与 `policy_version` 均由可信组件 **Model Router / vLLM Async Sampler** 旁路直写 **Trace Store**。
+- **Paper Tree 子系统（独立 Workflow）**：保持独立入口与工作流编排，涵盖论文入库（PDF / arXiv / DOI）、OpenAlex 脉络扩展、**Relation Analysis Agent**（贡献抽取与演化关系分析）、人工确认及可选 **GraphAssistant**（只读图谱问答与页码跳转）；不绕经主审查 Supervisor，仅通过结构化证据桥与主链路协同。
+- **共享证据底座与开源边界**：持久化不可变 **Evidence Ledger**（按证据生命周期持久留存，与 7 天 TTL 短期会话缓存物理分离）、**Trace Store**、**Task & Material Store** 与 **Model Router** 构成数据闭环；其中本仓库公开包含可运行底座（`6.1` 与 `6.2` 节），目标态中的完整企业级调度、自动化修复及大规模训练权重属于私有演进扩展。
 
-### 6.1 当前已实现 Agent 与确定性边界
+### 6.1 公开仓库可运行 Agent 与确定性边界（Open Core）
 
-当前代码库中已实际运行并承担模型审阅、贡献抽取、工具调用或策略决策的核心组件如下（其余解析、指纹校验、容差限幅、沙箱隔离与出处核验均由确定性程序执行）：
+当前公开代码库中已直接可运行并承担模型审阅、贡献抽取、只读问答或本地策略决策的核心组件如下（其余解析、指纹校验、容差限幅、沙箱隔离与出处核验均由确定性程序执行）：
 
 | Agent | 所在运行域 | 核心职责 | 对应实现 | 确定性约束 |
 |---|---|---|---|---|
@@ -349,135 +358,92 @@ python -m articheck run --task examples/task.json --output runs/review
 
 <a id="training"></a>
 
-## 9. Planner 后训练
+## 9. Agent 与后训练技术体系
 
-后训练框架完成了受预算约束的序列决策建模，定义了主张选择与停止策略的优化路径，并将问题召回、误报、覆盖率和取证成本纳入统一评测协议。策略训练与效果评测 [待完成]。
+> 本仓库开源提供了 `verl` 自定义 `AgentLoop`、LoRA SFT 与 GRPO 决策训练的 **MVP 骨架**（覆盖公开仓内 `check(claim_id)` / `stop` 动作空间）；下述完整 **Supervisor 受约束编排 + 专家 Agent SFT + 多阶段 RL（`M1→M4`）+ 选择性覆盖评测体系** 为 ArtiCheck 完整目标后训练架构，其私有扩展模块与完整 GPU 训练权重未随开源仓库发布。
 
-训练方案已将参数更新范围限定为规划模型（Planner）。模型读取主张清单、检查历史、工具反馈和剩余预算，输出 `check(claim_id)` 或 `stop`；实验执行、指标重算和结论核对由固定工具与规则承担。完整实验继续按冻结计划排程。
+后训练框架将科研审查调度建模为**受预算与权限约束的序列决策问题（Constrained POMDP）**：在公开 MVP 中由 `Planner Agent` 决策 `check(claim_id)` / `stop`；在演进后的目标架构中进一步扩展为**先通过 SFT 固化四大专业 Agent（`Reviewer / Novelty / Auditor / Fixer`）能力与工具协议（ACP），冻结专家策略后，再对全局 `Supervisor Agent`（`12` 类结构化调度与重规划动作）实施渐进式 RL 优化**。实验执行、指标重算、缓存闭包与发布门禁始终由确定性 Runtime 与工具网关承担，不交由策略模型自由发挥。
 
-### 9.1 模型选型与训练范围
+### 9.1 模型选型与路由（Model Router）
 
-| 模型 | 定位 | 训练任务 |
+| 模型 | 定位 | 训练与路由职责 |
 |---|---|---|
-| [Qwen2.5-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct) | 主实验模型，与项目 7B 基线保持一致 | LoRA SFT、GRPO 策略优化及本地权重发布 [待完成] |
-| [Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) | 轻量验证模型，用于检验训练流程和规模效应 | 数据、动作协议、奖励与部署成本对照 [待完成] |
-| [Qwen3-8B](https://huggingface.co/Qwen/Qwen3-8B) | 扩展对照模型，用于评估方法迁移能力 | 非思考模式下的模板适配、SFT 与 GRPO 对照 [待完成] |
+| [Qwen2.5-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct) | 主实验与路由骨干 | 专家 Agent LoRA SFT、Supervisor 渐进式 RL 优化与推理权重路由 |
+| [Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) | 轻量验证与对照模型 | 检验动作协议、奖励塑造、规模效应与低成本路由分支 |
+| [Qwen3-8B](https://huggingface.co/Qwen/Qwen3-8B) | 跨家族扩展对照 | 非思考模式模板适配与跨基座方法迁移验证 |
 
-三个候选模型的官方许可均为 Apache-2.0。对照方案已覆盖每个模型的原始指令、SFT 和 GRPO 版本，并规定基础模型 revision、分词器、对话模板与工具权限保持一致，用于区分模型选型收益和后训练收益。
+三个候选模型的官方许可均为 Apache-2.0。**Model Router** 统一管理在线/离线推理分配、能力降级回退、Shadow / Canary 灰度流量切分，并负责将推理引擎产出的原生 token IDs 与 log-prob 旁路写入 `Trace Store`。
 
-### 9.2 数据构建与隔离 [待完成]
+### 9.2 数据谱系隔离与三态 Rollout 环境
 
-数据方案明确了至少 **50 个独立原始仓库、1,000 条人工审核主张**的建设规模，覆盖指标计算、数据划分和基线设置，并纳入正常实验、缺陷注入样本与可取得独立证据的真实问题。样本生产协议已定义教师候选轨迹、执行证据、规则校验与人工复核的筛选流程。数据构建 [待完成]。
+1. **谱系级防泄漏聚类**：数据方案按原始仓库谱系执行 `80/10/10` 训练/验证/测试划分，基于 `repo_origin`、`paper_id` 与引用/派生树构建聚类群组（明确剔除 `shared_dataset_source` 等宽泛公开基准共用边的过度并组，防止样本流失与长尾域塌陷）；`CORE-Bench` 等外部评测严格遵循官方原始划分并独立报告。
+2. **数据与可信遥测契约**：决策输入涵盖九层压缩状态投影（主张账本、依赖图进度、缓存命中闭包、证据缺口、剩余预算等）；监督与奖励标签严禁泄漏进推理上下文；所有用于 off-policy / RL 训练的 `native_token_ids`、`behavior_logprobs`、`model_route_id` 与 `policy_version` 均以 `RouterTelemetryRecord` 形式由 `Model Router / vLLM` 写入，拒绝接收来自 Agent 输出载荷的自报遥测。
+3. **三态混合 RL 交互环境**：为兼顾真实环境覆盖、确定性可复现与采样吞吐，Rollout 环境按状态转移性质分流为三种模式：
+   - **Recorded Replay**：命中 `StageCacheKey` 闭包的确定性重放（秒级零成本返回经校验证据）；
+   - **Live Sandbox**：仅对缺失证据链路触发容器按需执行与 `recompute_metric` 核验；
+   - **Unsupported Transition**：对越权、无效依赖或超预算请求返回结构化拒答与确定性负反馈。
 
-划分协议已按原始仓库谱系设置 **80/10/10** 的训练、验证与测试分组。同源仓库、fork、缺陷版本和相关主张保留在同一组；验证与测试标签仅供评估，不进入模型输入。样本保留材料版本、标签依据、模型版本和审核记录。
+### 9.3 监督微调（SFT）与能力固化
 
-训练数据协议划分了动作监督与任务级奖励两类信息：
+SFT 采用 LoRA 参数化（`W = W₀ + (alpha/r)BA`），优先固化专家 Agent（含 `Novelty` ACP 工具调用、`Reviewer` 多轮检索与 `Fixer` 补丁边界）及 `Supervisor` 合法动作分布；保留完整多轮工具交互上下文，仅对助手动作 token 计算交叉熵，历史观察与工具反馈设为 `-100`。
 
-| 数据层 | 内容与约束 |
-|---|---|
-| 决策输入 | 主张文本与规范、已检查集合、已有判定和剩余预算；成本估计与证据共享关系作为观察扩展 [待完成] |
-| 监督目标 | 合法的 `check(claim_id)` / `stop` 动作；保留证据不足、执行失败与预算变化对应的多轮上下文 |
-| 奖励标签 | 独立审核的逐主张真值，仅进入奖励计算和评测，不暴露给策略模型 |
-| 追溯元数据 | 原始仓库谱系、材料与计划指纹、教师及策略版本、采样参数、接受依据和数据划分 |
-
-轨迹接受协议规定了先核对动作合法性、执行证据与停止依据，再使用独立接受清单筛选。拒绝无证据的自评标签、跨版本混合轨迹和中途截断的动作；同一轨迹导出的多个决策样本保持同组。各缺陷类型、正常样本及难度分布按数据版本记录，训练采样与测试分布分别报告。
-
-决策环境设计纳入了不同取证成本、证据共享关系与受限预算，并设置顺序、随机和成本启发式对照，用于验证检查顺序和停止时机对质量及成本的影响。观察字段扩展与决策环境验收 [待完成]。
-
-### 9.3 监督微调（SFT）[待完成]
-
-SFT 设计采用了 LoRA 参数化，冻结基础权重，仅更新线性层的低秩适配器。对权重矩阵使用 `W = W₀ + (alpha/r)BA`，其中 `W₀` 保持固定，`A/B` 为可训练参数。每个样本保留完整交互历史，仅对最后一条 assistant 动作计算交叉熵；历史消息、工具反馈和 padding 的标签设为 `-100`。聊天模板须满足前缀一致性检查，避免监督标签偏移。多轮拆分样本沿用原仓库分组。
-
-| 配置项 | 脚本初始配置 |
+| 配置项 | 开源脚本初始配置 |
 |---|---|
 | 适配器 | `r=16`、`alpha=32`、`dropout=0.05`，覆盖 `all-linear` |
 | 优化参数 | 学习率 `2e-5`，单卡 batch `1`，梯度累积 `8` |
 | 精度与内存 | BF16、激活检查点，训练时关闭 KV cache |
-| 上下文与轮数 | 最大 `4096` tokens，首轮 `1` epoch；超长样本整条跳过并统计比例，避免截断动作 |
+| 上下文与截断策略 | 最大 `4096` tokens；超长样本整条跳过并统计比例，避免截断末端监督动作 |
 
-[SFT 脚本](scripts/train_sft.py)已设置上述初始配置；模型选择协议已纳入动作合法率、核查质量与成本，训练 loss 用于监测收敛。验证回调、训练种子配置及 GPU 运行 [待完成]。
+公开仓库中的基础实现见 [SFT 训练脚本](scripts/train_sft.py) 与 [训练契约说明](docs/TRAINING.md)。
 
-检查点验收协议已规定在独立验证集执行冻结任务，并记录动作合法率、主张质量、工具调用和 token 消耗。超过长度限制的样本不截断、不静默计入有效训练量，报告总样本数、有效样本数与跳过原因。按训练种子保存配置与检查点，避免用单次最低 loss 代表稳定收益。
+### 9.4 渐进式强化学习（M1→M4：GRPO / DAPO / Truncated Rollout IS）
 
-SFT 脚本已定义 LoRA adapter、分词器和对话模板的保存流程；交付协议已纳入适配器合并、动作一致性与任务质量核对，并衔接 GRPO 初始化和本地推理。合并验收与权重发布 [待完成]。
+RL 阶段基于 SFT 检查点初始化，通过 `verl` 自定义 `AgentLoop` 组织多轮决策—取证—状态收敛交互。采用**组内无价值网络相对优势**（`Aᵢ = (Rᵢ − mean(R)) / (std(R) + ε)`），并按 **M1→M4** 四阶段渐进消融集成各项稳定机制（先验验证单一变量收益后再叠加下一机制）：
 
-### 9.4 强化学习（GRPO）[待完成]
+- **M1（Baseline GRPO）**：固定每任务 `8` 条轨迹、基础 KL 约束与动作合法性基础奖励；
+- **M2（DAPO Clip-Higher + Token-Mean）**：采用 `0.2 / 0.28` 非对称裁剪缓解高概率动作熵塌陷，配合 token-mean 损失聚合消除长短轨迹梯度偏置；
+- **M3（Dynamic Filtering & Replay）**：过滤组内全同奖励的零优势轨迹并动态补采样，维持有效梯度密度；
+- **M4（Truncated Rollout IS）**：针对异步 `vLLM` 采样策略与 `FSDP2` 更新策略之间的 off-policy 偏差引入截断重要性采样（截断上限初值 `2.0`）。
 
-GRPO 方案已采用 SFT 检查点初始化策略，并通过 verl 自定义 AgentLoop 组织“选择主张—取得证据—接收反馈—继续或停止”的交互。采样配置已为每个任务设置 **8 条轨迹**，依据最终核查结果计算组内相对奖励，再更新 LoRA 参数。仅模型生成的 token 参与优化，工具与环境观察使用零损失掩码；采样器记录原生 token IDs、行为 log-prob 和策略版本。
+| 奖励/惩罚结构项 | 开源 MVP 权重参考 | 目标架构扩展约束 |
+|---|---|---|
+| 正确发现缺陷 / 核验支持 | `+1` / `+0.25` | 结合 `ClaimVerdict` 与证据链路完整度校验 |
+| 错误指控正常主张（FP） | `-2` | 非对称强惩罚，抑制幻觉指控与过度审查 |
+| 漏判问题主张 / 证据不足未决 | `-0.5` / `-0.1` | 配合覆盖率与成本感知预算正则，避免消极弃权 |
+| 工具调用与生成开销惩罚 | `0.02/call` + `1e-6/tok`（失败 `-1`） | 越权与违反 `ReleaseGateStatus` 协议触发硬性截断罚分 |
 
-优化协议已对同一任务的轨迹奖励定义组内优势 `Aᵢ = (Rᵢ − mean(R)) / (std(R) + ε)`，将任务级优势用于该轨迹的模型动作 token。更新采用裁剪策略比率，并以 KL 项约束策略偏移；参考策略与 rollout 行为策略分别记录，避免混用两种 log-prob。该过程不训练独立价值网络。算法依据见 [verl GRPO](https://verl.readthedocs.io/en/latest/algo/grpo.html)，运行接口遵循 [项目固定版本](docs/TRAINING.md)。
+公开仓库基础配置见 [GRPO 配置脚本](scripts/train_grpo.sh)（actor 学习率 `1e-6`、FSDP2 + LoRA + 动态 token 批 + 分块 log-prob 长度预算 `16384`）及 [技术方案](docs/POST_TRAINING.md)。
 
-| 奖励项 | 函数默认权重 |
-|---|---:|
-| 正确发现问题 | `+1` |
-| 错误指控正常主张 | `-2` |
-| 将问题主张判为正常 | `-0.5` |
-| 正确支持正常主张 | `+0.25` |
-| 证据不足或停止后未检查的主张 | `-0.1` |
+### 9.5 选择性覆盖率评测协议与门槛
 
-奖励函数已对主张奖励取均值，并扣除 `0.02 × 工具调用数` 与 `0.000001 × 生成 token 数`；失败轨迹额外扣除 `1`。这些系数用于平衡核查质量与调用开销，实际费用另行计量。奖励验收协议已纳入验证集校准，以及过早停止、过度弃权和缓存重复调用等行为检查。
+为避免“用笼统覆盖率掩盖拒答”或“把合理拒答混同于误判”，评测体系对固定流程、原始基座、SFT、等预算拒绝采样 SFT 与 `M1→M4` RL 在同预算/同上下文下执行仓库级配对对照，并采用**解耦四维选择性指标**：
 
-[GRPO 配置](scripts/train_grpo.sh)已设置 actor 学习率 `1e-6`、KL 约束和 `0.2 / 0.28` 的非对称裁剪，结合 FSDP2、LoRA、激活检查点与动态 token 批处理。消融方案已覆盖动态补采样、clip-higher、截断重要性采样和课程训练，用于评估各机制对稳定性与任务效果的贡献。动态补采样、重要性采样、课程调度的分布式集成及调用计量对齐 [待完成]。
-
-| RL 配置项 | 脚本初始配置 |
+| 评估维度 | 核心指标与协议口径 |
 |---|---|
-| 采样与批量 | 每任务 `8` 条轨迹，prompt batch `16`，更新 mini-batch `8` |
-| 序列预算 | prompt 上限 `4096`、response 总预算 `2048`；每次动作生成上限 `256` tokens，以剩余预算为限 |
-| 参数更新 | LoRA `r=16 / alpha=32`，actor 学习率 `1e-6`，token-mean 损失聚合 |
-| 训练与推理 | FSDP2、BF16 训练链路集成 [待完成]；vLLM 异步 rollout、动态 token 批、分块 log-prob 长度预算 `16384` |
-| 训练监控 | KL、熵、优势方差、裁剪比例、无效动作率、工具调用与验证集质量；监控与验证回调联调 [待完成] |
+| 执行与协议可靠性 | JSON + 动作联合合法率、预算越界计数、`StageCacheKey` 缓存命中准确性与幂等提交一致性 |
+| 选择性覆盖与拒答 | 拆解报告 **Attempted Coverage**（尝试核验比例）、**Resolved Coverage**（有效闭环结论比例）与 **Justified Abstention Rate**（依据不足时的合理拒答率） |
+| 错判与发布门禁风险 | **Selective Error Rate**（在已下达肯定/否定裁决上的错误率）与 **Unverified Report Release Rate**（未满足证据闭环即放行报告的比例，`ReleaseGateStatus` 与 `ClaimVerdict` 严格分开统计） |
+| 统计检验与外部基准 | 至少 `3` 组随机种子、按仓库聚类计算配对 95% 置信区间；外部基准分任务报告 `CORE-Bench`（官方切分执行能力）与 `JudgeEval`（裁决一致性） |
 
-机制方案已定义组内同奖励轨迹的过滤与补采样，以及按 rollout 行为概率和训练侧概率偏差修正权重的截断重要性采样；截断上限初值已设为 `2.0`。这两项与课程训练分别消融，防止将多项配置同时变化产生的收益归因于单一机制。实验配置与完整公式见 [技术方案](docs/POST_TRAINING.md)。
+| 阶段产出状态 | 公开仓库状态 | 说明 |
+|---|---|---|
+| 公开仓库 MVP 骨架与契约单测 | **已开源可运行** | 覆盖 `259` Python / `147` 前端测试、LIBLINEAR `15` runs 与 `12`-claim 冒烟链路 |
+| 完整多 Agent SFT / `M1→M4` 私有训练权重与大规模评测 | **私有实现 / 公开数值未纳入** | 涉及商业化策略与私有评测集；待完成开源脱敏归档后另行公开对照表格 |
 
-### 9.5 效果评估与发布门槛 [待完成]
-
-评测方案纳入了独立仓库测试集，并以相同材料、工具、上下文与预算，对照固定流程、原始模型、SFT 模型、等预算拒绝采样 SFT 和 GRPO 模型。训练计算量、教师数据量与采样开销分别记录；测试阈值、奖励权重和验收路线在查看测试结果前冻结。
-
-| 对照组 | 控制变量与用途 |
-|---|---|
-| 原始 Planner / SFT / GRPO | 固定基础模型、工具、输入和推理预算，比较后训练收益 |
-| 等预算拒绝采样 SFT / GRPO | 对齐数据与采样开销，区分训练方法与额外计算的贡献 |
-| 移除误报惩罚 / 成本项 | 检验质量约束与预算约束的作用 |
-| 移除 clip-higher / 动态采样 / IS / 课程 | 每轮只改变一个因素，报告任务效果与训练稳定性 |
-
-| 评估维度 | 指标与验收要求 |
-|---|---|
-| 执行可靠性 | JSON 与动作联合合法率 ≥ `99%`，预算越界为 `0`；重复或不存在的主张计为无效动作 |
-| 判断质量 | 报告宏 F1、问题召回与 precision；相对同模型原始 Planner，SFT 的等预算宏 F1 差值须满足仓库级配对 95% 区间下界 > `0` |
-| 误报与覆盖 | 测试误报率的 95% 置信上界 ≤ `5%`，判断覆盖率 ≥ `95%`；失败与弃权保留在总体统计中 |
-| 强化学习收益 | 相对最强 SFT 对照，等预算质量改善的 95% 区间下界 > `0`；或宏 F1 差值区间下界 ≥ `-1` 个百分点，且工具调用至少减少 `10%`、配对区间支持成本下降。质量路线与成本路线预先选定 |
-| 泛化与稳定性 | 至少 `3` 个训练随机种子，测试独立仓库、未见缺陷组合与不同预算；按仓库聚类统计，公开各次结果与置信区间 |
-| 部署效果 | 核对 adapter、合并权重与推理服务的任务表现；分别报告显存、时延、工具调用和实际费用，量化版本独立评测 |
-
-宏 F1 同时衡量问题主张与正常主张的判断质量。误报率以全部正常主张为分母；弃权和失败计入对应真值类别的漏判，并单列覆盖率。时延报告中位数与 P95，费用保留价格日期和计费范围。
-
-基准方案已按任务分工：项目任务集衡量缺陷发现，CORE-Bench 衡量实验执行，JudgeEval 衡量判定与人工评分的一致性；结果分别报告，区分规划模型与完整系统的贡献。外部基准适配 [待完成]。
-
-### 9.6 模型交付与结果归档 [待完成]
-
-交付协议覆盖了模型 adapter / 合并权重、分词器、对话模板、基础模型许可、文件校验和与模型卡，并定义评测报告与数据划分、模型版本、训练配置、奖励权重、逐任务轨迹和汇总脚本的关联方式，用于本地部署、网站服务与后续版本回归。
-
-| 结果项 | 结果 |
-|---|---|
-| 三种模型的 SFT / GRPO 收益、误报与覆盖率 | [待完成] |
-| 等预算对照、机制消融及跨种子统计 | [待完成] |
-| 独立仓库与外部基准评测 | [待完成] |
-| 权重发布、部署质量、显存、时延与实际成本 | [待完成] |
-
-完整奖励公式、数据协议与统计判据见 [后训练技术方案](docs/POST_TRAINING.md)。
+完整公式、奖励消融路线与数据协议见 [后训练技术方案](docs/POST_TRAINING.md) 与 [评测基准规范](docs/BENCHMARKS.md)。
 
 <a id="roadmap"></a>
 
 ## 10. 路线图
 
-| 版本 | 范围 |
+| 版本与轨道 | 范围 |
 |---|---|
-| v0.1.0 · 核查与复现 | 主张级流水线、本地工作台、API 接入、Docker 执行、公开 CPU 案例与证据复核 |
-| v0.2 · 决策环境与多仓库评测 [待完成] | 比较同预算下不同策略的质量与成本；冻结 ≥8 个独立原始仓库，验证 / 测试均含正负例；比较固定工作流 + 7B 与单 Agent |
-| v0.3 · SFT / GRPO Planner [待完成] | 使用冻结数据训练 GPU SFT、三种子 GRPO，保存曲线、置信区间与等预算对照，发布模型权重与下载说明 |
-| v0.4 · 效率与部署 [待完成] | 测量 GPU 训练、缓存与量化的质量、显存、吞吐、延迟和成本，部署微调权重服务并完成效果对照；网站的模型 API 与 CPU 执行见第 2.3 节 |
+| v0.1.0 · 开源可运行底座（Open Core） | 主张级流水线、在线/本地工作台、API 接入、Docker / `bwrap` 执行、Paper Tree 知识图谱与只读问答、LIBLINEAR 公开案例及 `verl` MVP 骨架 |
+| 目标架构 · Supervisor + Runtime DAG | 统一 `Deterministic Runtime` 并发无冲突合并、`StageCacheKey` 全依赖缓存闭包、`Fixer` 五重防线、`Novelty` 与盲抽 `Auditor` 闭环及持久化 `Evidence Ledger` |
+| 后训练与评测 · `M1→M4` 与选择性基准 | `Model Router` + 可信 `RouterTelemetryRecord` 旁路采集、三态混合 RL 环境、SFT → GRPO/DAPO/Truncated IS 渐进优化及选择性覆盖率体系 |
+| 部署与灰度发布 | `Model Router` Shadow/Canary 路由、量化推理对照、延迟与显存归档（在线与本地调用入口见第 2 节） |
 
-更新日期：**2026-11-18**。版本范围已按上表划分，结果、配置与日志纳入统一归档协议。GitHub Release 发布 [待完成]。
+更新日期：**2026-11-19**。本仓库公开记录以 [v0.1.0 开源代码及测试记录](#results)为准；私有商业演进模块与完整训练产出按内部发布协议归档。
 
 <a id="docs"></a>
 
