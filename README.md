@@ -15,7 +15,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CPU case](https://img.shields.io/badge/LIBLINEAR-15_runs-227755)](https://github.com/Gump111458785/ArtiCheck/actions/runs/41408434563)
 
-[在线工作台](https://articheck-workbench.edgeone.dev) · [系统架构](#architecture) · [快速开始](#quickstart) · [旗舰案例](#case) · [后训练](#training) · [界面展示](#showcase)
+[在线工作台](https://articheck-workbench.edgeone.dev) · [系统架构](#architecture) · [快速开始](#quickstart)
 
 </div>
 
